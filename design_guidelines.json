@@ -57,7 +57,7 @@
     "borders": "1px solid tinted border-border/60. Never pure gray."
   },
   "components": {
-    "buttons": "Pill-shaped (rounded-full) for primary CTAs on marketing. Rounded-xl for dashboard actions. Always define hover:bg and hover:text.",
+    "buttons": "Pill-shaped (rounded-full). Semantic variants: btn-primary (main CTA / save), btn-secondary (success: deliver, verify, approve), btn-danger (destructive confirm: delete, reject, cancel delivery), btn-outline (dismiss / Cancel that closes a sheet), btn-outline-danger (logout / soft leave). Icon: icon-btn-success | icon-btn-danger | icon-btn-neutral. Never use red for dismiss Cancel.",
     "bottom_nav": "Fixed bottom-0 w-full z-50 flex justify-around items-center h-16 pb-safe. Use Phosphor Icons.",
     "data_cards": "For today's deliveries: dense, tap-friendly full-width blocks with swipe or large button targets for 'Mark Delivered'.",
     "status_badges": "Soft background with dark text (e.g., bg-green-100 text-green-800) with rounded-full."

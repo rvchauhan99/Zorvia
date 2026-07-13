@@ -1,6 +1,6 @@
 # AGENTS.md — Zorvia
 
-You are working in the **Zorvia** monorepo (UI/API display name: **Tiffin OS** until a rename pass).
+You are working in the **Zorvia** monorepo (user-facing brand and API title: **Zorvia**).
 
 ## Read order (do this before exploring the whole codebase)
 
@@ -15,17 +15,18 @@ Do **not** re-derive platform architecture from scratch each session if these do
 ## Non-negotiables
 
 - Tenancy: `tenant_id = provider_id`; always scope queries.
-- Do not invent Phase 2 features (Stripe checkout, staff roles, notification inbox UI, invite API) unless the user asks.
-- Subscription activate is **intentionally** without a payment gateway.
-- Integrations must degrade gracefully (Resend stub, R2 → base64, Firebase → 501 / disabled buttons).
+- Do not invent Phase 2 features (notification inbox UI, WhatsApp) unless the user asks.
+- Waves A–D are **shipped** (staff/roles, Stripe-optional billing, audit log, GST/HST, brand rename).
+- Subscription activate: `BILLING_PROVIDER=none` self-activates; `stripe` uses Checkout + webhook.
+- Integrations must degrade gracefully (Resend stub, R2 → base64, Firebase → 501 / disabled buttons, Stripe → 501 when mode=stripe without keys).
 - Never commit secrets (`.env`, `backend/secrets/`, service account JSON).
 - Preserve existing `data-testid` attributes.
-- Prefer TypeScript only if the area already uses it; this frontend is JS/JSX.
+- Prefer TypeScript for the Next.js frontend (`frontend/`).
 
 ## Stack reminders
 
 - Backend: FastAPI in `backend/`, run with `npm run dev` (root) or `cd backend && npm run dev`
-- Frontend: CRA+CRACO in `frontend/`, `npm run dev` (in `frontend/`) or `npm run dev:frontend` from root; restart after `REACT_APP_*` changes
+- Frontend: Next.js in `frontend/`, `npm run dev` (in `frontend/`) or `npm run dev:frontend` from root; restart after `NEXT_PUBLIC_*` changes
 - Tests: `python -m pytest tests/backend_test.py -n 0` from `backend/`
 - Firebase project: `zorvia-app`
 

@@ -15,21 +15,22 @@ Before broad codebase exploration, prefer project docs:
 
 ## Product
 
-- Brand: **Zorvia**; UI/API may still say **Tiffin OS**.
+- Brand: **Zorvia** (user-facing + API title).
 - Multi-tenant tiffin SaaS: provider admin + consumer; `tenant_id = provider_id`.
+- Frontend: **Next.js** App Router (TypeScript) in `frontend/`.
 
 ## Do not reinvent
 
-- SaaS plan **activate without payment gateway** is intentional MVP.
-- Notifications are **write-only** (no inbox UI yet).
-- `activity_logs` indexed but largely unused (no writers).
-- Consumer invite accept model may exist without routes — Phase 2.
-- Firebase: `FIREBASE_SERVICE_ACCOUNT_PATH` or `_JSON` + frontend `REACT_APP_FIREBASE_*` (`zorvia-app`).
+- Waves A–D shipped (staff/roles, Stripe-optional billing, audit, GST/HST, brand rename).
+- SaaS activate: `BILLING_PROVIDER=none` (default self-activate) or `stripe` Checkout + webhook.
+- Notifications inbox **API** exists; inbox **UI** still deferred.
+- Activity logs have writers + More-page UI (Wave D).
+- Firebase: `FIREBASE_SERVICE_ACCOUNT_PATH` or `_JSON` + frontend `NEXT_PUBLIC_FIREBASE_*` (`zorvia-app`).
 
 ## Engineering constraints
 
 - Never commit `.env` or `backend/secrets/`.
 - Preserve `data-testid`.
-- Keep Resend / R2 / Firebase graceful when unset.
+- Keep Resend / R2 / Firebase / Stripe graceful when unset.
 - Update docs when behavior changes.
 - UI: follow `design_guidelines.json` when editing frontend visuals.

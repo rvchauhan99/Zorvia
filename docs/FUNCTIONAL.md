@@ -1,7 +1,6 @@
 # Zorvia — Functional Specification
 
 **Product brand:** Zorvia  
-**UI / API display name:** Tiffin OS (rename pending)  
 **Last updated:** 2026-07-13  
 **Source of truth:** live codebase; see also [PLATFORM_BLUEPRINT.md](./PLATFORM_BLUEPRINT.md) and [TECHNICAL.md](./TECHNICAL.md)
 
@@ -20,7 +19,7 @@ Zorvia is a multi-tenant SaaS for **Canadian tiffin providers**. Provider admins
 | **Provider Admin** | Owner-operator of a tiffin kitchen | Onboard customers, run daily delivery list, verify Interac payments, export reports, manage org settings and SaaS subscription |
 | **Consumer** | Meal subscriber under one provider | See balance and deliveries, cancel before cutoff, submit payments |
 
-There is **no staff/driver role** in MVP (Phase 2).
+There are **staff roles** on `platform_users`: `admin` (default), `driver` (deliveries only), `viewer` (read-only).
 
 ---
 
@@ -43,9 +42,12 @@ There is **no staff/driver role** in MVP (Phase 2).
 
 | Feature | Behavior | Acceptance |
 |---------|----------|------------|
-| Provider email signup | Creates `providers` + `platform_users`, starts **trial**, returns JWT; optional welcome email | Can log in; org + signup code exist |
-| Unified email login | Tries provider then consumer; consumer blocked if provider inaccessible | Correct `user_type` session |
-| Google Sign-In | Firebase ID token → `POST /api/auth/google`; new provider needs `org_name`; new consumer needs `signup_code` | Buttons disabled until Firebase client + fields ready; **501** if server Firebase unset |
+| Provider email signup | Creates `providers` + `platform_users`, starts **trial**; provider chooses unique alphanumeric `signup_code`; sends email OTP via Resend; **no JWT until verified** | After `/verify-email`, can log in; org + code exist |
+| Unified email login | Tries provider then consumer; blocks unverified (`403`) and inaccessible provider subscription | Correct `user_type` session |
+| Google Sign-In | Firebase ID token → `POST /api/auth/google`; new provider needs `org_name` + `signup_code`; new consumer needs `signup_code`; email treated verified | Buttons disabled until Firebase client + fields ready; **501** if server Firebase unset |
+| Email verification | 6-digit OTP (10 min); account/tenant created only after `POST /auth/verify-email` | Session issued only after OTP; pending signup kept until verified |
+| Forgot / reset password | OTP email for provider or consumer with password; `POST /auth/forgot-password`, `POST /auth/reset-password` | Can log in with new password |
+| Change password | `POST /auth/change-password` with current password (settings / profile) | Password updated |
 | Session | Bearer JWT in `tiffin_token` / session in `tiffin_session` localStorage | `/api/auth/me` restores user |
 
 ### 4.2 Provider organization
@@ -53,33 +55,39 @@ There is **no staff/driver role** in MVP (Phase 2).
 | Feature | Behavior |
 |---------|----------|
 | Profile | Org name, contact, Interac email, address fields |
-| Settings | `cutoff_hours`, default meal price, timezone, signup code (shareable) |
-| Signup code | Unique per provider; consumers use it to join |
+| Settings | `cutoff_hours`, default meal price, timezone, signup code (shareable), kitchen logo (512×512), `closed_dates` (holidays), change password |
+| Signup code | Chosen by provider at signup; **letters/numbers only** (3–32); stored uppercase; unique case-insensitively across tenants; consumers join with case-insensitive match |
+| Kitchen logo | Optional; upload on settings → Pillow square resize 512 → R2 (`logos/`) or data-URL fallback |
+| Consumer avatar | Optional on signup (deferred upload after verify) and profile; 256×256 → R2 (`avatars/`) |
+| Closed dates | No delivery generation on dates in `settings.closed_dates` |
 
 ### 4.3 Customer CRM (provider)
 
 | Feature | Behavior |
 |---------|----------|
 | CRUD | List/create/get/patch/delete customers under tenant |
+| Customer 360 | `GET /customers/{id}` includes outstanding + deliveries + payments; timeline at `GET /customers/{id}/timeline` |
+| Filters (UI) | all \| pending \| paused \| inactive \| high_balance |
 | Delivery days | Weekday indices `0=Mon … 6=Sun` |
 | Meal price | Per-customer CAD amount used on generated deliveries |
-| Pause / resume | Date window; deliveries in window generated as `paused` |
+| Pause / resume | Date window; deliveries in window generated as `paused`; resume restores future `paused` → `pending` |
 | Approve | Self-signup consumers start `pending_approval=true`; provider must approve before deliveries generate |
+| Reject | `POST /customers/{id}/reject` with optional reason; sets inactive + `rejected`; notifies consumer account if present |
 
 ### 4.4 Deliveries
 
 | Feature | Behavior |
 |---------|----------|
-| Auto-generate | Idempotent per `(tenant_id, customer_id, delivery_date)`; skips pending-approval; respects delivery days + pauses |
+| Auto-generate | Idempotent per `(tenant_id, customer_id, delivery_date)`; skips pending-approval, closed dates; respects delivery days + pauses |
 | Statuses | `pending`, `delivered`, `missed`, `cancelled`, `paused` |
-| Provider mark | One-tap delivered / missed / cancelled |
-| Consumer cancel | Only `pending`; blocked inside `cutoff_hours` before assumed **noon UTC** delivery time |
+| Provider mark | One-tap delivered / missed / cancelled (**today or past only**; not future) |
+| Consumer cancel | Upcoming `pending` only; blocked for past dates; within `cutoff_hours` before assumed **local noon** (provider timezone) |
 
 ### 4.5 Payments (Interac)
 
 | Feature | Behavior |
 |---------|----------|
-| Consumer submit | Multipart: `amount`, `reference`, optional `screenshot` |
+| Consumer submit | Multipart: `amount`, `reference` (unique per tenant), optional `screenshot` (jpeg/png/webp ≤5MB) |
 | Screenshot storage | Cloudflare R2 when configured; else **base64 data URL** fallback |
 | Provider verify | Sets verified; notifies consumer (DB + email if Resend set) |
 | Provider reject | Requires reason; notifies consumer |
@@ -93,21 +101,51 @@ There is **no staff/driver role** in MVP (Phase 2).
 - Active customers  
 - Area summary  
 - Dashboard summary  
+- Monthly statement (`GET /reports/statement?month=YYYY-MM`) — tenant or consumer-scoped  
 - CSV export supported in UI for report tabs  
 
+### 4.6b Consumer profile
+
+- `PATCH /consumer/me/profile` — phone, address, apartment, postal_code, delivery_days  
+- Statement CSV download from payments/profile  
+
+### 4.6c Onboarding
+
+- Provider dashboard checklist when Interac email missing, no customers, or first visit (dismissible)  
+- Consumer pending-approval empty state explains “what happens next”
 ### 4.7 SaaS subscription (provider)
 
 | Feature | Behavior |
 |---------|----------|
 | Trial | New providers: `trialing` for `TRIAL_DAYS` (default 15) |
 | Plans | `monthly` / `quarterly` / `yearly` CAD prices from env |
-| Activate | **Self-activate without payment gateway** (MVP); stores plan + `current_period_end` |
+| Activate (`BILLING_PROVIDER=none`) | Self-activate immediately; stores plan + `current_period_end` |
+| Activate (`BILLING_PROVIDER=stripe`) | Returns Stripe Checkout URL; webhook marks active |
+| Renew / switch | While already `active`, period **extends** from remaining end |
 | Access | `trialing` or `active` required for gated provider/consumer operations |
+
+### 4.7b Tax (GST/HST)
+
+- Provider setting `tax_rate_percent` (default `0`).  
+- Outstanding uses add-on: `sum(meal × (1 + tax/100)) − payments`.  
+- Monthly statements include `tax_rate` and `tax_amount` lines.
+
+### 4.7c Activity audit
+
+- Writers on login, customer soft-delete/reject, payment verify/reject, settings patch, plan activate.  
+- List via `GET /providers/me/activity` or `GET /reports/activity`.  
+- Simple list on provider More page.
 
 ### 4.8 Notifications
 
-- Written to `notifications` on payment verify/reject.  
-- **No inbox list API or UI in MVP** (data is stored for Phase 2).
+- Written via `notify()` on payment submit/verify/reject, consumer cancel, and consumer signup.  
+- Inbox API: `GET /notifications`, `POST /notifications/{id}/read`, `POST /notifications/read-all`.  
+- **Inbox UI still deferred** (API is available).
+
+### 4.9 Cancel cutoff
+
+- Delivery treated as **local noon** in provider `settings.timezone` (default `America/Toronto`).  
+- Cancel blocked when within `cutoff_hours` of that instant.
 
 ---
 
@@ -115,19 +153,19 @@ There is **no staff/driver role** in MVP (Phase 2).
 
 ### Journey A — Provider onboarding
 
-1. Land on `/` → Sign up → `/signup`  
-2. Create org + admin account → redirect `/provider`  
-3. Copy signup code from settings  
+1. Land on `/` → Sign up → `/signup` (password + confirm; choose alphanumeric signup code)  
+2. Verify email via OTP → `/verify-email` → redirect `/provider`  
+3. Copy signup code from settings / dashboard; optional kitchen logo  
 4. Add or approve customers; open Deliveries for today  
 
 **Done when:** Dashboard loads; signup code visible; customers appear on delivery day after approval.
 
 ### Journey B — Consumer joins via code
 
-1. `/consumer-signup` with provider signup code  
-2. Account created; customer `pending_approval`  
-3. Provider approves in Customers  
-4. Consumer sees deliveries when generated  
+1. `/consumer-signup` with provider signup code (confirm password; optional photo); invite emails open this URL with `?code=&email=&name=` prefilled  
+2. Verify email OTP → account created; if a CRM customer already exists for that email/tenant (from invite), it is reused (no duplicate); otherwise customer is `pending_approval`  
+3. Provider approves in Customers (when pending)  
+4. Consumer sees deliveries when generated; can change password / avatar in profile  
 
 **Done when:** Consumer home shows upcoming meals after approval + generate.
 
@@ -161,11 +199,14 @@ There is **no staff/driver role** in MVP (Phase 2).
 
 1. **Tenant isolation:** Never return or mutate another tenant’s data.  
 2. **Outstanding:** `sum(delivered.meal_price) - sum(verified.payment.amount)`.  
-3. **Cancel cutoff:** `cutoff_hours` before noon UTC on delivery date (documented simplification).  
+3. **Cancel cutoff:** `cutoff_hours` before local noon on delivery date in provider `settings.timezone` (default America/Toronto). Past dates cannot be cancelled.  
 4. **Pending approval:** No auto-deliveries until approved.  
 5. **Idempotent generation:** Unique index on tenant + customer + date.  
 6. **Subscription:** Gated deps use effective status (lazy expiry of trial).  
-7. **Integrations degrade:** Missing Resend → log stub; missing R2 → base64; missing Firebase → Google auth 501.
+7. **Integrations degrade:** Missing Resend → log stub; missing R2 → base64; missing Firebase → Google auth 501.  
+8. **Mark status:** Provider may mark delivered/missed/cancelled only for `delivery_date <= provider today` and only from `pending`. Undo to `pending` only from delivered/missed/cancelled.  
+9. **Payments:** Submit amount must be `> 0`; verify/reject only from `pending`.  
+10. **Pause:** `end` must be on or after `start`.
 
 ---
 
@@ -184,29 +225,74 @@ There is **no staff/driver role** in MVP (Phase 2).
 
 - Provider/consumer auth (email + Google when Firebase configured)  
 - CRM, deliveries, Interac payments, reports, CSV  
-- Trial + plan activate (no gateway)  
+- Trial + plan activate (`BILLING_PROVIDER=none` by default)  
 - Resend + R2 with graceful fallback  
 - Firebase Admin + client wiring  
+- Next.js App Router frontend (TypeScript)
+
+### Wave A (shipped)
+
+| Item | Notes |
+|------|-------|
+| Subscription banner refresh | Unified `zorvia:subscription-refresh` event |
+| Timezone cancel cutoff | Provider `settings.timezone` local noon (default America/Toronto) |
+| Notification inbox | `GET/POST /notifications`; bell UI; emits on pay/cancel/signup |
+| Delivery day ops | FSA sort, bulk mark delivered, sticky next stop |
+| Interac reconcile | Search, outstanding hint, batch verify, unique references |
+| Security hardening | Prod JWT guard, rate limits, soft-delete, upload limits |
+
+### Wave B (shipped)
+
+| Item | Notes |
+|------|-------|
+| Customer 360 | Detail page + timeline; list filters; name links |
+| Reject pending | API + list UI; notifies consumer |
+| Consumer schedule/profile | Cancel any upcoming pending; editable profile |
+| Pause resume | Future paused deliveries restored to pending |
+| Holidays | `closed_dates` on provider settings; engine skips |
+| Onboarding checklist | Provider dashboard + consumer pending empty state |
+| Monthly statements | `GET /reports/statement`; CSV on reports/payments/profile |
+
+### Wave C (shipped)
+
+| Item | Notes |
+|------|-------|
+| Staff / driver / viewer | `POST/GET /providers/me/staff`; `require_roles`; FE nav + mutate gates |
+| Route order | `PATCH /deliveries/route-order`; up/down + Open in Maps |
+| PWA | `manifest.webmanifest`, `sw.js`, offline delivery status queue |
+| Live board | Deliveries poll 10s when focused; nav badges every 45s |
+| Mobile listings | Customers + Reports: stacked cards below `md`; dense tables from `md+` (no horizontal scroll) |
+| Delivery filters | Compact status chips + search; route reorder on `sm+` only |
+| Bulk confirms | Mark all delivered + Verify selected require AppSheet confirmation before applying |
+| Action button colors | `btn-danger` for delete/reject/cancel-delivery; `btn-secondary` for deliver/verify; `btn-outline` for dismiss Cancel |
+| CSV import + invites | Sample CSV download on Customers; `POST /customers/import` (supports driver_email + delivery_sequence); invite HTML → `/consumer-signup?code=` |
+| Customer route master | Optional `driver_id` + `delivery_sequence`; unique per driver pool; insert/move at N auto-shifts later stops; new deliveries inherit `route_order` + driver |
+| SMS stub | `send_sms` + `sms_notifications` setting; cancel confirmation |
+
+### Wave D (shipped)
+
+| Item | Notes |
+|------|-------|
+| Stripe billing (graceful) | `BILLING_PROVIDER=none\|stripe`; Checkout URL; webhook; 501 if keys missing |
+| Period extend on renew | `activate_plan` extends from remaining period when active |
+| Audit log | `audit.log_activity`; writers; More-page activity list |
+| GST/HST | `tax_rate_percent`; outstanding add-on; statement tax lines |
+| Brand rename | User-facing **Zorvia** (layouts, landing, emails) |
 
 ### Phase 2 / deferred
 
 | Item | Notes |
 |------|-------|
-| Real SaaS billing (Stripe etc.) | Activate is placeholder |
-| Staff / driver roles | Single admin only |
-| Consumer invite email + tokenized link | `ConsumerInviteAccept` model exists; **no routes** |
-| Notification inbox UI | Writes only |
-| Audit log UI | `activity_logs` indexed; **no writers found** |
-| CSV bulk customer import | Not implemented |
-| SMS / WhatsApp | Not implemented |
+| Notification inbox UI | API exists; UI deferred |
+| Stripe Customer Portal / recurring polish | Checkout + webhook shipped; portal optional |
 | Multi-currency | CAD assumptions |
-| Fix trial banner live refresh | Known MEDIUM UX bug |
+| WhatsApp | Not implemented (SMS stub only) |
 
 ---
 
 ## 9. Non-goals (do not invent)
 
-- Do not add Stripe checkout unless explicitly tasked.  
-- Do not invent a notifications inbox without a product request.  
+- Do not invent a notifications **inbox UI** without a product request (API already exists).  
 - Do not change tenancy model (`tenant_id = provider_id`).  
 - Do not commit secrets; document env **names** only.
+- Stripe is optional via `BILLING_PROVIDER`; leave default `none` unless tasked to enable.

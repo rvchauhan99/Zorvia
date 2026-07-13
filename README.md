@@ -1,6 +1,6 @@
 # Zorvia
 
-Multi-tenant **tiffin SaaS** for Canadian providers (UI/API label: **Tiffin OS**). FastAPI + MongoDB backend, React frontend, Firebase Google auth, Resend email, Cloudflare R2 storage.
+Multi-tenant **tiffin SaaS** for Canadian providers (**Zorvia**). FastAPI + MongoDB backend, Next.js frontend, Firebase Google auth, Resend email, Cloudflare R2 storage, optional Stripe billing.
 
 ## Documentation (start here)
 
@@ -38,9 +38,9 @@ source .venv/bin/activate
 # Install requirements; skip private emergentintegrations/litellm if pip fails — unused by app
 pip install -r requirements.txt
 
-# Frontend
+# Frontend (Next.js — lives in frontend/)
 cd ../frontend
-npm install --legacy-peer-deps
+npm install
 ```
 
 ### Run
@@ -50,9 +50,9 @@ npm install --legacy-peer-deps
 npm run dev
 # or: cd backend && npm run dev
 
-# Terminal 2 — Web
-cd frontend && npm run dev
-# or from root: npm run dev:frontend
+# Terminal 2 — Web (Next.js)
+npm run dev:frontend
+# or: cd frontend && npm run dev
 ```
 
 Equivalent without npm (API): `cd backend && source .venv/bin/activate && uvicorn server:app --reload --host 0.0.0.0 --port 8000`
@@ -72,7 +72,7 @@ python -m pytest tests/backend_test.py -n 0
 
 ```
 backend/     FastAPI
-frontend/    React (CRA + CRACO)
+frontend/    Next.js (App Router)
 docs/        Functional, technical, blueprint
 memory/      Compact PRD + index for agents
 ```

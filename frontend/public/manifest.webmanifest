@@ -1,0 +1,16 @@
+{
+  "name": "Zorvia",
+  "short_name": "Zorvia",
+  "description": "Provider and consumer portal for tiffin deliveries",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F7F3EB",
+  "theme_color": "#C45C26",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "48x48",
+      "type": "image/x-icon"
+    }
+  ]
+}

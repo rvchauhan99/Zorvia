@@ -1,0 +1,219 @@
+@import url("https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800,900&f[]=satoshi@400,500,700&display=swap");
+
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: "Satoshi", "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Cabinet Grotesk", "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-display);
+
+  --color-brand-cream: var(--brand-cream);
+  --color-brand-surface: var(--brand-surface);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-border: var(--brand-border);
+  --color-brand-terracotta: var(--brand-terracotta);
+  --color-brand-terracottaDark: var(--brand-terracottaDark);
+  --color-brand-sage: var(--brand-sage);
+  --color-brand-sageDark: var(--brand-sageDark);
+  --color-brand-amber: var(--brand-amber);
+
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+
+  --animate-fade-in-up: fade-in-up 0.4s ease-out both;
+
+  @keyframes fade-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+:root {
+  --background: hsl(36 45% 98%);
+  --foreground: hsl(0 0% 10%);
+  --card: hsl(0 0% 100%);
+  --card-foreground: hsl(0 0% 10%);
+  --popover: hsl(0 0% 100%);
+  --popover-foreground: hsl(0 0% 10%);
+  --primary: hsl(14 68% 54%);
+  --primary-foreground: hsl(0 0% 100%);
+  --secondary: hsl(138 25% 39%);
+  --secondary-foreground: hsl(0 0% 100%);
+  --muted: hsl(40 22% 94%);
+  --muted-foreground: hsl(30 8% 35%);
+  --accent: hsl(40 22% 94%);
+  --accent-foreground: hsl(0 0% 10%);
+  --destructive: hsl(0 65% 55%);
+  --destructive-foreground: hsl(0 0% 100%);
+  --border: hsl(40 12% 88%);
+  --input: hsl(40 12% 88%);
+  --ring: hsl(14 68% 54%);
+  --radius: 0.75rem;
+
+  --brand-cream: #FDFBF7;
+  --brand-surface: #F5F3ED;
+  --brand-ink: #1A1A1A;
+  --brand-border: #E6E4DD;
+  --brand-terracotta: #D95D39;
+  --brand-terracottaDark: #C24927;
+  --brand-sage: #4A7C59;
+  --brand-sageDark: #3A6346;
+  --brand-amber: #E8A365;
+
+  --chart-1: hsl(14 68% 54%);
+  --chart-2: hsl(138 25% 39%);
+  --chart-3: hsl(27 74% 65%);
+  --chart-4: hsl(33 55% 55%);
+  --chart-5: hsl(15 82% 50%);
+
+  --sidebar: hsl(36 45% 98%);
+  --sidebar-foreground: hsl(0 0% 10%);
+  --sidebar-primary: hsl(14 68% 54%);
+  --sidebar-primary-foreground: hsl(0 0% 100%);
+  --sidebar-accent: hsl(40 22% 94%);
+  --sidebar-accent-foreground: hsl(0 0% 10%);
+  --sidebar-border: hsl(40 12% 88%);
+  --sidebar-ring: hsl(14 68% 54%);
+}
+
+.dark {
+  /* Minimal dark mode placeholders if needed later, but Zorvia is mostly light mode oriented per design guidelines. */
+  --background: hsl(0 0% 10%);
+  --foreground: hsl(36 45% 98%);
+  --card: hsl(0 0% 10%);
+  --card-foreground: hsl(36 45% 98%);
+  --popover: hsl(0 0% 10%);
+  --popover-foreground: hsl(36 45% 98%);
+  --primary: hsl(14 68% 54%);
+  --primary-foreground: hsl(0 0% 100%);
+  --secondary: hsl(138 25% 39%);
+  --secondary-foreground: hsl(0 0% 100%);
+  --muted: hsl(0 0% 15%);
+  --muted-foreground: hsl(30 8% 70%);
+  --accent: hsl(0 0% 15%);
+  --accent-foreground: hsl(36 45% 98%);
+  --destructive: hsl(0 65% 55%);
+  --destructive-foreground: hsl(0 0% 100%);
+  --border: hsl(0 0% 20%);
+  --input: hsl(0 0% 20%);
+  --ring: hsl(14 68% 54%);
+
+  --sidebar: hsl(0 0% 10%);
+  --sidebar-foreground: hsl(36 45% 98%);
+  --sidebar-primary: hsl(14 68% 54%);
+  --sidebar-primary-foreground: hsl(0 0% 100%);
+  --sidebar-accent: hsl(0 0% 15%);
+  --sidebar-accent-foreground: hsl(36 45% 98%);
+  --sidebar-border: hsl(0 0% 20%);
+  --sidebar-ring: hsl(14 68% 54%);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "ss01" on, "ss02" on;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display tracking-tight;
+  }
+  .label-overline {
+    @apply text-xs uppercase tracking-[0.15em] font-medium text-muted-foreground;
+  }
+}
+
+@layer components {
+  .glass-nav {
+    @apply backdrop-blur-xl bg-white/85 border-t border-black/5 shadow-[0_-8px_32px_rgba(0,0,0,0.05)];
+  }
+  .card-tinted {
+    @apply bg-white border border-brand-border rounded-2xl;
+  }
+  .card-tinted-hover {
+    @apply transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg;
+  }
+  .pill-btn {
+    @apply rounded-full px-5 h-11 inline-flex items-center justify-center font-medium transition-transform duration-150 ease-out active:scale-95;
+  }
+  /* Action semantics: primary = main CTA, secondary = success/positive, danger = destructive, outline = dismiss/neutral */
+  .btn-primary {
+    @apply bg-primary text-primary-foreground hover:bg-brand-terracottaDark;
+  }
+  .btn-secondary {
+    @apply bg-secondary text-secondary-foreground hover:bg-brand-sageDark;
+  }
+  .btn-danger {
+    @apply bg-destructive text-destructive-foreground hover:bg-destructive/90;
+  }
+  .btn-outline {
+    @apply border border-brand-border bg-white hover:bg-brand-surface text-foreground;
+  }
+  .btn-outline-danger {
+    @apply border border-destructive/40 bg-white text-destructive hover:bg-destructive/10;
+  }
+  .icon-btn {
+    @apply h-11 w-11 min-h-[44px] min-w-[44px] rounded-full inline-flex items-center justify-center cursor-pointer transition-colors;
+  }
+  .icon-btn-neutral {
+    @apply bg-white border border-brand-border hover:bg-brand-surface text-foreground;
+  }
+  .icon-btn-danger {
+    @apply bg-white border border-destructive/35 text-destructive hover:bg-destructive/10;
+  }
+  .icon-btn-success {
+    @apply bg-white border border-secondary/35 text-secondary hover:bg-secondary/10;
+  }
+  .stat-card {
+    @apply bg-white border border-brand-border rounded-2xl p-5 flex flex-col gap-2;
+  }
+}
