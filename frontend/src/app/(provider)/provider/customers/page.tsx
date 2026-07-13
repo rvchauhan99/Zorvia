@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Plus, MagnifyingGlass, PencilSimple, Trash, PauseCircle, PlayCircle, CheckCircle, XCircle, UploadSimple, EnvelopeSimple, DownloadSimple } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { canMutateAdmin } from "@/lib/roles";
 import { fmtCAD, WEEKDAYS, todayISO } from "@/lib/format";
 import AppSheet from "@/components/AppSheet";
 
@@ -43,7 +44,7 @@ const FILTERS: { id: Filter; label: string }[] = [
 
 export default function Customers() {
   const { session } = useAuth();
-  const canMutate = (session?.role || "admin") === "admin";
+  const canMutate = canMutateAdmin(session);
   const [items, setItems] = useState<any[]>([]);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Filter>("all");

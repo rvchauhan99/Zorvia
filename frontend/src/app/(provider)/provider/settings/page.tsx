@@ -1,12 +1,17 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { Plus, Trash } from "@phosphor-icons/react";
 import { todayISO } from "@/lib/format";
+import { useAuth } from "@/lib/auth";
+import { canMutateAdmin } from "@/lib/roles";
 
 export default function Settings() {
+  const { session, ready } = useAuth();
+  const router = useRouter();
   const [prov, setProv] = useState<any>(null);
   const [saving, setSaving] = useState(false);
   const [newClosed, setNewClosed] = useState(todayISO());
@@ -27,7 +32,14 @@ export default function Settings() {
     setStaff(s);
   }
 
-  useEffect(() => { load().catch(() => toast.error("Failed to load settings")); }, []);
+  useEffect(() => {
+    if (!ready) return;
+    if (!canMutateAdmin(session)) {
+      router.replace("/provider");
+      return;
+    }
+    load().catch(() => toast.error("Failed to load settings"));
+  }, [ready, session, router]);
 
   if (!prov) return <div className="text-muted-foreground">Loading…</div>;
 

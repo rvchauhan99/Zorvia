@@ -1,27 +1,37 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Gear, ChartLine, SignOut, ArrowRight, CreditCard } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
+import { canMutateAdmin, isDriver } from "@/lib/roles";
 
 export default function More() {
   const { logout, session } = useAuth();
   const router = useRouter();
   const [activity, setActivity] = useState<any[]>([]);
-  const items = [
-    { to: "/provider/reports", label: "Reports", icon: ChartLine, testid: "more-reports" },
-    { to: "/provider/subscription", label: "Subscription", icon: CreditCard, testid: "more-subscription" },
-    { to: "/provider/settings", label: "Settings", icon: Gear, testid: "more-settings" },
-  ];
+  const admin = canMutateAdmin(session);
+
+  const items = useMemo(() => {
+    const all = [
+      { to: "/provider/reports", label: "Reports", icon: ChartLine, testid: "more-reports" },
+      { to: "/provider/subscription", label: "Subscription", icon: CreditCard, testid: "more-subscription", adminOnly: true },
+      { to: "/provider/settings", label: "Settings", icon: Gear, testid: "more-settings", adminOnly: true },
+    ];
+    return all.filter((it) => !it.adminOnly || admin);
+  }, [admin]);
 
   useEffect(() => {
+    if (isDriver(session)) {
+      router.replace("/provider/deliveries");
+      return;
+    }
     api.get("/providers/me/activity", { params: { limit: 15 } })
       .then(({ data }) => setActivity(Array.isArray(data) ? data : []))
       .catch(() => setActivity([]));
-  }, []);
+  }, [session, router]);
 
   return (
     <div className="flex flex-col gap-4 animate-fade-in-up">

@@ -17,9 +17,11 @@ Zorvia is a multi-tenant SaaS for **Canadian tiffin providers**. Provider admins
 | Persona | Who | Primary goals |
 |---------|-----|---------------|
 | **Provider Admin** | Owner-operator of a tiffin kitchen | Onboard customers, run daily delivery list, verify Interac payments, export reports, manage org settings and SaaS subscription |
+| **Provider Driver** | Delivery staff under a provider | Mark deliveries delivered/missed, reorder route, bulk mark — Deliveries module only |
+| **Provider Viewer** | Read-only staff | View dashboard, customers, deliveries, payments, reports — no mutate, no settings/subscription |
 | **Consumer** | Meal subscriber under one provider | See balance and deliveries, cancel before cutoff, submit payments |
 
-There are **staff roles** on `platform_users`: `admin` (default), `driver` (deliveries only), `viewer` (read-only).
+There are **staff roles** on `platform_users`: `admin` (default), `driver` (deliveries mutate only), `viewer` (read-only operational modules).
 
 ---
 
@@ -27,14 +29,26 @@ There are **staff roles** on `platform_users`: `admin` (default), `driver` (deli
 
 - One **provider** = one **tenant**.
 - `tenant_id` on all scoped records equals `provider_id`.
-- Provider users live in `platform_users` (`role=admin` today).
+- Provider users live in `platform_users` with role `admin` \| `driver` \| `viewer`.
 - Consumers live in `consumer_accounts` linked to a `customers` row under that tenant.
-- JWT claims: `sub` (user id), `ut` (`provider` \| `consumer`), `tid` (tenant id).
+- JWT claims: `sub` (user id), `ut` (`provider` \| `consumer`), `tid` (tenant id); staff role is loaded from `platform_users` on each request.
 - Expired / inaccessible provider subscription:
-  - Provider active routes → **402** → UI redirects to `/provider/subscription`
+  - Provider active routes → **402** → UI redirects admins to `/provider/subscription`
   - Consumer routes → **403** with message that provider subscription is inactive
 
----
+### Staff access matrix
+
+| Area | Admin | Viewer | Driver |
+|------|-------|--------|--------|
+| Dashboard | Full + quick mark | Read only (no Deliver/Miss) | Redirect → Deliveries |
+| Customers | Full | Read (no actions/forms) | Blocked (API + redirect) |
+| Deliveries | Full | Read (no mark/reorder/bulk) | Full mark/reorder/bulk |
+| Payments | Full | Read | Blocked |
+| Reports | Read | Read | Blocked (API 403 + redirect) |
+| Settings / Subscription | Full | No access | No access |
+| More | Reports + Subscription + Settings + activity + logout | Reports + activity + logout | N/A (not in nav) |
+
+Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliveries`). Backend uses `require_roles` / `require_roles_active` on mutating routes.
 
 ## 4. Feature catalog
 
@@ -257,7 +271,7 @@ There are **staff roles** on `platform_users`: `admin` (default), `driver` (deli
 
 | Item | Notes |
 |------|-------|
-| Staff / driver / viewer | `POST/GET /providers/me/staff`; `require_roles`; FE nav + mutate gates |
+| Staff / driver / viewer | Access matrix in §3; FE `lib/roles.ts`; layout redirects; More link filter; dashboard marks admin-only |
 | Route order | `PATCH /deliveries/route-order`; up/down + Open in Maps |
 | PWA | `manifest.webmanifest`, `sw.js`, offline delivery status queue |
 | Live board | Deliveries poll 10s when focused; nav badges every 45s |

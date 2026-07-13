@@ -6,6 +6,8 @@ import { api } from "@/lib/api";
 import { fmtCAD } from "@/lib/format";
 import { toast } from "sonner";
 import { Check, Sparkle, Warning } from "@phosphor-icons/react";
+import { useAuth } from "@/lib/auth";
+import { canMutateAdmin } from "@/lib/roles";
 
 export const SUBSCRIPTION_REFRESH_EVENT = "zorvia:subscription-refresh";
 
@@ -13,12 +15,20 @@ export default function Subscription() {
   const [data, setData] = useState<any>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const router = useRouter();
+  const { session, ready } = useAuth();
 
   async function load() {
     const { data } = await api.get("/providers/me/subscription");
     setData(data);
   }
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    if (!ready) return;
+    if (!canMutateAdmin(session)) {
+      router.replace("/provider");
+      return;
+    }
+    load();
+  }, [ready, session, router]);
 
   async function activate(planId: string) {
     setBusy(planId);

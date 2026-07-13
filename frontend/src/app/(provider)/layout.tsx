@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { House, Users, Truck, Receipt, DotsThree, SignOut, ChartLine, Sparkle, Warning, CreditCard } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
+import { isAdmin, isDriver as roleIsDriver, canMutateAdmin, staffRole } from "@/lib/roles";
 import NotificationBell from "@/components/NotificationBell";
 
 export const SUBSCRIPTION_REFRESH_EVENT = "zorvia:subscription-refresh";
@@ -57,9 +58,9 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
   const [sub, setSub] = useState<any>(null);
   const [badges, setBadges] = useState({ pendingPayments: 0, pendingCustomers: 0 });
 
-  const role = session?.role || "admin";
-  const isDriver = role === "driver";
-  const canMutate = role === "admin";
+  const role = staffRole(session);
+  const isDriver = roleIsDriver(session);
+  const canMutate = canMutateAdmin(session);
 
   const items = useMemo(() => {
     if (isDriver) {
@@ -76,14 +77,18 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
     }
     if (isDriver && !pathname.startsWith("/provider/deliveries")) {
       router.replace("/provider/deliveries");
+      return;
+    }
+    if (!isAdmin(session) && (pathname.startsWith("/provider/settings") || pathname.startsWith("/provider/subscription"))) {
+      router.replace(isDriver ? "/provider/deliveries" : "/provider");
     }
   }, [ready, session, router, isDriver, pathname]);
 
   const loadSub = useCallback(() => {
-    if (session?.user_type === "provider" && !isDriver) {
+    if (session?.user_type === "provider" && canMutate) {
       api.get("/providers/me/subscription").then(({ data }) => setSub(data)).catch(() => {});
     }
-  }, [session, isDriver]);
+  }, [session, canMutate]);
 
   const loadBadges = useCallback(() => {
     if (session?.user_type !== "provider" || isDriver) return;
@@ -124,7 +129,7 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
   const daysLeft = sub?.days_left;
   const onSubscriptionPage = pathname.startsWith("/provider/subscription");
   const banner =
-    isDriver || status === "active" || onSubscriptionPage
+    !canMutate || status === "active" || onSubscriptionPage
       ? null
       : status === "trialing"
       ? { tone: "trial", text: `Free trial · ${daysLeft} day${daysLeft === 1 ? "" : "s"} left`, sub: "Pick a plan any time to avoid interruption.", cta: "Choose plan" }

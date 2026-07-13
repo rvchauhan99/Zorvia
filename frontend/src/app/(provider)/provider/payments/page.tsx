@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { canMutateAdmin } from "@/lib/roles";
 import { fmtCAD, fmtDateTime } from "@/lib/format";
 import StatusPill from "@/components/StatusPill";
 import AppSheet from "@/components/AppSheet";
@@ -11,7 +12,7 @@ import { CheckCircle, XCircle, Eye } from "@phosphor-icons/react";
 
 export default function Payments() {
   const { session } = useAuth();
-  const canMutate = (session?.role || "admin") === "admin";
+  const canMutate = canMutateAdmin(session);
   const [items, setItems] = useState<any[]>([]);
   const [filter, setFilter] = useState("pending");
   const [q, setQ] = useState("");

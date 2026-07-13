@@ -6,6 +6,8 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { ArrowLeft, PencilSimple } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import { canMutateAdmin } from "@/lib/roles";
 import { fmtCAD, fmtDate, WEEKDAYS, todayISO } from "@/lib/format";
 import StatusPill from "@/components/StatusPill";
 
@@ -29,6 +31,8 @@ export default function CustomerDetail() {
   const params = useParams();
   const id = params?.id as string;
   const router = useRouter();
+  const { session } = useAuth();
+  const canMutate = canMutateAdmin(session);
   const [tab, setTab] = useState<Tab>("overview");
   const [c, setC] = useState<any>(null);
   const [notesDraft, setNotesDraft] = useState("");
@@ -50,6 +54,7 @@ export default function CustomerDetail() {
   }, [id]);
 
   async function saveNotes() {
+    if (!canMutate) return;
     setSavingNotes(true);
     try {
       await api.patch(`/customers/${id}`, { notes: notesDraft });
@@ -221,17 +226,21 @@ export default function CustomerDetail() {
             data-testid="customer-notes"
             value={notesDraft}
             onChange={(e) => setNotesDraft(e.target.value)}
-            className="min-h-[140px] w-full px-4 py-3 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all"
+            readOnly={!canMutate}
+            disabled={!canMutate}
+            className="min-h-[140px] w-full px-4 py-3 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all disabled:opacity-80"
             placeholder="Dietary preferences, gate code, etc."
           />
-          <button
-            data-testid="customer-notes-save"
-            disabled={savingNotes}
-            onClick={saveNotes}
-            className="pill-btn btn-primary self-end disabled:opacity-60 cursor-pointer"
-          >
-            {savingNotes ? "Saving…" : "Save notes"}
-          </button>
+          {canMutate ? (
+            <button
+              data-testid="customer-notes-save"
+              disabled={savingNotes}
+              onClick={saveNotes}
+              className="pill-btn btn-primary self-end disabled:opacity-60 cursor-pointer"
+            >
+              {savingNotes ? "Saving…" : "Save notes"}
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>

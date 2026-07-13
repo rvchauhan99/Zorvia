@@ -4,6 +4,8 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import { canMutateAdmin } from "@/lib/roles";
 import { fmtCAD, fmtDate, todayISO } from "@/lib/format";
 import { Truck, Receipt, CurrencyDollar, Users, ArrowRight, Copy, CheckCircle, Circle } from "@phosphor-icons/react";
 import { toast } from "sonner";
@@ -32,6 +34,8 @@ function StatCard({ icon: Icon, label, value, hint, tone = "primary", testid }: 
 
 export default function ProviderDashboard() {
   const router = useRouter();
+  const { session } = useAuth();
+  const canQuickMark = canMutateAdmin(session);
   const [summary, setSummary] = useState<any>(null);
   const [provider, setProvider] = useState<any>(null);
   const [todayDeliveries, setTodayDeliveries] = useState<any[]>([]);
@@ -188,7 +192,7 @@ export default function ProviderDashboard() {
                   </div>
                   <div className="flex items-center justify-between sm:justify-end gap-2">
                     <div className="text-sm font-medium">{fmtCAD(d.meal_price)}</div>
-                    {d.status === "pending" ? (
+                    {d.status === "pending" && canQuickMark ? (
                       <div className="flex items-center gap-2">
                         <button data-testid={`quick-delivered-${d.id}`} onClick={() => markDelivery(d.id, "delivered")} className="h-11 min-h-[44px] px-4 rounded-full bg-secondary text-secondary-foreground text-sm font-medium active:scale-95 transition-transform cursor-pointer hover:bg-brand-sageDark">Deliver</button>
                         <button data-testid={`quick-missed-${d.id}`} onClick={() => markDelivery(d.id, "missed")} className="h-11 min-h-[44px] px-4 rounded-full border border-destructive/40 bg-white text-destructive text-sm font-medium cursor-pointer hover:bg-destructive/10">Miss</button>

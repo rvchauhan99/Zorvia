@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { canMutateDeliveries } from "@/lib/roles";
 import { fmtCAD, fmtDate, todayISO } from "@/lib/format";
 import StatusPill from "@/components/StatusPill";
 import AppSheet from "@/components/AppSheet";
@@ -48,7 +49,7 @@ function writeQueue(q: { id: string; status: string }[]) {
 
 export default function Deliveries() {
   const { session } = useAuth();
-  const canMutate = (session?.role || "admin") !== "viewer";
+  const canMutate = canMutateDeliveries(session);
   const [date, setDate] = useState(todayISO());
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
