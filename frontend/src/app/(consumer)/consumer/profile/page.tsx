@@ -27,13 +27,18 @@ export default function ConsumerProfile() {
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [pwForm, setPwForm] = useState({ current_password: "", new_password: "", confirm_password: "" });
   const [pwBusy, setPwBusy] = useState(false);
+  const [hasPassword, setHasPassword] = useState(true);
   const { logout } = useAuth();
   const router = useRouter();
   const input = "h-11 w-full px-4 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all";
 
   async function load() {
-    const { data } = await api.get("/consumer/me");
+    const [{ data }, { data: me }] = await Promise.all([
+      api.get("/consumer/me"),
+      api.get("/auth/me"),
+    ]);
     setMe(data);
+    setHasPassword(!!me?.has_password);
     const c = data.customer || {};
     setForm({
       phone: c.phone || "",
@@ -114,12 +119,14 @@ export default function ConsumerProfile() {
     }
     setPwBusy(true);
     try {
-      await api.post("/auth/change-password", {
-        current_password: pwForm.current_password,
+      const body: { new_password: string; current_password?: string } = {
         new_password: pwForm.new_password,
-      });
-      toast.success("Password updated");
+      };
+      if (hasPassword) body.current_password = pwForm.current_password;
+      await api.post("/auth/change-password", body);
+      toast.success(hasPassword ? "Password updated" : "Password set — you can sign in with email too");
       setPwForm({ current_password: "", new_password: "", confirm_password: "" });
+      setHasPassword(true);
     } catch (err: any) {
       toast.error(err?.response?.data?.detail || "Failed to change password");
     } finally {
@@ -248,11 +255,16 @@ export default function ConsumerProfile() {
       </form>
 
       <form onSubmit={changePassword} className="card-tinted p-5 flex flex-col gap-3" data-testid="change-password-section">
-        <h2 className="font-display font-bold text-xl">Change password</h2>
-        <label className="flex flex-col gap-1.5">
-          <span className="label-overline">Current password</span>
-          <input data-testid="pw-current" type="password" required className={input} value={pwForm.current_password} onChange={(e) => setPwForm({ ...pwForm, current_password: e.target.value })} />
-        </label>
+        <h2 className="font-display font-bold text-xl">{hasPassword ? "Change password" : "Set password"}</h2>
+        {!hasPassword ? (
+          <p className="text-sm text-muted-foreground">You signed in with Google. Set a password to also use email login.</p>
+        ) : null}
+        {hasPassword ? (
+          <label className="flex flex-col gap-1.5">
+            <span className="label-overline">Current password</span>
+            <input data-testid="pw-current" type="password" required className={input} value={pwForm.current_password} onChange={(e) => setPwForm({ ...pwForm, current_password: e.target.value })} />
+          </label>
+        ) : null}
         <label className="flex flex-col gap-1.5">
           <span className="label-overline">New password</span>
           <input data-testid="pw-new" type="password" required minLength={6} className={input} value={pwForm.new_password} onChange={(e) => setPwForm({ ...pwForm, new_password: e.target.value })} />
@@ -262,7 +274,7 @@ export default function ConsumerProfile() {
           <input data-testid="pw-confirm" type="password" required minLength={6} className={input} value={pwForm.confirm_password} onChange={(e) => setPwForm({ ...pwForm, confirm_password: e.target.value })} />
         </label>
         <button data-testid="pw-submit" type="submit" disabled={pwBusy} className="pill-btn btn-outline h-11 cursor-pointer disabled:opacity-60">
-          {pwBusy ? "Updating…" : "Update password"}
+          {pwBusy ? (hasPassword ? "Updating…" : "Setting…") : (hasPassword ? "Update password" : "Set password")}
         </button>
       </form>
 

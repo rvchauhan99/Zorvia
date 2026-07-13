@@ -58,10 +58,11 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 |---------|----------|------------|
 | Provider email signup | Creates `providers` + `platform_users`, starts **trial**; provider chooses unique alphanumeric `signup_code`; sends email OTP via Resend; **no JWT until verified** | After `/verify-email`, can log in; org + code exist |
 | Unified email login | Tries provider then consumer; blocks unverified (`403`) and inaccessible provider subscription | Correct `user_type` session |
-| Google Sign-In | Firebase ID token → `POST /api/auth/google`; new provider needs `org_name` + `signup_code`; new consumer needs `signup_code`; email treated verified | Buttons disabled until Firebase client + fields ready; **501** if server Firebase unset |
+| Google Sign-In | Firebase ID token → `POST /api/auth/google`; matches existing account by **email** (primary id) or `google_uid`, then backfills `google_uid`; new provider needs `org_name` + `signup_code`; new consumer needs `signup_code`; email treated verified | Same account as password signup for that email; buttons disabled until Firebase client + fields ready; **501** if server Firebase unset |
+| Account linking | Email is the primary identity. Manual signup → later Google login links; Google-only → set password via forgot/reset or Settings/Profile **Set password** | Same `user_id`; both methods work |
 | Email verification | 6-digit OTP (10 min); account/tenant created only after `POST /auth/verify-email` | Session issued only after OTP; pending signup kept until verified |
-| Forgot / reset password | OTP email for provider or consumer with password; `POST /auth/forgot-password`, `POST /auth/reset-password` | Can log in with new password |
-| Change password | `POST /auth/change-password` with current password (settings / profile) | Password updated |
+| Forgot / reset password | OTP for any existing account (including Google-only with no prior password); `POST /auth/forgot-password`, `POST /auth/reset-password` | Can log in with new/set password |
+| Change / set password | `POST /auth/change-password`: with existing hash requires current; without hash sets first password | `has_password` on `/auth/me`; UI shows Set vs Change |
 | Session | Bearer JWT in `tiffin_token` / session in `tiffin_session` localStorage | `/api/auth/me` restores user |
 
 ### 4.2 Provider organization

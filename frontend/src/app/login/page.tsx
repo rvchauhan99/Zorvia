@@ -115,7 +115,9 @@ function LoginForm() {
           </div>
           <GoogleSignInButton user_type="provider" label="Continue with Google (Provider)" testid="google-login-provider" />
           <p className="text-xs text-muted-foreground mt-2">
-            Providers: use Google above. Consumers: use email/password after signing up with a provider code, or{" "}
+            Same email = same account for Google and password. Signed up with Google? Use{" "}
+            <Link href="/forgot-password" className="text-primary font-medium hover:underline">Forgot password</Link>
+            {" "}to set one. Consumers:{" "}
             <Link href="/consumer-signup" className="text-secondary font-medium underline-offset-2 hover:underline">join with a signup code</Link>.
           </p>
           <div className="mt-6 p-4 rounded-2xl bg-brand-surface border border-brand-border text-sm">

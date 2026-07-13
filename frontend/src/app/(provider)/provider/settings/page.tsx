@@ -21,15 +21,18 @@ export default function Settings() {
   const [logoBusy, setLogoBusy] = useState(false);
   const [pwForm, setPwForm] = useState({ current_password: "", new_password: "", confirm_password: "" });
   const [pwBusy, setPwBusy] = useState(false);
+  const [hasPassword, setHasPassword] = useState(true);
   const input = "h-11 px-4 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all";
 
   async function load() {
-    const [{ data: p }, { data: s }] = await Promise.all([
+    const [{ data: p }, { data: s }, { data: me }] = await Promise.all([
       api.get("/providers/me"),
       api.get("/providers/me/staff"),
+      api.get("/auth/me"),
     ]);
     setProv(p);
     setStaff(s);
+    setHasPassword(!!me?.has_password);
   }
 
   useEffect(() => {
@@ -145,12 +148,14 @@ export default function Settings() {
     }
     setPwBusy(true);
     try {
-      await api.post("/auth/change-password", {
-        current_password: pwForm.current_password,
+      const body: { new_password: string; current_password?: string } = {
         new_password: pwForm.new_password,
-      });
-      toast.success("Password updated");
+      };
+      if (hasPassword) body.current_password = pwForm.current_password;
+      await api.post("/auth/change-password", body);
+      toast.success(hasPassword ? "Password updated" : "Password set — you can sign in with email too");
       setPwForm({ current_password: "", new_password: "", confirm_password: "" });
+      setHasPassword(true);
     } catch (err: any) {
       toast.error(err?.response?.data?.detail || "Failed to change password");
     } finally {
@@ -200,14 +205,20 @@ export default function Settings() {
 
       <div className="card-tinted p-6 flex flex-col gap-4" data-testid="change-password-section">
         <div>
-          <h2 className="font-display font-bold text-xl">Change password</h2>
-          <p className="text-sm text-muted-foreground mt-1">Requires your current password.</p>
+          <h2 className="font-display font-bold text-xl">{hasPassword ? "Change password" : "Set password"}</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            {hasPassword
+              ? "Requires your current password."
+              : "You signed in with Google. Set a password to also use email login."}
+          </p>
         </div>
         <form onSubmit={changePassword} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <label className="flex flex-col gap-1.5 sm:col-span-2">
-            <span className="label-overline">Current password</span>
-            <input data-testid="pw-current" type="password" required className={input} value={pwForm.current_password} onChange={(e) => setPwForm({ ...pwForm, current_password: e.target.value })} />
-          </label>
+          {hasPassword ? (
+            <label className="flex flex-col gap-1.5 sm:col-span-2">
+              <span className="label-overline">Current password</span>
+              <input data-testid="pw-current" type="password" required className={input} value={pwForm.current_password} onChange={(e) => setPwForm({ ...pwForm, current_password: e.target.value })} />
+            </label>
+          ) : null}
           <label className="flex flex-col gap-1.5">
             <span className="label-overline">New password</span>
             <input data-testid="pw-new" type="password" required minLength={6} className={input} value={pwForm.new_password} onChange={(e) => setPwForm({ ...pwForm, new_password: e.target.value })} />
@@ -217,7 +228,7 @@ export default function Settings() {
             <input data-testid="pw-confirm" type="password" required minLength={6} className={input} value={pwForm.confirm_password} onChange={(e) => setPwForm({ ...pwForm, confirm_password: e.target.value })} />
           </label>
           <button data-testid="pw-submit" type="submit" disabled={pwBusy} className="pill-btn btn-outline h-11 sm:col-span-2 cursor-pointer disabled:opacity-60">
-            {pwBusy ? "Updating…" : "Update password"}
+            {pwBusy ? (hasPassword ? "Updating…" : "Setting…") : (hasPassword ? "Update password" : "Set password")}
           </button>
         </form>
       </div>

@@ -30,7 +30,7 @@ export default function ForgotPasswordPage() {
     <div className="min-h-screen bg-brand-cream animate-fade-in-up flex items-center justify-center p-6">
       <form onSubmit={onSubmit} className="w-full max-w-md card-tinted p-6 sm:p-8 flex flex-col gap-4">
         <h1 className="font-display font-black text-3xl">Forgot password</h1>
-        <p className="text-sm text-muted-foreground">We&apos;ll email a one-time code to reset your password (provider or consumer).</p>
+        <p className="text-sm text-muted-foreground">We&apos;ll email a one-time code to reset or set your password (works for Google-only accounts too).</p>
         <label className="flex flex-col gap-1.5">
           <span className="label-overline">Email</span>
           <input data-testid="forgot-email" required type="email" className={input} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
