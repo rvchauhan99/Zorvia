@@ -1,0 +1,4 @@
+/* Reset legacy centered layout so we get natural left-aligned reading flow. */
+.App {
+    min-height: 100vh;
+}

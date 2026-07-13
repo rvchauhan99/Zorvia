@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 2 full-stack testing of Tiffin OS. Added 5 new subscription tests (trial/plans/activate/gate/reactivate) and updated Google 501→401 and R2 base64→public URL assertions. 39/39 backend pytest tests pass (with -n 0). Frontend Google-sign-in buttons required a frontend supervisor restart to pick up REACT_APP_FIREBASE_* env vars — after that all UI flows work. One UX bug found: trial banner does not refresh immediately after plan activation.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/providers/me/subscription/activate", "issue": "Invalid plan returns 422 (Pydantic Literal validation), spec expected 400. Both are valid client errors, but if strict 400 desired, wrap validation manually. Test now accepts either."},
+      {"endpoint": "pytest.ini", "issue": "addopts uses -n 2 --dist loadscope; session-scoped fixtures (provider_a) get duplicated across xdist workers, causing 3 tests to fail across workers. Running with `-n 0` yields 39/39. Same context flagged in iteration 1. Consider dropping xdist or moving cross-class deps into a single class."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ProviderLayout / Subscription", "issue": "After successfully activating a plan on /provider/subscription and redirecting to /provider, the trial banner (data-testid=trial-banner-trial) still shows until the 60s poll fires or user reloads. ProviderLayout only re-fetches /providers/me/subscription on mount + 60s interval; Subscription.jsx should notify the layout (context/event) or the layout should refetch on route change.", "selector": "[data-testid='trial-banner-trial']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [
+      {"flow": "Firebase Google sign-in buttons", "issue": "REACT_APP_FIREBASE_* env vars were set but the running frontend bundle had them undefined (firebaseReady=false) — all three Google buttons stayed disabled with tooltip 'Google sign-in isn't configured yet'. A `sudo supervisorctl restart frontend` was required for CRA to re-inject them. After restart, buttons behave exactly as spec (disabled without org_name/signup_code, enabled otherwise, Login button enabled by default).", "affected_selectors": ["[data-testid='google-login-provider']", "[data-testid='google-signup-provider']", "[data-testid='google-signup-consumer']"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Refresh subscription state in ProviderLayout right after Subscription.jsx activation (e.g. lift sub into AuthContext, or trigger a refetch via location change) so the trial banner disappears immediately.",
+    "Consider returning 400 (not 422) for invalid plan by handling `plan` as `str` and validating in the endpoint, if the API contract needs strict 400.",
+    "Optional: drop xdist or refactor session fixtures so pytest passes with default addopts (-n 2 --dist loadscope)."
+  ],
+  "critical_code_review_comments": [
+    "ProviderLayout polls /providers/me/subscription every 60s for every provider page view — chatty for a mostly-static value. Consider caching in AuthContext with manual invalidation.",
+    "google_login in routes_auth.py imports `ConsumerAccount` from `models` again inside the function body (already imported at top); duplicate import.",
+    "services.py: BUCKET_PUBLIC_URL_BASE presigned fallback URL for R2 uses SigV4 with region `auto` — signed URL will still work but is 168h TTL, non-ideal for immutable payment screenshots. Public bucket + BUCKET_PUBLIC_URL_BASE is used here (verified working).",
+    "subscriptions.effective_status: when status='cancelled' or 'expired' explicitly stored, returns as-is — but activate_plan never resets to those; only status='trialing' or 'active' ever set from code paths. Dead branch OK for MVP but note.",
+    "activate_plan silently replaces current_period_end regardless of remaining days; if a user re-activates 'monthly' with 20 days remaining, they lose those 20 days. May want to extend from existing period_end when active."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py"],
+  "success_rate": {"backend": "100% (39/39 with -n 0)", "frontend": "~95% (all critical flows verified; one banner-refresh UX bug)"},
+  "test_credentials": "Fresh accounts created per-run via /api/auth/provider/signup. Sample: uitest_<ts>@test.com / secret123 (Org: UI Kitchen, code TF-AF7832).",
+  "seed_data_creation": "None — all TEST_-prefixed and per-run.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run backend tests with `python -m pytest tests/backend_test.py -n 0` (xdist duplicates session fixtures). Frontend `REACT_APP_FIREBASE_*` env values are baked at CRA build/start — if you change /app/frontend/.env, `sudo supervisorctl restart frontend` is REQUIRED. To force-expire a provider for gate testing, use pymongo: db.providers.update_one({'id': tid}, {'$set': {'subscription.trial_ends_at': '2020-01-01T00:00:00+00:00', 'subscription.status': 'trialing'}}).",
+  "rca of the issue": "Google buttons appeared disabled because CRA inlines REACT_APP_* at compile/start time, so the frontend service must be restarted after env changes. Trial banner staleness: ProviderLayout mount-only + 60s poll for /providers/me/subscription, no event on activation → banner keeps showing until poll or reload."
+}

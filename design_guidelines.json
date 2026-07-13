@@ -1,0 +1,123 @@
+{
+  "theme": "Light Theme (Archetype 1: Organic & Earthy mixed with high-efficiency logistics)",
+  "typography": {
+    "headings": {
+      "family": "Cabinet Grotesk, sans-serif",
+      "weights": ["font-medium", "font-bold", "font-black"],
+      "tracking": "tracking-tight",
+      "rules": "Never use Inter for headings. Keep it expressive. Max size text-6xl."
+    },
+    "body": {
+      "family": "Satoshi, DM Sans, sans-serif",
+      "weights": ["font-normal", "font-medium"],
+      "tracking": "tracking-normal",
+      "rules": "Clean, highly readable for dense data like delivery addresses and Interac references."
+    },
+    "labels": {
+      "rules": "Uppercase, tiny text-xs, tracking-[0.15em] for table headers and overlines."
+    }
+  },
+  "colors": {
+    "background": {
+      "marketing": "#FDFBF7",
+      "dashboard": "#FFFFFF",
+      "surface": "#F5F3ED"
+    },
+    "primary": {
+      "DEFAULT": "#D95D39",
+      "hover": "#C24927",
+      "foreground": "#FFFFFF",
+      "description": "Deep Terracotta - signifies food, warmth, and urgency."
+    },
+    "secondary": {
+      "DEFAULT": "#4A7C59",
+      "hover": "#3A6346",
+      "foreground": "#FFFFFF",
+      "description": "Sage Green - for delivered status, financial success, and trust."
+    },
+    "neutral": {
+      "900": "#1A1A1A",
+      "800": "#2D2D2D",
+      "200": "#E6E4DD",
+      "100": "#F5F3ED",
+      "rules": "Tinted grays with a warm yellow/orange undertone. No pure #000000 or #808080."
+    },
+    "status": {
+      "delivered": "#4A7C59",
+      "pending": "#E8A365",
+      "cancelled": "#D95D39"
+    }
+  },
+  "visual_enhancers": {
+    "surfaces": {
+      "bottom_nav": "Crystal Glass: backdrop-blur-xl bg-white/80 border-t border-black/5 shadow-[0_-8px_32px_rgba(0,0,0,0.04)]",
+      "cards": "Flat solid background #FFFFFF, border border-[#E6E4DD], rounded-2xl. Hover: -translate-y-1, shadow-lg transition-transform",
+      "hero_overlay": "bg-black/30 or gradient-to-r from-black/60 to-transparent for maximum image visibility"
+    },
+    "borders": "1px solid tinted border-border/60. Never pure gray."
+  },
+  "components": {
+    "buttons": "Pill-shaped (rounded-full) for primary CTAs on marketing. Rounded-xl for dashboard actions. Always define hover:bg and hover:text.",
+    "bottom_nav": "Fixed bottom-0 w-full z-50 flex justify-around items-center h-16 pb-safe. Use Phosphor Icons.",
+    "data_cards": "For today's deliveries: dense, tap-friendly full-width blocks with swipe or large button targets for 'Mark Delivered'.",
+    "status_badges": "Soft background with dark text (e.g., bg-green-100 text-green-800) with rounded-full."
+  },
+  "grids_and_layouts": {
+    "spacing_system": "Use generous padding: p-4 to p-6 for mobile cards, p-8 to p-12 for desktop sections.",
+    "dashboard_grid": "High Density Grid (Bento): grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 or gap-6. Every pixel utilized.",
+    "marketing_grid": "Tetris Grid: Asymmetrical, grid-cols-1 md:grid-cols-12 gap-8. Break standard symmetry.",
+    "mobile_first": "Ensure tap targets are at least 48x48px. Limit image heights to max-h-[60vh] on mobile."
+  },
+  "motion": {
+    "transitions": "Specific transitions only. e.g., transition-transform duration-200 ease-out. NO 'transition-all'.",
+    "micro_interactions": "Active state scale down (active:scale-95) for primary buttons like 'Mark Delivered'.",
+    "page_load": "Staggered fade-in-up for dashboard lists (Framer Motion)."
+  },
+  "accessibility": {
+    "contrast": "Ensure text meets 4.5:1 against backgrounds. Use text-shadow if placing text over images.",
+    "focus": "focus:ring-2 focus:ring-primary/50 focus:outline-none",
+    "testing": "All interactive elements MUST have data-testid attributes (e.g., data-testid='mark-delivered-btn')."
+  },
+  "media": {
+    "image_urls": {
+      "hero_tiffin": {
+        "url": "https://images.unsplash.com/photo-1781747835478-a9c3bab5a670?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDJ8MHwxfHNlYXJjaHwyfHxpbmRpYW4lMjB0aWZmaW4lMjBsdW5jaCUyMGJveCUyMGZvb2R8ZW58MHx8fHwxNzgzOTI0ODk3fDA&ixlib=rb-4.1.0&q=85",
+        "description": "Partitioned Indian lunchbox - ideal for main hero or consumer portal dashboard background."
+      },
+      "healthy_meals": {
+        "url": "https://images.unsplash.com/photo-1547592180-85f173990554?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzF8MHwxfHNlYXJjaHwxfHxoZWFsdGh5JTIwbWVhbCUyMHByZXAlMjBmbGF0bGF5fGVufDB8fHx8MTc4MzkyNDg5N3ww&ixlib=rb-4.1.0&q=85",
+        "description": "Vegetable salad / meal prep - use for feature grids or consumer upcoming meals."
+      },
+      "delivery_driver": {
+        "url": "https://images.unsplash.com/photo-1656952945433-6cc98812d2a2?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDN8MHwxfHNlYXJjaHwxfHxmb29kJTIwZGVsaXZlcnklMjBkcml2ZXIlMjBzbWlsaW5nfGVufDB8fHx8MTc4MzkyNDg5N3ww&ixlib=rb-4.1.0&q=85",
+        "description": "Smiling delivery driver - use for provider marketing page or onboarding flow."
+      }
+    },
+    "icons": "Use @phosphor-icons/react for high-end, clean duotone/regular weights."
+  },
+  "libraries": {
+    "ui": "shadcn/ui (customized severely to break the generic vercel look), sonner for toasts, lucide-react or phosphor-icons.",
+    "charts": "recharts or shadcn charts for Daily Deliveries and Area Summary."
+  },
+  "instructions_to_main_agent": [
+    "1. Setup a mobile-first UI with a persistent bottom navigation for Provider Admin (Dashboard | Customers | Deliveries | Payments | More).",
+    "2. Provider Dashboard must feature bento-box style widgets for Today's Deliveries, Pending, Outstanding, and Collections.",
+    "3. Implement one-tap delivery marking (Delivered/Missed/Cancelled) using large tap targets and trigger a 'sonner' toast upon action.",
+    "4. Consumer portal must be dead simple: upcoming delivery card, balance, and Interac reference submission form.",
+    "5. Do NOT use completely transparent backgrounds on fixed headers or bottom navs. Use backdrop-blur-xl with solid tints.",
+    "6. Replace generic Inter font with Cabinet Grotesk (Headings) and Satoshi (Body) via next/font or standard web fonts.",
+    "7. Include `data-testid` on all buttons, form fields, and navigation items."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "You tend to converge toward generic, 'on distribution' outputs. Avoid the 'AI slop' aesthetic.",
+    "Do not use dark colors as gradients.",
+    "Create depth through layered design elements with z-index hierarchy and glass-morphism effects (12-24px blur).",
+    "You MUST NOT apply universal transitions (e.g. transition: all). Target specific properties (e.g. transition-transform).",
+    "You MUST NOT center align the app container (.App { text-align: center; }). Keep natural left-aligned reading flow.",
+    "Always use modern button styles (pill-shaped or rounded-xl) with hover animations.",
+    "NEVER use AI assistant Emoji characters (🤖🧠💭) for icons.",
+    "Every interaction needs micro-animations (hover, focus, active).",
+    "Use 2-3x more spacing than feels comfortable.",
+    "Use the exact image URLs provided. Do not use placeholder text or dummy image services."
+  ]
+}
