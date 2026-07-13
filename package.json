@@ -1,0 +1,12 @@
+{
+  "name": "zorvia",
+  "private": true,
+  "description": "Zorvia (Tiffin OS) — monorepo scripts",
+  "scripts": {
+    "dev": "npm run dev --prefix backend",
+    "dev:backend": "npm run dev --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "start": "npm run start --prefix frontend",
+    "install:frontend": "npm install --legacy-peer-deps --prefix frontend"
+  }
+}
