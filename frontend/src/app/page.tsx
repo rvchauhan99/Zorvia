@@ -177,7 +177,7 @@ export default function Landing() {
       {/* Split */}
       <section className={`${shell} pb-16 sm:pb-20 lg:pb-28 grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8`}>
         <div className="card-tinted p-8 sm:p-10 lg:p-12 flex flex-col gap-5">
-          <img src={DRIVER_IMG} alt="MealHQ delivery courier" className="rounded-2xl h-56 sm:h-72 w-full object-cover object-[center_20%]" />
+          <img src={DRIVER_IMG} alt="MealHQ delivery courier" className="rounded-2xl h-56 sm:h-72 w-full object-cover object-center" />
           <span className="label-overline text-primary text-sm">For providers</span>
           <h3 className="font-display font-bold text-3xl sm:text-4xl leading-tight">Your daily route in your pocket</h3>
           <p className="text-base sm:text-lg text-muted-foreground leading-relaxed">Wake up to today&apos;s delivery list, sorted by area. Tap through as you go. Outstanding balances update the moment you mark delivered.</p>
