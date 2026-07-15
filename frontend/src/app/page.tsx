@@ -1,12 +1,19 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Truck, ChartLineUp, Receipt, ShieldCheck } from "@phosphor-icons/react";
+import { ArrowRight, Truck, ChartLineUp, Receipt, ShieldCheck, EnvelopeSimple } from "@phosphor-icons/react";
+import { toast } from "sonner";
+import { api } from "@/lib/api";
 
 const HERO_IMG = "https://images.unsplash.com/photo-1781747835478-a9c3bab5a670?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDJ8MHwxfHNlYXJjaHwyfHxpbmRpYW4lMjB0aWZmaW4lMjBsdW5jaCUyMGJveCUyMGZvb2R8ZW58MHx8fHwxNzgzOTI0ODk3fDA&ixlib=rb-4.1.0&q=85";
 const MEAL_IMG = "https://images.unsplash.com/photo-1547592180-85f173990554?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzF8MHwxfHNlYXJjaHwxfHxoZWFsdGh5JTIwbWVhbCUyMHByZXAlMjBmbGF0bGF5fGVufDB8fHx8MTc4MzkyNDg5N3ww&ixlib=rb-4.1.0&q=85";
-const DRIVER_IMG = "https://images.unsplash.com/photo-1656952945433-6cc98812d2a2?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDN8MHwxfHNlYXJjaHwxfHxmb29kJTIwZGVsaXZlcnklMjBkcml2ZXIlMjBzbWlsaW5nfGVufDB8fHx8MTc4MzkyNDg5N3ww&ixlib=rb-4.1.0&q=85";
+const DRIVER_IMG = "/brand/mealhq-provider-courier.png";
+
+const CONTACT_EMAILS = [
+  "khamarvedang04@gmail.com",
+  "ravatrajsinh@gmail.com",
+] as const;
 
 const features = [
   { icon: Truck, title: "Daily delivery list", body: "Auto-generated from active customers and their weekly schedule. One-tap Delivered / Missed / Cancelled." },
@@ -16,13 +23,50 @@ const features = [
 ];
 
 const shell = "mx-auto w-full max-w-[1800px] px-4 sm:px-6 lg:px-10";
+const inputCls = "h-12 px-4 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-shadow w-full";
 
 export default function Landing() {
+  const [contact, setContact] = useState({
+    name: "",
+    email: "",
+    subject: "",
+    message: "",
+    company: "",
+  });
+  const [submitting, setSubmitting] = useState(false);
+
+  async function onContactSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!contact.name.trim() || !contact.email.trim() || !contact.message.trim()) {
+      toast.error("Name, email, and message are required");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await api.post("/public/contact", {
+        name: contact.name.trim(),
+        email: contact.email.trim(),
+        subject: contact.subject.trim() || undefined,
+        message: contact.message.trim(),
+        company: contact.company,
+      });
+      toast.success("Message sent — we'll get back to you soon.");
+      setContact({ name: "", email: "", subject: "", message: "", company: "" });
+    } catch (err: unknown) {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        "Could not send. Please email us directly.";
+      toast.error(typeof detail === "string" ? detail : "Could not send. Please email us directly.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-brand-cream text-foreground animate-fade-in-up">
       {/* Nav — brand larger than actions */}
       <header className="sticky top-0 z-30 backdrop-blur-xl bg-brand-cream/85 border-b border-brand-border">
-        <div className="flex items-center justify-between px-4 sm:px-6 lg:px-10 py-3 sm:py-4">
+        <div className="flex items-center justify-between px-4 sm:px-6 lg:px-10 py-3 sm:py-4 gap-3">
           <Link href="/" className="inline-flex items-center shrink-0" data-testid="landing-brand">
             <img
               src="/brand/mealhq-logo-horizontal.png"
@@ -31,6 +75,13 @@ export default function Landing() {
             />
           </Link>
           <nav className="flex items-center gap-2 sm:gap-2.5">
+            <a
+              data-testid="landing-contact-link"
+              href="#contact"
+              className="hidden sm:inline-flex pill-btn btn-outline text-sm h-9 sm:h-10 px-4 sm:px-5"
+            >
+              Contact
+            </a>
             <Link data-testid="landing-login-link" href="/login" className="pill-btn btn-outline text-sm h-9 sm:h-10 px-4 sm:px-5">Log in</Link>
             <Link data-testid="landing-signup-link" href="/signup" className="pill-btn btn-primary text-sm h-9 sm:h-10 px-4 sm:px-5">Start free</Link>
           </nav>
@@ -126,7 +177,7 @@ export default function Landing() {
       {/* Split */}
       <section className={`${shell} pb-16 sm:pb-20 lg:pb-28 grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8`}>
         <div className="card-tinted p-8 sm:p-10 lg:p-12 flex flex-col gap-5">
-          <img src={DRIVER_IMG} alt="Delivery" className="rounded-2xl h-56 sm:h-72 w-full object-cover" />
+          <img src={DRIVER_IMG} alt="MealHQ delivery courier" className="rounded-2xl h-56 sm:h-72 w-full object-cover object-[center_20%]" />
           <span className="label-overline text-primary text-sm">For providers</span>
           <h3 className="font-display font-bold text-3xl sm:text-4xl leading-tight">Your daily route in your pocket</h3>
           <p className="text-base sm:text-lg text-muted-foreground leading-relaxed">Wake up to today&apos;s delivery list, sorted by area. Tap through as you go. Outstanding balances update the moment you mark delivered.</p>
@@ -141,10 +192,126 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* Contact */}
+      <section id="contact" className={`${shell} pb-16 sm:pb-20 lg:pb-28 scroll-mt-28`}>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-start">
+          <div className="lg:col-span-5 flex flex-col gap-5">
+            <span className="label-overline text-sm sm:text-base tracking-[0.18em]">Contact us</span>
+            <h2
+              className="font-display font-bold leading-[1.05] tracking-tight"
+              style={{ fontSize: "clamp(2rem, 4vw, 3.5rem)" }}
+            >
+              Questions about MealHQ? Reach out.
+            </h2>
+            <p className="text-base sm:text-lg text-muted-foreground leading-relaxed max-w-md">
+              Tell us about your kitchen, partnership ideas, or anything else. We read every message.
+            </p>
+            <div className="flex flex-col gap-3 pt-2">
+              {CONTACT_EMAILS.map((email) => (
+                <a
+                  key={email}
+                  href={`mailto:${email}`}
+                  data-testid={`contact-mailto-${email.split("@")[0]}`}
+                  className="inline-flex items-center gap-3 text-base sm:text-lg font-medium text-foreground hover:text-primary transition-colors"
+                >
+                  <EnvelopeSimple size={22} weight="duotone" className="text-primary shrink-0" />
+                  {email}
+                </a>
+              ))}
+            </div>
+          </div>
+
+          <form
+            onSubmit={onContactSubmit}
+            data-testid="contact-form"
+            className="lg:col-span-7 card-tinted p-7 sm:p-9 lg:p-10 flex flex-col gap-4"
+          >
+            {/* Honeypot */}
+            <input
+              type="text"
+              name="company"
+              value={contact.company}
+              onChange={(e) => setContact({ ...contact, company: e.target.value })}
+              tabIndex={-1}
+              autoComplete="off"
+              aria-hidden="true"
+              className="absolute -left-[9999px] h-0 w-0 opacity-0"
+            />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm font-medium">Name</span>
+                <input
+                  data-testid="contact-name"
+                  required
+                  className={inputCls}
+                  value={contact.name}
+                  onChange={(e) => setContact({ ...contact, name: e.target.value })}
+                  placeholder="Your name"
+                />
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm font-medium">Email</span>
+                <input
+                  data-testid="contact-email"
+                  required
+                  type="email"
+                  className={inputCls}
+                  value={contact.email}
+                  onChange={(e) => setContact({ ...contact, email: e.target.value })}
+                  placeholder="you@example.com"
+                />
+              </label>
+            </div>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium">Subject <span className="text-muted-foreground font-normal">(optional)</span></span>
+              <input
+                data-testid="contact-subject"
+                className={inputCls}
+                value={contact.subject}
+                onChange={(e) => setContact({ ...contact, subject: e.target.value })}
+                placeholder="How can we help?"
+              />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium">Message</span>
+              <textarea
+                data-testid="contact-message"
+                required
+                rows={5}
+                maxLength={2000}
+                className={`${inputCls} h-auto py-3 resize-y min-h-[140px]`}
+                value={contact.message}
+                onChange={(e) => setContact({ ...contact, message: e.target.value })}
+                placeholder="Tell us a bit about your kitchen or question…"
+              />
+            </label>
+            <button
+              type="submit"
+              data-testid="contact-submit"
+              disabled={submitting}
+              className="pill-btn btn-primary self-start h-12 px-7 text-base gap-2 disabled:opacity-60 cursor-pointer mt-1"
+            >
+              {submitting ? "Sending…" : "Send message"}
+              {!submitting && <ArrowRight size={18} weight="bold" />}
+            </button>
+          </form>
+        </div>
+      </section>
+
       <footer className="border-t border-brand-border py-10 lg:py-12">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 px-4 sm:px-6 lg:px-10">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 px-4 sm:px-6 lg:px-10">
           <img src="/brand/mealhq-logo-horizontal.png" alt="MealHQ" className="h-14 sm:h-16 w-auto" />
-          <div className="text-sm sm:text-base text-muted-foreground">Made for Canadian tiffin providers · CAD · Interac e-Transfer</div>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
+            <div className="text-sm sm:text-base text-muted-foreground">Made for Canadian tiffin providers · CAD · Interac e-Transfer</div>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm sm:text-base">
+              <span className="text-muted-foreground">Contact</span>
+              {CONTACT_EMAILS.map((email) => (
+                <a key={email} href={`mailto:${email}`} className="font-medium hover:text-primary transition-colors">
+                  {email}
+                </a>
+              ))}
+            </div>
+          </div>
         </div>
       </footer>
     </div>

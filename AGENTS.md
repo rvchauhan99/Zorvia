@@ -28,7 +28,7 @@ Do **not** re-derive platform architecture from scratch each session if these do
 - Backend: FastAPI in `backend/`, run with `npm run dev` (root) or `cd backend && npm run dev`
 - Frontend: Next.js in `frontend/`, `npm run dev` (in `frontend/`) or `npm run dev:frontend` from root; restart after `NEXT_PUBLIC_*` changes
 - Tests: `python -m pytest tests/backend_test.py -n 0` from `backend/`
-- Firebase project: `zorvia-app`
+- Firebase project: `mealhq-app` (Google Sign-In); Cloud Run API remains on GCP `zorvia-app`
 
 ## When you change behavior
 

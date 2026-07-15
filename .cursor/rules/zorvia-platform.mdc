@@ -25,7 +25,7 @@ Before broad codebase exploration, prefer project docs:
 - SaaS activate: `BILLING_PROVIDER=none` (default self-activate) or `stripe` Checkout + webhook.
 - Notifications inbox **API** exists; inbox **UI** still deferred.
 - Activity logs have writers + More-page UI (Wave D).
-- Firebase: `FIREBASE_SERVICE_ACCOUNT_PATH` or `_JSON` + frontend `NEXT_PUBLIC_FIREBASE_*` (`zorvia-app`).
+- Firebase: `FIREBASE_SERVICE_ACCOUNT_PATH` or `_JSON` + frontend `NEXT_PUBLIC_FIREBASE_*` (`mealhq-app`).
 
 ## Engineering constraints
 

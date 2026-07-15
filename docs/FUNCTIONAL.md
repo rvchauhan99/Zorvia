@@ -208,6 +208,14 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 
 **Done when:** After activate, provider routes work; banner should clear (see known UX issue: may need reload).
 
+### Journey F — Landing contact
+
+1. Visitor opens `/` → Contact (nav or `#contact`)  
+2. Submits name, email, message (optional subject) via form **or** uses mailto links  
+3. Backend `POST /api/public/contact` emails both `CONTACT_TO_EMAILS` inboxes via Resend (`Reply-To` = visitor)  
+
+**Done when:** Team receives the message (or visitor emailed directly when Resend is unset).
+
 ---
 
 ## 6. Business rules (must not break)
