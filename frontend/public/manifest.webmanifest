@@ -1,12 +1,24 @@
 {
-  "name": "Zorvia",
-  "short_name": "Zorvia",
+  "name": "MealHQ",
+  "short_name": "MealHQ",
   "description": "Provider and consumer portal for tiffin deliveries",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#F7F3EB",
-  "theme_color": "#C45C26",
+  "background_color": "#F4F7F6",
+  "theme_color": "#0E8F8B",
   "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
     {
       "src": "/favicon.ico",
       "sizes": "48x48",

@@ -4,17 +4,25 @@ import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/lib/auth";
 
 export const metadata: Metadata = {
-  title: "Zorvia",
+  title: "MealHQ",
   description: "Provider and consumer portal for tiffin deliveries",
   manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "48x48" },
+      { url: "/icons/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icons/favicon-16.png", sizes: "16x16", type: "image/png" },
+    ],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
   appleWebApp: {
     capable: true,
-    title: "Zorvia",
+    title: "MealHQ",
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#C45C26",
+  themeColor: "#0E8F8B",
 };
 
 export default function RootLayout({

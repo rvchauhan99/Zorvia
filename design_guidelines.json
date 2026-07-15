@@ -1,5 +1,5 @@
 {
-  "theme": "Light Theme (Archetype 1: Organic & Earthy mixed with high-efficiency logistics)",
+  "theme": "Light Theme (MealHQ: Ink / Mist / Lagoon ops + Mango accents)",
   "typography": {
     "headings": {
       "family": "Cabinet Grotesk, sans-serif",
@@ -19,33 +19,37 @@
   },
   "colors": {
     "background": {
-      "marketing": "#FDFBF7",
+      "marketing": "#F4F7F6",
       "dashboard": "#FFFFFF",
-      "surface": "#F5F3ED"
+      "surface": "#E8EEED"
     },
     "primary": {
-      "DEFAULT": "#D95D39",
-      "hover": "#C24927",
+      "DEFAULT": "#0E8F8B",
+      "hover": "#0A7270",
       "foreground": "#FFFFFF",
-      "description": "Deep Terracotta - signifies food, warmth, and urgency."
+      "description": "Lagoon - MealHQ ops HQ color, matches logo HQ and mark."
     },
     "secondary": {
-      "DEFAULT": "#4A7C59",
-      "hover": "#3A6346",
+      "DEFAULT": "#2A9D7A",
+      "hover": "#1F7A5E",
       "foreground": "#FFFFFF",
-      "description": "Sage Green - for delivered status, financial success, and trust."
+      "description": "Fresh green - delivered status, financial success, and trust."
+    },
+    "accent": {
+      "DEFAULT": "#F5A524",
+      "description": "Mango - meal energy accents (highlights, warnings soft)."
     },
     "neutral": {
-      "900": "#1A1A1A",
-      "800": "#2D2D2D",
-      "200": "#E6E4DD",
-      "100": "#F5F3ED",
-      "rules": "Tinted grays with a warm yellow/orange undertone. No pure #000000 or #808080."
+      "900": "#0B1220",
+      "800": "#1A2433",
+      "200": "#D5DCD9",
+      "100": "#E8EEED",
+      "rules": "Cool mist undertones aligned to MealHQ Mist canvas. No purple kitsch."
     },
     "status": {
-      "delivered": "#4A7C59",
-      "pending": "#E8A365",
-      "cancelled": "#D95D39"
+      "delivered": "#2A9D7A",
+      "pending": "#F5A524",
+      "cancelled": "#0E8F8B"
     }
   },
   "visual_enhancers": {

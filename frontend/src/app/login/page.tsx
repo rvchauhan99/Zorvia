@@ -3,7 +3,7 @@
 import React, { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ForkKnife, ArrowRight } from "@phosphor-icons/react";
+import { ArrowRight } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
@@ -67,8 +67,12 @@ function LoginForm() {
       </div>
       <div className="flex-1 flex items-center justify-center p-6 sm:p-10">
         <div className="w-full max-w-md">
-          <Link href="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
-            <ForkKnife size={18} /> <span className="font-bold">Zorvia</span>
+          <Link href="/" className="inline-flex items-center transition-opacity hover:opacity-80" data-testid="login-brand">
+            <img
+              src="/brand/mealhq-logo-horizontal.png"
+              alt="MealHQ"
+              className="h-11 w-auto"
+            />
           </Link>
           <h1 className="font-display font-bold text-3xl mt-6">Welcome back</h1>
           <p className="text-sm text-muted-foreground mt-1">Log in to your provider or consumer account.</p>
