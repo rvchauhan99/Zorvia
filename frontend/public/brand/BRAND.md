@@ -27,6 +27,7 @@ Wordmark: bold geometric sans. “Meal” in Ink, “HQ” in Lagoon.
 | `mealhq-mark.png` | Square mark on light |
 | `mealhq-mark-dark.png` | Mark on Ink |
 | `mealhq-logo-horizontal.png` | Header / auth wordmark |
+| `mealhq-logo-email.png` | Email header (lightweight, ~400px wide) |
 | `mealhq-logo-stacked.png` | Splash / OG |
 | `mealhq-icon-1024.png` | App icon master |
 | `../icons/icon-192.png` | PWA 192 |
