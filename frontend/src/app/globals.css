@@ -126,7 +126,7 @@
 }
 
 .dark {
-  /* Minimal dark mode placeholders if needed later, but Zorvia is mostly light mode oriented per design guidelines. */
+  /* Minimal dark mode placeholders if needed later, but MealHQ is mostly light mode oriented per design guidelines. */
   --background: hsl(0 0% 10%);
   --foreground: hsl(36 45% 98%);
   --card: hsl(0 0% 10%);

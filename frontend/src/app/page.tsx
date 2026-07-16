@@ -304,6 +304,12 @@ export default function Landing() {
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
             <div className="text-sm sm:text-base text-muted-foreground">Made for Canadian tiffin providers · CAD · Interac e-Transfer</div>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm sm:text-base">
+              <Link href="/privacy" className="font-medium hover:text-primary transition-colors" data-testid="landing-footer-privacy">
+                Privacy
+              </Link>
+              <Link href="/terms" className="font-medium hover:text-primary transition-colors" data-testid="landing-footer-terms">
+                Terms
+              </Link>
               <span className="text-muted-foreground">Contact</span>
               {CONTACT_EMAILS.map((email) => (
                 <a key={email} href={`mailto:${email}`} className="font-medium hover:text-primary transition-colors">

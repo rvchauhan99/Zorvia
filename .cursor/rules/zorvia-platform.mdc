@@ -1,9 +1,9 @@
 ---
-description: Zorvia platform memory — always apply; read docs before re-exploring
+description: MealHQ platform memory — always apply; read docs before re-exploring
 alwaysApply: true
 ---
 
-# Zorvia platform rule
+# MealHQ platform rule
 
 Before broad codebase exploration, prefer project docs:
 
@@ -15,7 +15,7 @@ Before broad codebase exploration, prefer project docs:
 
 ## Product
 
-- Brand: **Zorvia** (user-facing + API title).
+- Brand: **MealHQ** (user-facing + API title). Infra IDs may still be `zorvia-*` (GCP, DB name, secrets).
 - Multi-tenant tiffin SaaS: provider admin + consumer; `tenant_id = provider_id`.
 - Frontend: **Next.js** App Router (TypeScript) in `frontend/`.
 
@@ -25,7 +25,7 @@ Before broad codebase exploration, prefer project docs:
 - SaaS activate: `BILLING_PROVIDER=none` (default self-activate) or `stripe` Checkout + webhook.
 - Notifications inbox **API** exists; inbox **UI** still deferred.
 - Activity logs have writers + More-page UI (Wave D).
-- Firebase: `FIREBASE_SERVICE_ACCOUNT_PATH` or `_JSON` + frontend `NEXT_PUBLIC_FIREBASE_*` (`mealhq-app`).
+- Firebase: `FIREBASE_SERVICE_ACCOUNT_PATH` or `_JSON` + frontend `NEXT_PUBLIC_FIREBASE_*` (`mealhq-ca`).
 
 ## Engineering constraints
 

@@ -27,7 +27,7 @@ function downloadSampleCsv() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "zorvia-customers-sample.csv";
+  a.download = "mealhq-customers-sample.csv";
   a.click();
   URL.revokeObjectURL(url);
 }

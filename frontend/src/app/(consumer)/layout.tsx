@@ -33,7 +33,12 @@ export default function ConsumerLayout({ children }: { children: React.ReactNode
     <div className="min-h-screen bg-brand-cream text-foreground overflow-x-hidden">
       <header className="sticky top-0 z-30 backdrop-blur-xl bg-white/85 border-b border-brand-border pt-[env(safe-area-inset-top,0px)]">
         <div className="max-w-2xl mx-auto flex items-center justify-between px-4 py-3">
-          <div className="font-display font-black text-lg tracking-tight">Zorvia</div>
+          <img
+            src="/brand/mealhq-logo-horizontal.png"
+            alt="MealHQ"
+            className="h-8 w-auto"
+            data-testid="consumer-brand-logo"
+          />
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground hidden sm:inline truncate max-w-[160px]">{session?.email}</span>
             <NotificationBell testid="consumer-notification-bell" />
