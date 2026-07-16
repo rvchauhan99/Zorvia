@@ -110,12 +110,15 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 
 ### 4.6 Reports (provider)
 
+- Dashboard remains the day-of-operations cockpit: today’s required meals, pending / delivered / missed / cancelled deliveries, today’s collections, outstanding balance, pending payment approvals, pending customer approvals, and route quick actions.
+- Analysis (`/provider/analysis`) is the period business-health report: 7d / 30d / 90d / MTD KPIs, charts, receivables aging, top outstanding customers, top collectors, area concentration, and rule-based highlights.
 - Daily deliveries  
 - Outstanding balances  
 - Collections  
 - Active customers  
 - Area summary  
 - Dashboard summary  
+- Business insights (`GET /reports/business-insights?period=30d`) for Analysis  
 - Monthly statement (`GET /reports/statement?month=YYYY-MM`) — tenant or consumer-scoped  
 - CSV export supported in UI for report tabs  
 

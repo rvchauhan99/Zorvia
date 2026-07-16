@@ -16,6 +16,7 @@ export default function More() {
 
   const items = useMemo(() => {
     const all = [
+      { to: "/provider/analysis", label: "Analysis", icon: ChartLine, testid: "more-analysis" },
       { to: "/provider/reports", label: "Reports", icon: ChartLine, testid: "more-reports" },
       { to: "/provider/subscription", label: "Subscription", icon: CreditCard, testid: "more-subscription", adminOnly: true },
       { to: "/provider/settings", label: "Settings", icon: Gear, testid: "more-settings", adminOnly: true },

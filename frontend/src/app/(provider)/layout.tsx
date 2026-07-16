@@ -178,6 +178,15 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
           {!isDriver ? (
             <>
               <Link
+                href="/provider/analysis"
+                data-testid="side-nav-analysis"
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors duration-150 ${
+                  pathname.startsWith("/provider/analysis") ? "bg-brand-surface text-primary" : "text-foreground hover:bg-brand-surface"
+                }`}
+              >
+                <ChartLine size={20} /> Analysis
+              </Link>
+              <Link
                 href="/provider/reports"
                 data-testid="side-nav-reports"
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors duration-150 ${
