@@ -8,8 +8,7 @@ import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
 import { isAdmin, isDriver as roleIsDriver, canMutateAdmin, staffRole } from "@/lib/roles";
 import NotificationBell from "@/components/NotificationBell";
-
-export const SUBSCRIPTION_REFRESH_EVENT = "zorvia:subscription-refresh";
+import { SUBSCRIPTION_REFRESH_EVENT } from "@/lib/subscription-events";
 
 const allItems = [
   { to: "/provider", label: "Dashboard", icon: House, testid: "nav-dashboard", end: true },

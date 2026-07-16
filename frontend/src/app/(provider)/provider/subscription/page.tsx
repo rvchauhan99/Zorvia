@@ -8,8 +8,7 @@ import { toast } from "sonner";
 import { Check, Sparkle, Warning } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth";
 import { canMutateAdmin } from "@/lib/roles";
-
-export const SUBSCRIPTION_REFRESH_EVENT = "zorvia:subscription-refresh";
+import { SUBSCRIPTION_REFRESH_EVENT } from "@/lib/subscription-events";
 
 export default function Subscription() {
   const [data, setData] = useState<any>(null);
