@@ -8,6 +8,7 @@ import { canMutateDeliveries } from "@/lib/roles";
 import { fmtCAD, fmtDate, todayISO } from "@/lib/format";
 import StatusPill from "@/components/StatusPill";
 import AppSheet from "@/components/AppSheet";
+import { StatusFilterCards } from "@/components/StatusFilterCards";
 import { ArrowLeft, ArrowRight, CheckCircle, XCircle, Prohibit, CaretUp, CaretDown, MapPin } from "@phosphor-icons/react";
 
 const OFFLINE_QUEUE_KEY = "tiffin_delivery_status_queue";
@@ -53,7 +54,7 @@ export default function Deliveries() {
   const [date, setDate] = useState(todayISO());
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState("pending");
   const [q, setQ] = useState("");
   const [bulkBusy, setBulkBusy] = useState(false);
   const [confirmBulkDeliver, setConfirmBulkDeliver] = useState(false);
@@ -211,11 +212,6 @@ export default function Deliveries() {
     { k: "paused", label: "Paused", count: counts.paused || 0 },
   ];
 
-  const chipClass = (active: boolean) =>
-    `shrink-0 whitespace-nowrap px-3.5 h-9 rounded-full text-sm font-medium border cursor-pointer transition-colors ${
-      active ? "bg-primary text-primary-foreground border-primary" : "bg-white border-brand-border hover:bg-brand-surface"
-    }`;
-
   return (
     <div className="flex flex-col gap-3 sm:gap-5 animate-fade-in-up pb-24 sm:pb-0">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 sm:gap-3">
@@ -284,27 +280,24 @@ export default function Deliveries() {
           placeholder="Search name, address, postal…"
           className="h-10 w-full px-3 rounded-xl bg-white border border-brand-border text-sm outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
         />
-        <div className="flex gap-2 overflow-x-auto pb-0.5 sm:flex-wrap sm:overflow-visible" data-testid="delivery-filters">
-          {statusFilters.map((f) => (
-            <button
-              key={f.k}
-              data-testid={`filter-${f.k}`}
-              onClick={() => setFilter(f.k)}
-              className={chipClass(filter === f.k)}
-            >
-              {f.label}
-              <span className={`ml-1.5 tabular-nums ${filter === f.k ? "opacity-90" : "text-muted-foreground"}`}>{f.count}</span>
-            </button>
-          ))}
-        </div>
+        <StatusFilterCards
+          testid="delivery-filters"
+          value={filter}
+          onChange={setFilter}
+          options={statusFilters.map((f) => ({ id: f.k, label: f.label, count: f.count }))}
+        />
       </div>
 
       <div className="card-tinted overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-muted-foreground">Loading…</div>
+          <div className="p-6 sm:p-8 text-center text-muted-foreground text-sm">Loading…</div>
         ) : filtered.length === 0 ? (
-          <div className="p-8 text-center text-muted-foreground">
-            No deliveries for {fmtDate(date)}. {items.length === 0 ? "Nothing scheduled." : "Try a different filter or search."}
+          <div className="p-6 sm:p-8 text-center text-muted-foreground text-sm">
+            {items.length === 0
+              ? `No deliveries for ${fmtDate(date)}. Nothing scheduled.`
+              : filter === "pending"
+                ? `No pending deliveries for ${fmtDate(date)}.`
+                : `No ${filter === "all" ? "" : `${filter} `}deliveries for ${fmtDate(date)}. Try a different filter or search.`}
           </div>
         ) : (
           <ul className="divide-y divide-brand-border">

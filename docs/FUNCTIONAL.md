@@ -81,8 +81,9 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 | Feature | Behavior |
 |---------|----------|
 | CRUD | List/create/get/patch/delete customers under tenant |
-| Customer 360 | `GET /customers/{id}` includes outstanding + deliveries + payments; timeline at `GET /customers/{id}/timeline` |
-| Filters (UI) | all \| pending \| paused \| inactive \| high_balance |
+| Customer 360 | `GET /customers/{id}` includes outstanding + deliveries + payments; timeline at `GET /customers/{id}/timeline`; Analysis tab via `GET /customers/{id}/insights?period=` and `?tab=analysis` |
+| Filters (UI) | Compact horizontal chips: all \| pending \| paused \| inactive \| high_balance (with counts) |
+| Mobile list | Whole customer card opens Analysis (`/provider/customers/{id}?tab=analysis`); action buttons stop propagation |
 | Delivery days | Weekday indices `0=Mon … 6=Sun` |
 | Meal price | Per-customer CAD amount used on generated deliveries |
 | Pause / resume | Date window; deliveries in window generated as `paused`; resume restores future `paused` → `pending` |
@@ -95,6 +96,7 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 |---------|----------|
 | Auto-generate | Idempotent per `(tenant_id, customer_id, delivery_date)`; skips pending-approval, closed dates; respects delivery days + pauses |
 | Statuses | `pending`, `delivered`, `missed`, `cancelled`, `paused` |
+| Status filter UI | Compact horizontal chips with counts (mobile scroll); **default filter = Pending** |
 | Provider mark | One-tap delivered / missed / cancelled (**today or past only**; not future) |
 | Consumer cancel | Upcoming `pending` only; blocked for past dates; within `cutoff_hours` before assumed **local noon** (provider timezone) |
 
@@ -106,12 +108,14 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 | Screenshot storage | Cloudflare R2 when configured; else **base64 data URL** fallback |
 | Provider verify | Sets verified; notifies consumer (DB + email if Resend set) |
 | Provider reject | Requires reason; notifies consumer |
+| Status filter UI | Compact horizontal chips (Pending / Verified / Rejected / All); **default = Pending** |
 | Outstanding | Σ `meal_price` for `delivered` − Σ `amount` for `verified` payments |
 
 ### 4.6 Reports (provider)
 
 - Dashboard remains the day-of-operations cockpit: today’s required meals, pending / delivered / missed / cancelled deliveries, today’s collections, outstanding balance, pending payment approvals, pending customer approvals, and route quick actions.
-- Analysis (`/provider/analysis`) is the period business-health report: 7d / 30d / 90d / MTD KPIs, charts, receivables aging, top outstanding customers, top collectors, area concentration, and rule-based highlights.
+- Analysis (`/provider/analysis`) is the period business-health report: 7d / 30d / 90d / MTD KPIs, charts, receivables aging, top outstanding customers, top collectors, area concentration, and rule-based highlights. Top customer rows deep-link to `/provider/customers/{id}?tab=analysis`.
+- Per-customer Analysis (customer detail tab) reuses the same analytics kit scoped via `GET /customers/{id}/insights` plus the activity timeline.
 - Daily deliveries  
 - Outstanding balances  
 - Collections  

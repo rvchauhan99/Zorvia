@@ -32,6 +32,24 @@ export type BusinessInsights = {
   highlights: BusinessInsight[];
 };
 
+export type CustomerInsights = {
+  customer_id: string;
+  customer_name: string;
+  period: { key: PeriodKey; start: string; end: string };
+  prior_period: { start: string; end: string };
+  kpis: Record<string, KpiValue>;
+  series: BusinessInsights["series"];
+  ar_aging: BusinessInsights["ar_aging"];
+  highlights: BusinessInsight[];
+};
+
+export type CustomerTimelineEvent = {
+  type: "delivery" | "payment" | "pause" | "note" | string;
+  at?: string;
+  date?: string;
+  data?: Record<string, any>;
+};
+
 export const PERIODS: Array<{ key: PeriodKey; label: string }> = [
   { key: "7d", label: "7 days" },
   { key: "30d", label: "30 days" },

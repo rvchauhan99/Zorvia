@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Plus, MagnifyingGlass, PencilSimple, Trash, PauseCircle, PlayCircle, CheckCircle, XCircle, UploadSimple, EnvelopeSimple, DownloadSimple } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
@@ -9,6 +10,7 @@ import { useAuth } from "@/lib/auth";
 import { canMutateAdmin } from "@/lib/roles";
 import { fmtCAD, WEEKDAYS, todayISO } from "@/lib/format";
 import AppSheet from "@/components/AppSheet";
+import { StatusFilterCards } from "@/components/StatusFilterCards";
 
 const empty = {
   name: "", email: "", phone: "", address: "", apartment: "", postal_code: "",
@@ -43,6 +45,7 @@ const FILTERS: { id: Filter; label: string }[] = [
 ];
 
 export default function Customers() {
+  const router = useRouter();
   const { session } = useAuth();
   const canMutate = canMutateAdmin(session);
   const [items, setItems] = useState<any[]>([]);
@@ -94,6 +97,14 @@ export default function Customers() {
       return true;
     });
   }, [items, filter]);
+
+  const filterCounts = useMemo(() => ({
+    all: items.length,
+    pending: items.filter((c) => !!c.pending_approval).length,
+    paused: items.filter((c) => isPaused(c)).length,
+    inactive: items.filter((c) => !c.active).length,
+    high_balance: items.filter((c) => (c.outstanding || 0) > 0).length,
+  }), [items]);
 
   function openCreate() { setEditing(null); setForm(empty); setShowForm(true); }
   function openEdit(c: any) {
@@ -227,11 +238,11 @@ export default function Customers() {
   }
 
   return (
-    <div className="flex flex-col gap-5 animate-fade-in-up">
+    <div className="flex flex-col gap-3 sm:gap-5 animate-fade-in-up">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <span className="label-overline">CRM</span>
-          <h1 className="font-display font-black text-3xl sm:text-4xl mt-1">Customers</h1>
+          <h1 className="font-display font-black text-2xl sm:text-4xl mt-0.5 sm:mt-1">Customers</h1>
         </div>
         {canMutate ? (
           <div className="flex flex-wrap gap-2">
@@ -260,36 +271,46 @@ export default function Customers() {
       <div className="flex items-center gap-2 max-w-md">
         <div className="flex-1 relative">
           <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input data-testid="customers-search" placeholder="Search name, phone, email or postal…" value={q} onChange={(e) => setQ(e.target.value)} className="w-full h-11 pl-9 pr-3 rounded-xl bg-white border border-brand-border outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all" />
+          <input data-testid="customers-search" placeholder="Search name, phone, email or postal…" value={q} onChange={(e) => setQ(e.target.value)} className="w-full h-10 pl-9 pr-3 rounded-xl bg-white border border-brand-border outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all text-sm" />
         </div>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-0.5 sm:flex-wrap sm:overflow-visible" data-testid="customers-filters">
-        {FILTERS.map((f) => (
-          <button
-            key={f.id}
-            data-testid={`filter-${f.id}`}
-            onClick={() => setFilter(f.id)}
-            className={`shrink-0 whitespace-nowrap px-3.5 h-9 rounded-full text-sm font-medium border cursor-pointer transition-colors ${
-              filter === f.id ? "bg-primary text-primary-foreground border-primary" : "bg-white border-brand-border hover:bg-brand-surface"
-            }`}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
+      <StatusFilterCards
+        testid="customers-filters"
+        value={filter}
+        onChange={(id) => setFilter(id as Filter)}
+        options={FILTERS.map((f) => ({ id: f.id, label: f.label, count: filterCounts[f.id] }))}
+      />
 
       <div className="card-tinted overflow-hidden">
         {filtered.length === 0 ? (
-          <div className="p-8 text-center text-muted-foreground">No customers match this filter.</div>
+          <div className="p-6 sm:p-8 text-center text-muted-foreground text-sm">No customers match this filter.</div>
         ) : (
           <>
             <ul className="md:hidden divide-y divide-brand-border">
               {filtered.map((c) => (
-                <li key={c.id} data-testid={`customer-row-${c.id}`} className="p-4 flex flex-col gap-3 hover:bg-brand-surface/60 transition-colors">
+                <li
+                  key={c.id}
+                  data-testid={`customer-row-${c.id}`}
+                  role="link"
+                  tabIndex={0}
+                  onClick={() => router.push(`/provider/customers/${c.id}?tab=analysis`)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      router.push(`/provider/customers/${c.id}?tab=analysis`);
+                    }
+                  }}
+                  className="p-3 flex flex-col gap-2 hover:bg-brand-surface/60 transition-colors cursor-pointer"
+                >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                      <Link href={`/provider/customers/${c.id}`} data-testid={`customer-link-${c.id}`} className="font-medium hover:text-primary hover:underline">
+                      <Link
+                        href={`/provider/customers/${c.id}?tab=analysis`}
+                        data-testid={`customer-link-${c.id}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="font-medium hover:text-primary hover:underline"
+                      >
                         {c.name}
                       </Link>
                       <div className="text-xs text-muted-foreground mt-0.5">
@@ -317,7 +338,7 @@ export default function Customers() {
                     <span>Driver <span className="text-foreground">{c.driver_name || "—"}</span></span>
                   </div>
                   {canMutate ? (
-                    <div className="flex items-center gap-0.5 flex-wrap -ml-1">
+                    <div className="flex items-center gap-0.5 flex-wrap -ml-1" onClick={(e) => e.stopPropagation()}>
                       {c.pending_approval ? (
                         <>
                           <button data-testid={`approve-${c.id}`} onClick={() => approve(c)} className="icon-btn icon-btn-success" title="Approve"><CheckCircle size={18} /></button>
@@ -355,7 +376,7 @@ export default function Customers() {
                   {filtered.map((c) => (
                     <tr key={c.id} data-testid={`customer-row-${c.id}`} className="hover:bg-brand-surface/60 transition-colors">
                       <td className="px-4 py-3">
-                        <Link href={`/provider/customers/${c.id}`} data-testid={`customer-link-${c.id}`} className="font-medium hover:text-primary hover:underline">
+                        <Link href={`/provider/customers/${c.id}?tab=analysis`} data-testid={`customer-link-${c.id}`} className="font-medium hover:text-primary hover:underline">
                           {c.name}
                         </Link>
                         <div className="text-xs text-muted-foreground">{c.address} {c.apartment ? `· ${c.apartment}` : ""}</div>

@@ -33,9 +33,9 @@ function TopList({
   testid: string;
 }) {
   return (
-    <div className="card-tinted p-5" data-testid={testid}>
-      <div className="mb-4">
-        <h2 className="font-display font-bold text-xl">{title}</h2>
+    <div className="card-tinted p-4 sm:p-5" data-testid={testid}>
+      <div className="mb-3 sm:mb-4">
+        <h2 className="font-display font-bold text-lg sm:text-xl">{title}</h2>
         <p className="text-sm text-muted-foreground">{description}</p>
       </div>
       {rows.length === 0 ? (
@@ -47,7 +47,17 @@ function TopList({
           {rows.map((row, idx) => (
             <li key={`${row.customer_id || row.name}-${idx}`} className="py-3 flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <div className="font-medium truncate">{row.name || "Unknown customer"}</div>
+                {row.customer_id ? (
+                  <Link
+                    href={`/provider/customers/${row.customer_id}?tab=analysis`}
+                    className="font-medium truncate block hover:text-primary hover:underline"
+                    data-testid={`analysis-customer-${row.customer_id}`}
+                  >
+                    {row.name || "Unknown customer"}
+                  </Link>
+                ) : (
+                  <div className="font-medium truncate">{row.name || "Unknown customer"}</div>
+                )}
                 {row.count ? <div className="text-xs text-muted-foreground">{row.count} payment{row.count === 1 ? "" : "s"}</div> : null}
               </div>
               <div className="font-semibold">{fmtCAD(row[amountKey] || 0)}</div>
@@ -90,12 +100,12 @@ export default function AnalysisPage() {
   const busy = loading || isPending;
 
   return (
-    <div className="flex flex-col gap-6 animate-fade-in-up">
-      <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+    <div className="flex flex-col gap-4 sm:gap-6 animate-fade-in-up">
+      <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3 sm:gap-4">
         <div>
           <span className="label-overline">Business health</span>
-          <h1 className="font-display font-black text-3xl sm:text-4xl mt-1">Analysis</h1>
-          <p className="text-sm sm:text-base text-muted-foreground mt-2 max-w-2xl">
+          <h1 className="font-display font-black text-2xl sm:text-4xl mt-0.5 sm:mt-1">Analysis</h1>
+          <p className="text-sm sm:text-base text-muted-foreground mt-1.5 sm:mt-2 max-w-2xl">
             Period trends, receivables risk, collections, delivery performance, and top customer signals.
           </p>
         </div>
@@ -119,7 +129,7 @@ export default function AnalysisPage() {
         <>
           <HighlightsPanel highlights={data.highlights} />
 
-          <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
             <KpiCard testid="kpi-collections" label="Collections" value={fmtCAD(k.collections_amount?.value || 0)} kpi={k.collections_amount} hint={`${k.collections_count?.value || 0} verified payments`} />
             <KpiCard testid="kpi-delivered-revenue" label="Delivered revenue" value={fmtCAD(k.delivered_revenue?.value || 0)} kpi={k.delivered_revenue} hint={`${k.delivered_count?.value || 0} delivered meals`} />
             <KpiCard testid="kpi-outstanding" label="Outstanding" value={fmtCAD(k.outstanding_total?.value || 0)} kpi={k.outstanding_total} hint="Current receivables" inverseDelta />
@@ -130,14 +140,14 @@ export default function AnalysisPage() {
             <KpiCard testid="kpi-collection-efficiency" label="Collection efficiency" value={percent(k.collection_efficiency?.value)} kpi={k.collection_efficiency} hint="Collections vs delivered value" />
           </section>
 
-          <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <section className="grid grid-cols-1 xl:grid-cols-2 gap-3 sm:gap-4">
             <DeliveryTrendChart data={data.series} />
             <CollectionsChart data={data.series} />
             <AgingChart data={data.ar_aging} />
             <AreaChart data={data.areas} />
           </section>
 
-          <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <section className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
             <TopList
               title="Top outstanding"
               description="Customers with the highest current receivables."
@@ -154,9 +164,9 @@ export default function AnalysisPage() {
             />
           </section>
 
-          <section className="card-tinted p-5 flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
+          <section className="card-tinted p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 justify-between">
             <div>
-              <h2 className="font-display font-bold text-xl">Need exports?</h2>
+              <h2 className="font-display font-bold text-lg sm:text-xl">Need exports?</h2>
               <p className="text-sm text-muted-foreground">Use detailed reports for CSV and monthly statement workflows.</p>
             </div>
             <div className="flex flex-wrap gap-2">

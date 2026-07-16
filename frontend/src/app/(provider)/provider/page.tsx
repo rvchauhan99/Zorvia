@@ -26,7 +26,7 @@ function StatCard({ icon: Icon, label, value, hint, tone = "primary", testid }: 
         <span className="label-overline">{label}</span>
         <Icon size={22} className={toneMap[tone]} weight="duotone" />
       </div>
-      <div className="font-display font-black text-3xl">{value}</div>
+      <div className="font-display font-black text-2xl sm:text-3xl">{value}</div>
       {hint ? <div className="text-xs text-muted-foreground">{hint}</div> : null}
     </div>
   );
@@ -94,15 +94,15 @@ export default function ProviderDashboard() {
   }
 
   return (
-    <div className="flex flex-col gap-6 animate-fade-in-up">
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+    <div className="flex flex-col gap-4 sm:gap-6 animate-fade-in-up">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 sm:gap-3">
         <div className="flex items-center gap-3">
           {provider?.logo_url ? (
-            <img src={provider.logo_url} alt="" className="h-12 w-12 rounded-xl object-cover border border-brand-border" data-testid="dashboard-logo" />
+            <img src={provider.logo_url} alt="" className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl object-cover border border-brand-border" data-testid="dashboard-logo" />
           ) : null}
           <div>
             <span className="label-overline">Today · {fmtDate(todayISO())}</span>
-            <h1 className="font-display font-black text-3xl sm:text-4xl mt-1">Good day, {(provider?.name || "there").split(" ")[0]}</h1>
+            <h1 className="font-display font-black text-2xl sm:text-4xl mt-0.5 sm:mt-1">Good day, {(provider?.name || "there").split(" ")[0]}</h1>
           </div>
         </div>
         {provider?.signup_code ? (
@@ -118,10 +118,10 @@ export default function ProviderDashboard() {
       </div>
 
       {showChecklist ? (
-        <div data-testid="onboarding-checklist" className="card-tinted p-5 border border-brand-amber/30 bg-amber-50/40">
+        <div data-testid="onboarding-checklist" className="card-tinted p-4 sm:p-5 border border-brand-amber/30 bg-amber-50/40">
           <div className="flex items-start justify-between gap-3 mb-3">
             <div>
-              <h2 className="font-display font-bold text-xl">Get set up</h2>
+              <h2 className="font-display font-bold text-lg sm:text-xl">Get set up</h2>
               <p className="text-sm text-muted-foreground mt-1">A few steps so you can start delivering and collecting.</p>
             </div>
             <button data-testid="dismiss-onboarding" onClick={dismissChecklist} className="text-xs text-muted-foreground hover:underline cursor-pointer shrink-0">Dismiss</button>
@@ -164,10 +164,10 @@ export default function ProviderDashboard() {
         <StatCard testid="stat-collections" icon={Users} label="Today's Collections" value={fmtCAD(summary?.collections_today?.amount ?? 0)} hint={`${summary?.collections_today?.count ?? 0} verified today`} tone="secondary" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 card-tinted p-5">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
+        <div className="lg:col-span-2 card-tinted p-4 sm:p-5">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-display font-bold text-xl">Today's route</h2>
+            <h2 className="font-display font-bold text-lg sm:text-xl">Today's route</h2>
             <button data-testid="go-deliveries" onClick={() => router.push("/provider/deliveries")} className="text-sm text-primary inline-flex items-center gap-1 cursor-pointer hover:underline">
               Open list <ArrowRight size={14} />
             </button>
@@ -207,7 +207,7 @@ export default function ProviderDashboard() {
           )}
         </div>
 
-        <div className="card-tinted p-5">
+        <div className="card-tinted p-4 sm:p-5">
           <h2 className="font-display font-bold text-xl mb-3">At a glance</h2>
           <div className="space-y-3 text-sm">
             <div className="flex items-center justify-between">

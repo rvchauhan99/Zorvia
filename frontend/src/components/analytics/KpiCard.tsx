@@ -19,15 +19,15 @@ export function KpiCard({ label, value, kpi, hint, inverseDelta = false, testid 
       : "bg-brand-surface text-muted-foreground";
 
   return (
-    <div data-testid={testid} className="card-tinted card-tinted-hover p-5 flex flex-col gap-3 min-h-[132px]">
+    <div data-testid={testid} className="card-tinted card-tinted-hover p-3.5 sm:p-5 flex flex-col gap-2 sm:gap-3 min-h-[108px] sm:min-h-[132px]">
       <div className="flex items-center justify-between gap-3">
         <span className="label-overline">{label}</span>
         <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${toneCls}`} data-testid={`${testid}-delta`}>
           {fmtDelta(kpi)}
         </span>
       </div>
-      <div className="font-display font-black text-3xl leading-none">{value}</div>
-      {hint ? <div className="text-sm text-muted-foreground">{hint}</div> : null}
+      <div className="font-display font-black text-2xl sm:text-3xl leading-none">{value}</div>
+      {hint ? <div className="text-xs sm:text-sm text-muted-foreground">{hint}</div> : null}
     </div>
   );
 }

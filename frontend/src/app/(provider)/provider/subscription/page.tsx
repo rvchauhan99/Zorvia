@@ -54,13 +54,13 @@ export default function Subscription() {
   const dl = data.days_left;
 
   return (
-    <div className="flex flex-col gap-6 animate-fade-in-up max-w-4xl">
+    <div className="flex flex-col gap-4 sm:gap-6 animate-fade-in-up max-w-4xl">
       <div>
         <span className="label-overline">Billing</span>
-        <h1 className="font-display font-black text-3xl sm:text-4xl mt-1">Your subscription</h1>
+        <h1 className="font-display font-black text-2xl sm:text-4xl mt-0.5 sm:mt-1">Your subscription</h1>
       </div>
 
-      <div className={`card-tinted p-5 flex items-center gap-4 ${status === "expired" ? "border-primary" : ""}`}>
+      <div className={`card-tinted p-4 sm:p-5 flex items-center gap-3 sm:gap-4 ${status === "expired" ? "border-primary" : ""}`}>
         {status === "trialing" ? (
           <>
             <Sparkle size={28} className="text-secondary" weight="fill" />
@@ -88,12 +88,12 @@ export default function Subscription() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
         {data.plans.map((p: any) => {
           const isCurrent = data.subscription?.plan === p.id && status === "active";
           const isRecommended = p.id === "quarterly";
           return (
-            <div key={p.id} className={`card-tinted p-6 flex flex-col gap-3 relative ${isRecommended ? "border-primary ring-2 ring-primary/20" : ""}`}>
+            <div key={p.id} className={`card-tinted p-4 sm:p-6 flex flex-col gap-3 relative ${isRecommended ? "border-primary ring-2 ring-primary/20" : ""}`}>
               {isRecommended ? <div className="absolute -top-2 left-6 bg-primary text-primary-foreground text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full">Recommended</div> : null}
               <div className="label-overline">{p.label}</div>
               <div className="flex items-baseline gap-1">

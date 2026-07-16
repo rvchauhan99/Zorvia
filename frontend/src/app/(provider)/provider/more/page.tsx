@@ -35,15 +35,15 @@ export default function More() {
   }, [session, router]);
 
   return (
-    <div className="flex flex-col gap-4 animate-fade-in-up">
+    <div className="flex flex-col gap-3 sm:gap-4 animate-fade-in-up">
       <div>
         <span className="label-overline">Account · {session?.email}</span>
-        <h1 className="font-display font-black text-3xl mt-1">More</h1>
+        <h1 className="font-display font-black text-2xl sm:text-3xl mt-0.5 sm:mt-1">More</h1>
       </div>
       <ul className="card-tinted divide-y divide-brand-border overflow-hidden">
         {items.map((it) => (
           <li key={it.to}>
-            <Link data-testid={it.testid} href={it.to} className="flex items-center gap-3 p-4 hover:bg-brand-surface transition-colors cursor-pointer">
+            <Link data-testid={it.testid} href={it.to} className="flex items-center gap-3 p-3.5 sm:p-4 hover:bg-brand-surface transition-colors cursor-pointer">
               <it.icon size={22} />
               <span className="font-medium">{it.label}</span>
               <ArrowRight size={16} className="ml-auto text-muted-foreground" />
@@ -51,16 +51,16 @@ export default function More() {
           </li>
         ))}
         <li>
-          <button data-testid="more-logout" onClick={() => { void logout().then(() => router.push("/login")); }} className="w-full flex items-center gap-3 p-4 hover:bg-destructive/10 transition-colors text-left cursor-pointer text-destructive">
+          <button data-testid="more-logout" onClick={() => { void logout().then(() => router.push("/login")); }} className="w-full flex items-center gap-3 p-3.5 sm:p-4 hover:bg-destructive/10 transition-colors text-left cursor-pointer text-destructive">
             <SignOut size={22} />
             <span className="font-medium">Sign out</span>
           </button>
         </li>
       </ul>
 
-      <div className="card-tinted p-5 flex flex-col gap-3" data-testid="activity-section">
+      <div className="card-tinted p-4 sm:p-5 flex flex-col gap-3" data-testid="activity-section">
         <div>
-          <h2 className="font-display font-bold text-xl">Recent activity</h2>
+          <h2 className="font-display font-bold text-lg sm:text-xl">Recent activity</h2>
           <p className="text-sm text-muted-foreground mt-1">Login, settings, payments, and subscription events.</p>
         </div>
         {activity.length === 0 ? (

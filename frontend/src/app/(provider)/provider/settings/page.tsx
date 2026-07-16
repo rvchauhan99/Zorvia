@@ -164,13 +164,13 @@ export default function Settings() {
   }
 
   return (
-    <div className="flex flex-col gap-5 animate-fade-in-up max-w-3xl">
+    <div className="flex flex-col gap-3 sm:gap-5 animate-fade-in-up max-w-3xl">
       <div>
         <span className="label-overline">Configuration</span>
-        <h1 className="font-display font-black text-3xl sm:text-4xl mt-1">Settings</h1>
+        <h1 className="font-display font-black text-2xl sm:text-4xl mt-0.5 sm:mt-1">Settings</h1>
       </div>
 
-      <div className="card-tinted p-6 flex flex-col gap-4">
+      <div className="card-tinted p-4 sm:p-6 flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <div>
             <div className="label-overline">Signup code</div>
@@ -181,9 +181,9 @@ export default function Settings() {
         <p className="text-xs text-muted-foreground">Share this with consumers to let them sign themselves up. You approve them from the Customers page.</p>
       </div>
 
-      <div className="card-tinted p-6 flex flex-col gap-4" data-testid="kitchen-logo-section">
+      <div className="card-tinted p-4 sm:p-6 flex flex-col gap-4" data-testid="kitchen-logo-section">
         <div>
-          <h2 className="font-display font-bold text-xl">Kitchen logo</h2>
+          <h2 className="font-display font-bold text-lg sm:text-xl">Kitchen logo</h2>
           <p className="text-sm text-muted-foreground mt-1">Stored as a 512×512 JPEG on Cloudflare R2 (or inline fallback).</p>
         </div>
         <div className="flex items-center gap-4">
@@ -203,7 +203,7 @@ export default function Settings() {
         </div>
       </div>
 
-      <div className="card-tinted p-6 flex flex-col gap-4" data-testid="change-password-section">
+      <div className="card-tinted p-4 sm:p-6 flex flex-col gap-4" data-testid="change-password-section">
         <div>
           <h2 className="font-display font-bold text-xl">{hasPassword ? "Change password" : "Set password"}</h2>
           <p className="text-sm text-muted-foreground mt-1">
@@ -233,7 +233,7 @@ export default function Settings() {
         </form>
       </div>
 
-      <div className="card-tinted p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="card-tinted p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
         <label className="flex flex-col gap-1.5">
           <span className="label-overline">Business name</span>
           <input data-testid="s-name" className={input} value={prov.name || ""} onChange={(e) => upd("name", e.target.value)} />
@@ -293,7 +293,7 @@ export default function Settings() {
         </label>
       </div>
 
-      <div className="card-tinted p-6 flex flex-col gap-4" data-testid="closed-dates-section">
+      <div className="card-tinted p-4 sm:p-6 flex flex-col gap-4" data-testid="closed-dates-section">
         <div>
           <h2 className="font-display font-bold text-xl">Closed dates / holidays</h2>
           <p className="text-sm text-muted-foreground mt-1">No deliveries will be generated on these dates.</p>
@@ -340,7 +340,7 @@ export default function Settings() {
         )}
       </div>
 
-      <div className="card-tinted p-6 flex flex-col gap-4" data-testid="staff-section">
+      <div className="card-tinted p-4 sm:p-6 flex flex-col gap-4" data-testid="staff-section">
         <div>
           <h2 className="font-display font-bold text-xl">Staff</h2>
           <p className="text-sm text-muted-foreground mt-1">Admins, drivers (deliveries only), and viewers (read-only).</p>

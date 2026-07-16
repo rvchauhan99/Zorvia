@@ -8,6 +8,7 @@ import { canMutateAdmin } from "@/lib/roles";
 import { fmtCAD, fmtDateTime } from "@/lib/format";
 import StatusPill from "@/components/StatusPill";
 import AppSheet from "@/components/AppSheet";
+import { StatusFilterCards } from "@/components/StatusFilterCards";
 import { CheckCircle, XCircle, Eye } from "@phosphor-icons/react";
 
 export default function Payments() {
@@ -92,28 +93,30 @@ export default function Payments() {
   }
 
   return (
-    <div className="flex flex-col gap-5 animate-fade-in-up">
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+    <div className="flex flex-col gap-3 sm:gap-5 animate-fade-in-up">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 sm:gap-3">
         <div>
           <span className="label-overline">Reconciliation</span>
-          <h1 className="font-display font-black text-3xl sm:text-4xl mt-1">Payments</h1>
+          <h1 className="font-display font-black text-2xl sm:text-4xl mt-0.5 sm:mt-1">Payments</h1>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <input
-            data-testid="payment-search"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") load(); }}
-            placeholder="Search name or ref"
-            className="h-10 px-3 rounded-xl bg-white border border-brand-border text-sm min-w-[180px]"
-          />
-          <button data-testid="payment-search-btn" onClick={load} className="h-10 px-4 rounded-full border border-brand-border bg-white text-sm font-medium hover:bg-brand-surface">Search</button>
+        <div className="flex flex-col sm:flex-row flex-wrap gap-2 w-full sm:w-auto">
+          <div className="flex gap-2 w-full sm:w-auto">
+            <input
+              data-testid="payment-search"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") load(); }}
+              placeholder="Search name or ref"
+              className="h-10 flex-1 sm:flex-none px-3 rounded-xl bg-white border border-brand-border text-sm min-w-0 sm:min-w-[180px]"
+            />
+            <button data-testid="payment-search-btn" onClick={load} className="h-10 px-4 rounded-full border border-brand-border bg-white text-sm font-medium hover:bg-brand-surface shrink-0">Search</button>
+          </div>
           {canMutate ? (
             <button
               data-testid="batch-verify"
               disabled={batchBusy || selected.size === 0}
               onClick={() => setConfirmBatchVerify(true)}
-              className="h-10 px-4 rounded-full bg-secondary text-secondary-foreground text-sm font-semibold disabled:opacity-50"
+              className="h-10 px-4 rounded-full bg-secondary text-secondary-foreground text-sm font-semibold disabled:opacity-50 w-full sm:w-auto"
             >
               Verify selected
             </button>
@@ -121,32 +124,22 @@ export default function Payments() {
         </div>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-0.5 sm:flex-wrap sm:overflow-visible" data-testid="payments-filters">
-        {[
-          { id: "pending", label: "Pending" },
-          { id: "verified", label: "Verified" },
-          { id: "rejected", label: "Rejected" },
-          { id: "all", label: "All" },
-        ].map((f) => (
-          <button
-            key={f.id}
-            data-testid={`pfilter-${f.id}`}
-            onClick={() => setFilter(f.id)}
-            className={`shrink-0 whitespace-nowrap px-3.5 h-9 rounded-full text-sm font-medium border cursor-pointer transition-colors ${
-              filter === f.id ? "bg-primary text-primary-foreground border-primary" : "bg-white border-brand-border hover:bg-brand-surface"
-            }`}
-          >
-            {f.label}
-            {f.id === "pending" && filter === "pending" ? (
-              <span className="ml-1.5 tabular-nums opacity-90">{items.length}</span>
-            ) : null}
-          </button>
-        ))}
-      </div>
+      <StatusFilterCards
+        testid="payments-filters"
+        itemTestIdPrefix="pfilter"
+        value={filter}
+        onChange={setFilter}
+        options={[
+          { id: "pending", label: "Pending", count: filter === "pending" ? items.length : undefined },
+          { id: "verified", label: "Verified", count: filter === "verified" ? items.length : undefined },
+          { id: "rejected", label: "Rejected", count: filter === "rejected" ? items.length : undefined },
+          { id: "all", label: "All", count: filter === "all" ? items.length : undefined },
+        ]}
+      />
 
       <div className="card-tinted overflow-hidden">
         {items.length === 0 ? (
-          <div className="p-10 text-center text-muted-foreground">No {filter === "all" ? "" : filter} payments.</div>
+          <div className="p-6 sm:p-10 text-center text-muted-foreground text-sm">No {filter === "all" ? "" : filter} payments.</div>
         ) : (
           <ul className="divide-y divide-brand-border">
             {items.map((p) => (

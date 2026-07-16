@@ -11,7 +11,7 @@ function tabButton(active: boolean, label: string, onClick: () => void, testid: 
     <button
       data-testid={testid}
       onClick={onClick}
-      className={`px-4 h-10 rounded-full text-sm font-medium border cursor-pointer transition-colors ${active ? "bg-primary text-primary-foreground border-primary" : "bg-white border-brand-border hover:bg-brand-surface"}`}
+      className={`snap-start shrink-0 whitespace-nowrap px-3.5 h-9 sm:h-10 rounded-full text-sm font-medium border cursor-pointer transition-colors ${active ? "bg-primary text-primary-foreground border-primary" : "bg-white border-brand-border hover:bg-brand-surface"}`}
     >{label}</button>
   );
 }
@@ -66,16 +66,16 @@ export default function Reports() {
   }
 
   return (
-    <div className="flex flex-col gap-5 animate-fade-in-up">
+    <div className="flex flex-col gap-3 sm:gap-5 animate-fade-in-up">
       <div className="flex items-center justify-between gap-3">
         <div>
           <span className="label-overline">Insights</span>
-          <h1 className="font-display font-black text-3xl sm:text-4xl mt-1">Reports</h1>
+          <h1 className="font-display font-black text-2xl sm:text-4xl mt-0.5 sm:mt-1">Reports</h1>
         </div>
-        <button data-testid="export-csv" onClick={exportCSV} className="pill-btn btn-outline gap-2 cursor-pointer hover:bg-brand-surface"><DownloadSimple size={16} /> Export CSV</button>
+        <button data-testid="export-csv" onClick={exportCSV} className="pill-btn btn-outline gap-2 cursor-pointer hover:bg-brand-surface h-10"><DownloadSimple size={16} /> Export CSV</button>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex gap-1.5 overflow-x-auto pb-0.5 snap-x snap-mandatory sm:flex-wrap sm:overflow-visible [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {tabButton(tab === "daily", "Daily deliveries", () => setTab("daily"), "rtab-daily")}
         {tabButton(tab === "outstanding", "Outstanding", () => setTab("outstanding"), "rtab-outstanding")}
         {tabButton(tab === "collections", "Collections", () => setTab("collections"), "rtab-collections")}
