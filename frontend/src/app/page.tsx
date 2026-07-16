@@ -96,25 +96,25 @@ export default function Landing() {
       <section className="relative lg:min-h-[calc(100vh-6.5rem)] grid grid-cols-1 lg:grid-cols-2">
         <div className="flex flex-col justify-center gap-5 sm:gap-7 px-4 sm:px-6 lg:px-10 xl:px-14 py-10 sm:py-14 lg:py-16">
           <span className="label-overline text-sm sm:text-base tracking-[0.2em]">Canada · CAD · Interac e-Transfer</span>
-          <p
+          <h1
             className="font-display font-black tracking-tight text-primary"
-            style={{ fontSize: "clamp(1.75rem, 3.5vw, 2.75rem)", lineHeight: 1.05 }}
+            style={{ fontSize: "clamp(2.5rem, 6vw, 5rem)", lineHeight: 1.02 }}
             data-testid="landing-app-name"
           >
             MealHQ
-          </p>
-          <h1
+          </h1>
+          <p
             className="font-display font-black tracking-tight text-foreground"
-            style={{ fontSize: "clamp(2.35rem, 5vw, 4.75rem)", lineHeight: 1.02 }}
+            style={{ fontSize: "clamp(1.65rem, 3.5vw, 3rem)", lineHeight: 1.08 }}
           >
             Run your tiffin business without the{" "}
             <span className="text-primary">spreadsheet chaos.</span>
-          </h1>
+          </p>
           <p
             className="text-muted-foreground max-w-[42rem] leading-snug"
             style={{ fontSize: "clamp(1.125rem, 1.5vw, 1.5rem)" }}
           >
-            MealHQ is the operating system for independent tiffin providers. Manage customers, delivery lists, Interac payments and outstanding balances — all from your phone.
+            MealHQ is the operating system for independent tiffin providers. Manage customers, delivery lists, Interac payments and outstanding balances — all from your phone. Sign in with Google to create your MealHQ account using your name and email.
           </p>
           <div className="flex flex-col gap-3 sm:gap-4 pt-1">
             <div className="flex flex-wrap gap-3 sm:gap-4 items-center">
@@ -176,6 +176,39 @@ export default function Landing() {
             <div className="font-display font-bold text-xl mt-1">Aarav S. · $65</div>
             <div className="text-sm text-muted-foreground">Interac ref #TX-4429</div>
           </div>
+        </div>
+      </section>
+
+      {/* OAuth brand verification: purpose + Google Sign-In (high on page for reviewers) */}
+      <section className={`${shell} py-12 sm:py-16 border-b border-brand-border/80`} aria-labelledby="about-mealhq-heading">
+        <div className="max-w-3xl flex flex-col gap-4">
+          <span className="label-overline text-sm sm:text-base tracking-[0.18em]">About MealHQ</span>
+          <h2
+            id="about-mealhq-heading"
+            className="font-display font-bold leading-[1.1] tracking-tight"
+            style={{ fontSize: "clamp(1.75rem, 3vw, 2.5rem)" }}
+          >
+            What MealHQ is — and why we use Google Sign-In
+          </h2>
+          <p className="text-base sm:text-lg text-muted-foreground leading-relaxed">
+            MealHQ is a multi-tenant SaaS for Canadian tiffin kitchens and their customers. Providers run delivery lists,
+            Interac e-Transfer reconciliation, and outstanding balances. Customers track meals, balances, and payment
+            references inside their provider&apos;s workspace.
+          </p>
+          <p className="text-base sm:text-lg text-muted-foreground leading-relaxed">
+            Sign in with Google lets you create or access a MealHQ account using your Google account. MealHQ requests
+            your basic Google profile (name, email address, and profile photo) only to authenticate you and set up your
+            MealHQ user record. We do not read your Gmail, contacts, or Drive, and we do not post to Google on your behalf.
+            See our{" "}
+            <Link href="/privacy" className="font-semibold text-primary hover:underline">
+              Privacy Policy
+            </Link>{" "}
+            and{" "}
+            <Link href="/terms" className="font-semibold text-primary hover:underline">
+              Terms of Service
+            </Link>
+            .
+          </p>
         </div>
       </section>
 
@@ -324,39 +357,6 @@ export default function Landing() {
               {!submitting && <ArrowRight size={18} weight="bold" />}
             </button>
           </form>
-        </div>
-      </section>
-
-      {/* OAuth brand verification: purpose + Google Sign-In data use (must be public, no login) */}
-      <section className={`${shell} pb-16 sm:pb-20 lg:pb-28`} aria-labelledby="about-mealhq-heading">
-        <div className="max-w-3xl flex flex-col gap-4">
-          <span className="label-overline text-sm sm:text-base tracking-[0.18em]">About MealHQ</span>
-          <h2
-            id="about-mealhq-heading"
-            className="font-display font-bold leading-[1.1] tracking-tight"
-            style={{ fontSize: "clamp(1.75rem, 3vw, 2.5rem)" }}
-          >
-            What MealHQ is — and why we use Google Sign-In
-          </h2>
-          <p className="text-base sm:text-lg text-muted-foreground leading-relaxed">
-            MealHQ is a multi-tenant SaaS for Canadian tiffin kitchens and their customers. Providers run delivery lists,
-            Interac e-Transfer reconciliation, and outstanding balances. Customers track meals, balances, and payment
-            references inside their provider&apos;s workspace.
-          </p>
-          <p className="text-base sm:text-lg text-muted-foreground leading-relaxed">
-            Sign in with Google lets you create or access a MealHQ account using your Google account. MealHQ requests
-            your basic Google profile (name, email address, and profile photo) only to authenticate you and set up your
-            MealHQ user record. We do not read your Gmail, contacts, or Drive, and we do not post to Google on your behalf.
-            See our{" "}
-            <Link href="/privacy" className="font-semibold text-primary hover:underline">
-              Privacy Policy
-            </Link>{" "}
-            and{" "}
-            <Link href="/terms" className="font-semibold text-primary hover:underline">
-              Terms of Service
-            </Link>
-            .
-          </p>
         </div>
       </section>
 
