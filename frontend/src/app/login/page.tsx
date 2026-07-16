@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Suspense, useEffect, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight } from "@phosphor-icons/react";
@@ -8,13 +8,24 @@ import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
 
+type LoginRole = "provider" | "consumer";
+
+function parseRole(raw: string | null): LoginRole {
+  return raw === "consumer" ? "consumer" : "provider";
+}
+
 function LoginForm() {
   const { login, session, ready } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [role, setRole] = useState<LoginRole>(() => parseRole(searchParams.get("role")));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    setRole(parseRole(searchParams.get("role")));
+  }, [searchParams]);
 
   useEffect(() => {
     if (!ready || !session) return;
@@ -26,6 +37,39 @@ function LoginForm() {
         : fallback;
     router.replace(dest);
   }, [ready, session, router, searchParams]);
+
+  const copy = useMemo(
+    () =>
+      role === "provider"
+        ? {
+            panelTitle: "Log in and get today's route.",
+            panelBody: "Your customers, deliveries, and Interac reconciliation — all in one workspace.",
+            title: "Welcome back",
+            subtitle: "Sign in to your kitchen workspace.",
+            signupHref: "/signup",
+            signupLabel: "New kitchen? Create a workspace",
+            signupTestId: "login-to-signup" as const,
+          }
+        : {
+            panelTitle: "Your meals and balance, in one place.",
+            panelBody: "See upcoming deliveries, track outstanding, and submit Interac references.",
+            title: "Welcome back",
+            subtitle: "Sign in to your meal account.",
+            signupHref: "/consumer-signup",
+            signupLabel: "New here? Sign up with your kitchen's code",
+            signupTestId: "login-to-consumer-signup" as const,
+          },
+    [role],
+  );
+
+  function selectRole(next: LoginRole) {
+    setRole(next);
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "provider") params.delete("role");
+    else params.set("role", "consumer");
+    const q = params.toString();
+    router.replace(q ? `/login?${q}` : "/login", { scroll: false });
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -61,8 +105,8 @@ function LoginForm() {
         />
         <div className="absolute inset-0 bg-gradient-to-tr from-black/60 to-transparent" />
         <div className="absolute bottom-10 left-10 text-white max-w-md">
-          <div className="font-display font-black text-4xl leading-tight">Log in and get today&apos;s route.</div>
-          <p className="mt-3 text-white/80">Your customers, deliveries, and Interac reconciliation — all in one workspace.</p>
+          <div className="font-display font-black text-4xl leading-tight">{copy.panelTitle}</div>
+          <p className="mt-3 text-white/80">{copy.panelBody}</p>
         </div>
       </div>
       <div className="flex-1 flex items-center justify-center p-6 sm:p-10">
@@ -74,8 +118,45 @@ function LoginForm() {
               className="h-11 w-auto"
             />
           </Link>
-          <h1 className="font-display font-bold text-3xl mt-6">Welcome back</h1>
-          <p className="text-sm text-muted-foreground mt-1">Log in to your provider or consumer account.</p>
+
+          <div
+            className="mt-6 grid grid-cols-2 gap-1 p-1 rounded-2xl bg-brand-surface border border-brand-border"
+            role="tablist"
+            aria-label="Account type"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={role === "provider"}
+              data-testid="login-role-provider"
+              onClick={() => selectRole("provider")}
+              className={`h-11 rounded-xl text-sm font-semibold transition-colors cursor-pointer ${
+                role === "provider"
+                  ? "bg-white text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              I run a kitchen
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={role === "consumer"}
+              data-testid="login-role-consumer"
+              onClick={() => selectRole("consumer")}
+              className={`h-11 rounded-xl text-sm font-semibold transition-colors cursor-pointer ${
+                role === "consumer"
+                  ? "bg-white text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              I order meals
+            </button>
+          </div>
+
+          <h1 className="font-display font-bold text-3xl mt-6">{copy.title}</h1>
+          <p className="text-sm text-muted-foreground mt-1">{copy.subtitle}</p>
+
           <form onSubmit={onSubmit} className="mt-8 flex flex-col gap-4">
             <label className="flex flex-col gap-1.5">
               <span className="label-overline">Email</span>
@@ -114,26 +195,38 @@ function LoginForm() {
               {submitting ? "Signing in..." : (<>Sign in <ArrowRight size={18} weight="bold" /></>)}
             </button>
           </form>
+
           <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
             <div className="flex-1 h-px bg-brand-border" /> OR <div className="flex-1 h-px bg-brand-border" />
           </div>
-          <GoogleSignInButton user_type="provider" label="Continue with Google (Provider)" testid="google-login-provider" />
+
+          <GoogleSignInButton
+            user_type={role}
+            label="Continue with Google"
+            testid={role === "provider" ? "google-login-provider" : "google-login-consumer"}
+          />
           <p className="text-xs text-muted-foreground mt-2">
-            Same email = same account for Google and password. Signed up with Google? Use{" "}
-            <Link href="/forgot-password" className="text-primary font-medium hover:underline">Forgot password</Link>
-            {" "}to set one. Consumers:{" "}
-            <Link href="/consumer-signup" className="text-secondary font-medium underline-offset-2 hover:underline">join with a signup code</Link>.
+            Same email works for Google and password.
           </p>
-          <div className="mt-6 p-4 rounded-2xl bg-brand-surface border border-brand-border text-sm">
-            <div className="font-medium text-foreground">Looking for the consumer portal?</div>
-            <div className="text-muted-foreground mt-1">Log in with the email you used at signup, or create an account with your kitchen&apos;s code.</div>
-            <Link data-testid="login-consumer-cta" href="/consumer-signup" className="inline-flex mt-3 pill-btn btn-outline h-10 text-sm">
-              Consumer sign up
+
+          <div className="mt-8 text-sm text-muted-foreground">
+            <Link
+              data-testid={copy.signupTestId}
+              href={copy.signupHref}
+              className="text-primary font-medium hover:underline"
+            >
+              {copy.signupLabel}
             </Link>
-          </div>
-          <div className="mt-6 text-sm text-muted-foreground flex flex-col gap-1">
-            <div>New provider? <Link data-testid="login-to-signup" href="/signup" className="text-primary font-medium hover:underline">Create a workspace</Link></div>
-            <div>New consumer? <Link data-testid="login-to-consumer-signup" href="/consumer-signup" className="text-secondary font-medium hover:underline">Sign up with a provider code</Link></div>
+            {/* Keep both testids discoverable for e2e when inactive */}
+            {role === "provider" ? (
+              <span className="sr-only">
+                <Link data-testid="login-to-consumer-signup" href="/consumer-signup">Sign up with a provider code</Link>
+              </span>
+            ) : (
+              <span className="sr-only">
+                <Link data-testid="login-to-signup" href="/signup">Create a workspace</Link>
+              </span>
+            )}
           </div>
         </div>
       </div>

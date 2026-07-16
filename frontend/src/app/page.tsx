@@ -82,8 +82,12 @@ export default function Landing() {
             >
               Contact
             </a>
-            <Link data-testid="landing-login-link" href="/login" className="pill-btn btn-outline text-sm h-9 sm:h-10 px-4 sm:px-5">Log in</Link>
-            <Link data-testid="landing-signup-link" href="/signup" className="pill-btn btn-primary text-sm h-9 sm:h-10 px-4 sm:px-5">Start free</Link>
+            <Link data-testid="landing-login-link" href="/login" className="pill-btn btn-outline text-sm h-9 sm:h-10 px-4 sm:px-5">
+              Log in
+            </Link>
+            <Link data-testid="landing-signup-link" href="/signup" className="pill-btn btn-primary text-sm h-9 sm:h-10 px-4 sm:px-5">
+              Start free
+            </Link>
           </nav>
         </div>
       </header>
@@ -105,18 +109,36 @@ export default function Landing() {
           >
             MealHQ is the operating system for independent tiffin providers. Manage customers, delivery lists, Interac payments and outstanding balances — all from your phone.
           </p>
-          <div className="flex flex-wrap gap-3 sm:gap-4 items-center pt-1">
-            <Link data-testid="hero-cta-signup" href="/signup" className="pill-btn btn-primary h-12 sm:h-14 px-7 sm:px-8 text-base sm:text-lg gap-2">
-              Start free <ArrowRight size={20} weight="bold" />
-            </Link>
-            <Link data-testid="hero-cta-consumer" href="/consumer-signup" className="pill-btn btn-outline h-12 sm:h-14 px-7 sm:px-8 text-base sm:text-lg">
-              I&apos;m a consumer
-            </Link>
+          <div className="flex flex-col gap-3 sm:gap-4 pt-1">
+            <div className="flex flex-wrap gap-3 sm:gap-4 items-center">
+              <div className="flex flex-col gap-1.5">
+                <span className="text-xs sm:text-sm font-semibold uppercase tracking-wide text-primary">
+                  For providers
+                </span>
+                <Link data-testid="hero-cta-signup" href="/signup" className="pill-btn btn-primary h-12 sm:h-14 px-7 sm:px-8 text-base sm:text-lg gap-2">
+                  Start free <ArrowRight size={20} weight="bold" />
+                </Link>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <span className="text-xs sm:text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  For customers
+                </span>
+                <Link data-testid="hero-cta-consumer" href="/consumer-signup" className="pill-btn btn-outline h-12 sm:h-14 px-7 sm:px-8 text-base sm:text-lg">
+                  I order meals
+                </Link>
+              </div>
+            </div>
+            <p className="text-sm sm:text-base text-muted-foreground">
+              Providers open a free workspace · Already with MealHQ?{" "}
+              <Link href="/login" className="font-semibold text-primary hover:underline" data-testid="hero-cta-login">
+                Log in
+              </Link>
+            </p>
           </div>
           <div className="flex flex-wrap items-end gap-6 sm:gap-10 pt-4 border-t border-brand-border/80 mt-2">
             <div>
               <div className="font-display font-bold" style={{ fontSize: "clamp(2rem, 3vw, 3rem)" }}>$0</div>
-              <div className="text-sm sm:text-base text-muted-foreground mt-1">to get started</div>
+              <div className="text-sm sm:text-base text-muted-foreground mt-1">to open a kitchen</div>
             </div>
             <div>
               <div className="font-display font-bold" style={{ fontSize: "clamp(2rem, 3vw, 3rem)" }}>4h</div>
@@ -185,7 +207,7 @@ export default function Landing() {
         </div>
         <div className="card-tinted p-8 sm:p-10 lg:p-12 flex flex-col gap-5">
           <img src={MEAL_IMG} alt="Meal" className="rounded-2xl h-56 sm:h-72 w-full object-cover" />
-          <span className="label-overline text-secondary text-sm">For consumers</span>
+          <span className="label-overline text-secondary text-sm">For customers</span>
           <h3 className="font-display font-bold text-3xl sm:text-4xl leading-tight">Never lose track of your subscription</h3>
           <p className="text-base sm:text-lg text-muted-foreground leading-relaxed">See upcoming meals, your outstanding balance, and submit Interac references — all in one place.</p>
           <Link href="/consumer-signup" data-testid="cta-consumer" className="pill-btn btn-secondary self-start h-14 px-7 text-base sm:text-lg">Join with a code</Link>
