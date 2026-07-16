@@ -4,8 +4,9 @@ import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/lib/auth";
 
 export const metadata: Metadata = {
-  title: "MealHQ",
-  description: "Provider and consumer portal for tiffin deliveries",
+  title: "MealHQ — Tiffin delivery OS for Canadian kitchens",
+  description:
+    "MealHQ helps independent tiffin providers manage customers, daily delivery lists, Interac e-Transfer payments, and outstanding balances. Customers track meals and balances. Sign in with Google uses your name and email to create your MealHQ account.",
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [
