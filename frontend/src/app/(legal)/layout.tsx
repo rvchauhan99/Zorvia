@@ -20,11 +20,14 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
             />
           </Link>
           <nav className="flex items-center gap-4 sm:gap-6 text-sm sm:text-base">
+            <Link href="/about" className="hover:text-primary transition-colors" data-testid="legal-nav-about">
+              About
+            </Link>
             <Link href="/privacy" className="hover:text-primary transition-colors" data-testid="legal-nav-privacy">
-              Privacy
+              Privacy Policy
             </Link>
             <Link href="/terms" className="hover:text-primary transition-colors" data-testid="legal-nav-terms">
-              Terms
+              Terms of Service
             </Link>
             <Link href="/#contact" className="hover:text-primary transition-colors" data-testid="legal-nav-contact">
               Contact
