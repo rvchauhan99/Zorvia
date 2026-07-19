@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { firebaseReady, signInWithGoogleAndGetIdToken } from "@/lib/firebase";
 import { api, saveSession } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { resolveAppHome } from "@/lib/roles";
 import { useRouter } from "next/navigation";
 
 type Props = {
@@ -69,14 +70,14 @@ export default function GoogleSignInButton({
       setSession({
         user_type: data.user_type, user_id: data.user_id, tenant_id: data.tenant_id,
         display_name: data.display_name, email: data.email,
-        access_token: data.access_token
+        access_token: data.access_token, role: data.role,
       });
       toast.success(`Welcome, ${data.display_name}`);
 
       if (onSuccess) {
         onSuccess(data);
       } else {
-        router.replace(data.user_type === "provider" ? "/provider" : "/consumer");
+        router.replace(resolveAppHome(data));
       }
     } catch (e: any) {
       const msg = e?.response?.data?.detail || e?.message || "Google sign-in failed";

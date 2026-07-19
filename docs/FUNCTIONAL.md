@@ -64,6 +64,7 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 | Forgot / reset password | OTP for any existing account (including Google-only with no prior password); `POST /auth/forgot-password`, `POST /auth/reset-password` | Can log in with new/set password |
 | Change / set password | `POST /auth/change-password`: with existing hash requires current; without hash sets first password | `has_password` on `/auth/me`; UI shows Set vs Change |
 | Session | Bearer JWT in `tiffin_token` / session in `tiffin_session` localStorage | `/api/auth/me` restores user |
+| Logged-in landing | Visiting `/` with an active session redirects to `/provider` or `/consumer` (same as `/login`) | No marketing home flash for returning users after hydrate |
 
 ### 4.2 Provider organization
 
@@ -287,7 +288,7 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 
 | Item | Notes |
 |------|-------|
-| Staff / driver / viewer | Access matrix in §3; FE `lib/roles.ts`; layout redirects; More link filter; dashboard marks admin-only |
+| Staff / driver / viewer | Access matrix in §3; FE `lib/roles.ts`; layout redirects; More link filter; dashboard marks admin-only; drivers land on `/provider/deliveries` (never call dashboard APIs) |
 | Route order | `PATCH /deliveries/route-order`; up/down + Open in Maps |
 | PWA | `manifest.webmanifest`, `sw.js`, offline delivery status queue |
 | Live board | Deliveries poll 10s when focused; nav badges every 45s |

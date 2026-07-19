@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, Truck, ChartLineUp, Receipt, ShieldCheck, EnvelopeSimple } from "@phosphor-icons/react/ssr";
 import { ContactForm } from "@/components/ContactForm";
+import LoggedInRedirect from "@/components/LoggedInRedirect";
 
 const HERO_IMG = "https://images.unsplash.com/photo-1781747835478-a9c3bab5a670?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDJ8MHwxfHNlYXJjaHwyfHxpbmRpYW4lMjB0aWZmaW4lMjBsdW5jaCUyMGJveCUyMGZvb2R8ZW58MHx8fHwxNzgzOTI0ODk3fDA&ixlib=rb-4.1.0&q=85";
 const MEAL_IMG = "https://images.unsplash.com/photo-1547592180-85f173990554?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzF8MHwxfHNlYXJjaHwxfHxoZWFsdGh5JTIwbWVhbCUyMHByZXAlMjBmbGF0bGF5fGVufDB8fHx8MTc4MzkyNDg5N3ww&ixlib=rb-4.1.0&q=85";
@@ -23,6 +24,7 @@ const shell = "mx-auto w-full max-w-[1800px] px-4 sm:px-6 lg:px-10";
 export default function Landing() {
   return (
     <div className="min-h-screen bg-brand-cream text-foreground animate-fade-in-up">
+      <LoggedInRedirect />
       <header className="sticky top-0 z-30 backdrop-blur-xl bg-brand-cream/85 border-b border-brand-border">
         <div className="flex items-center justify-between px-4 sm:px-6 lg:px-10 py-3 sm:py-4 gap-3">
           <Link href="/" className="inline-flex items-center shrink-0" data-testid="landing-brand">

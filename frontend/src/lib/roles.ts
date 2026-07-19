@@ -29,3 +29,29 @@ export function canMutateDeliveries(session: UserSession | null | undefined): bo
   const r = staffRole(session);
   return r === "admin" || r === "driver";
 }
+
+/** Post-login / landing home for a provider staff session. Drivers only use deliveries. */
+export function providerAppHome(session: UserSession | null | undefined): string {
+  return isDriver(session) ? "/provider/deliveries" : "/provider";
+}
+
+/**
+ * Safe destination after auth. Drivers are never sent to dashboard/admin routes
+ * (those APIs are role-gated and would toast errors).
+ */
+export function resolveAppHome(
+  session: UserSession | null | undefined,
+  next: string | null = null,
+): string {
+  if (!session) return "/login";
+  if (session.user_type === "consumer") {
+    return next?.startsWith("/consumer") ? next : "/consumer";
+  }
+  if (isDriver(session)) {
+    return next?.startsWith("/provider/deliveries") ? next : "/provider/deliveries";
+  }
+  if (next && (next.startsWith("/provider") || next.startsWith("/consumer"))) {
+    return next;
+  }
+  return "/provider";
+}

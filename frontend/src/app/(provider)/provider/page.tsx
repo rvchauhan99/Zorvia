@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { canMutateAdmin } from "@/lib/roles";
+import { canMutateAdmin, isDriver } from "@/lib/roles";
 import { fmtCAD, fmtDate, todayISO } from "@/lib/format";
 import { Truck, Receipt, CurrencyDollar, Users, ArrowRight, Copy, CheckCircle, Circle } from "@phosphor-icons/react";
 import { toast } from "sonner";
@@ -68,11 +68,16 @@ export default function ProviderDashboard() {
   }
 
   useEffect(() => {
+    if (!session) return;
+    if (isDriver(session)) {
+      router.replace("/provider/deliveries");
+      return;
+    }
     load();
     try {
       setDismissedOnboard(localStorage.getItem(ONBOARD_KEY) === "1");
     } catch { /* ignore */ }
-  }, []);
+  }, [session, router]);
 
   const hasInterac = !!(provider?.interac_email || "").trim();
   const hasCustomers = (summary?.active_customers ?? 0) > 0 || (summary?.pending_customers ?? 0) > 0;
@@ -91,6 +96,11 @@ export default function ProviderDashboard() {
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || "Failed");
     }
+  }
+
+  // Drivers never use the dashboard; layout + resolveAppHome send them to deliveries.
+  if (isDriver(session)) {
+    return null;
   }
 
   return (

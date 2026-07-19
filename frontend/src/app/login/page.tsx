@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
+import { resolveAppHome } from "@/lib/roles";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
 
 type LoginRole = "provider" | "consumer";
@@ -29,13 +30,7 @@ function LoginForm() {
 
   useEffect(() => {
     if (!ready || !session) return;
-    const next = searchParams.get("next");
-    const fallback = session.user_type === "provider" ? "/provider" : "/consumer";
-    const dest =
-      next && (next.startsWith("/provider") || next.startsWith("/consumer"))
-        ? next
-        : fallback;
-    router.replace(dest);
+    router.replace(resolveAppHome(session, searchParams.get("next")));
   }, [ready, session, router, searchParams]);
 
   const copy = useMemo(
@@ -77,13 +72,7 @@ function LoginForm() {
     try {
       const s = await login({ email, password });
       toast.success(`Welcome back, ${s.display_name}`);
-      const next = searchParams.get("next");
-      const fallback = s.user_type === "provider" ? "/provider" : "/consumer";
-      const dest =
-        next && (next.startsWith("/provider") || next.startsWith("/consumer"))
-          ? next
-          : fallback;
-      router.replace(dest);
+      router.replace(resolveAppHome(s, searchParams.get("next")));
     } catch (err: any) {
       const detail = err?.response?.data?.detail || "Login failed";
       toast.error(detail);

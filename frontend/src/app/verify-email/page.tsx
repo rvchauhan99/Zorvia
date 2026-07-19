@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { api, saveSession, getSession } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { resolveAppHome } from "@/lib/roles";
 
 function VerifyEmailForm() {
   const searchParams = useSearchParams();
@@ -38,7 +39,7 @@ function VerifyEmailForm() {
           // non-fatal
         }
       }
-      router.replace(data.user_type === "provider" ? "/provider" : "/consumer");
+      router.replace(resolveAppHome(data));
     } catch (err: any) {
       toast.error(err?.response?.data?.detail || "Verification failed");
     } finally {
