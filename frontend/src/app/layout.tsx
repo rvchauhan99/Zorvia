@@ -2,11 +2,67 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/lib/auth";
+import GoogleAnalytics from "@/components/GoogleAnalytics";
+
+const SITE_URL = "https://www.mealhq.ca";
+const TITLE = "MealHQ — Tiffin delivery OS for Canadian kitchens";
+const DESCRIPTION =
+  "MealHQ helps independent Canadian tiffin providers manage customers, daily delivery lists, Interac e-Transfer payments, and outstanding balances. Built for kitchens across Canada.";
 
 export const metadata: Metadata = {
-  title: "MealHQ — Tiffin delivery OS for Canadian kitchens",
-  description:
-    "MealHQ helps independent tiffin providers manage customers, daily delivery lists, Interac e-Transfer payments, and outstanding balances. Customers track meals and balances. Sign in with Google uses your name and email to create your MealHQ account.",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: TITLE,
+    template: "%s · MealHQ",
+  },
+  description: DESCRIPTION,
+  applicationName: "MealHQ",
+  authors: [{ name: "MealHQ" }],
+  creator: "MealHQ",
+  publisher: "MealHQ",
+  keywords: [
+    "tiffin software Canada",
+    "tiffin delivery management",
+    "Interac e-Transfer meals",
+    "meal delivery kitchen software",
+    "Canadian tiffin business",
+    "MealHQ",
+  ],
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_CA",
+    url: SITE_URL,
+    siteName: "MealHQ",
+    title: TITLE,
+    description: DESCRIPTION,
+    images: [
+      {
+        url: "/brand/mealhq-logo-horizontal.png",
+        width: 1200,
+        height: 630,
+        alt: "MealHQ — Tiffin delivery OS for Canadian kitchens",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: TITLE,
+    description: DESCRIPTION,
+    images: ["/brand/mealhq-logo-horizontal.png"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [
@@ -33,9 +89,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full antialiased" suppressHydrationWarning>
+    <html lang="en-CA" className="h-full antialiased" suppressHydrationWarning>
       <body className="min-h-full flex flex-col">
         <AuthProvider>
+          <GoogleAnalytics />
           {children}
           <Toaster position="top-center" richColors closeButton offset="calc(0.75rem + env(safe-area-inset-top, 0px))" />
         </AuthProvider>

@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { ArrowRight } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { trackEvent } from "@/lib/ga";
 
 const inputCls =
   "h-12 px-4 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-shadow w-full";
@@ -34,6 +35,7 @@ export function ContactForm() {
         company: contact.company,
       });
       toast.success("Message sent — we'll get back to you soon.");
+      trackEvent("contact_submit");
       setContact({ name: "", email: "", subject: "", message: "", company: "" });
     } catch (err: unknown) {
       const detail =

@@ -1,15 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { JsonLd, ORGANIZATION_LD, SOFTWARE_LD } from "@/components/JsonLd";
 
 export const metadata: Metadata = {
-  title: "MealHQ",
+  title: "About MealHQ",
   description:
     "MealHQ is software for Canadian tiffin providers and their customers. Manage delivery lists, Interac e-Transfer payments, and outstanding balances. Sign in with Google uses your name, email, and profile photo only to create or access your MealHQ account.",
+  alternates: { canonical: "/about" },
 };
 
 export default function AboutPage() {
   return (
     <article className="max-w-3xl mx-auto" data-testid="about-page">
+      <JsonLd data={[ORGANIZATION_LD, SOFTWARE_LD]} />
       <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-primary mb-6" data-testid="about-app-name">
         MealHQ
       </h1>

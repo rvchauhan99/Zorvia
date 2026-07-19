@@ -1,16 +1,20 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowRight } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
+import { trackEvent } from "@/lib/ga";
 
 export default function ProviderSignup() {
   const { providerSignup } = useAuth();
   const router = useRouter();
+  useEffect(() => {
+    trackEvent("signup_start", { flow: "provider" });
+  }, []);
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -38,6 +42,7 @@ export default function ProviderSignup() {
       const { confirm_password: _, ...rest } = form;
       const payload = { ...rest, meal_price_default: Number(form.meal_price_default), cutoff_hours: Number(form.cutoff_hours) };
       const s = await providerSignup(payload);
+      trackEvent("signup_complete", { flow: "provider" });
       if ("pending_email_verification" in s && s.pending_email_verification) {
         toast.success("Check your email for a verification code");
         router.replace(`/verify-email?email=${encodeURIComponent(s.email)}`);

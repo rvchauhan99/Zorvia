@@ -8,11 +8,15 @@ import { WEEKDAYS } from "@/lib/format";
 import { useAuth } from "@/lib/auth";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
 import ImageSourceField from "@/components/ImageSourceField";
+import { trackEvent } from "@/lib/ga";
 
 function ConsumerSignupForm() {
   const { consumerSignup } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
+  useEffect(() => {
+    trackEvent("signup_start", { flow: "consumer" });
+  }, []);
   const [form, setForm] = useState({
     signup_code: "",
     name: "",
@@ -61,6 +65,7 @@ function ConsumerSignupForm() {
     try {
       const { confirm_password: _, ...rest } = form;
       const s = await consumerSignup(rest);
+      trackEvent("consumer_signup");
       if (avatarFile) {
         const reader = new FileReader();
         const dataUrl = await new Promise<string>((resolve, reject) => {

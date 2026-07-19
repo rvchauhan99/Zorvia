@@ -1,7 +1,10 @@
+import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Truck, ChartLineUp, Receipt, ShieldCheck, EnvelopeSimple } from "@phosphor-icons/react/ssr";
 import { ContactForm } from "@/components/ContactForm";
 import LoggedInRedirect from "@/components/LoggedInRedirect";
+import { JsonLd, ORGANIZATION_LD, SOFTWARE_LD } from "@/components/JsonLd";
 
 const HERO_IMG = "https://images.unsplash.com/photo-1781747835478-a9c3bab5a670?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDJ8MHwxfHNlYXJjaHwyfHxpbmRpYW4lMjB0aWZmaW4lMjBsdW5jaCUyMGJveCUyMGZvb2R8ZW58MHx8fHwxNzgzOTI0ODk3fDA&ixlib=rb-4.1.0&q=85";
 const MEAL_IMG = "https://images.unsplash.com/photo-1547592180-85f173990554?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzF8MHwxfHNlYXJjaHwxfHxoZWFsdGh5JTIwbWVhbCUyMHByZXAlMjBmbGF0bGF5fGVufDB8fHx8MTc4MzkyNDg5N3ww&ixlib=rb-4.1.0&q=85";
@@ -21,20 +24,43 @@ const features = [
 
 const shell = "mx-auto w-full max-w-[1800px] px-4 sm:px-6 lg:px-10";
 
+export const metadata: Metadata = {
+  title: { absolute: "MealHQ — Tiffin delivery OS for Canadian kitchens" },
+  description:
+    "MealHQ is tiffin delivery software for independent Canadian kitchens. Manage customers, daily routes, Interac e-Transfer payments, and outstanding balances — built for Canada.",
+  alternates: { canonical: "/" },
+  openGraph: {
+    title: "MealHQ — Tiffin delivery OS for Canadian kitchens",
+    description:
+      "Run your Canadian tiffin business without spreadsheet chaos. Delivery lists, Interac payments, and balances in one place.",
+    url: "https://www.mealhq.ca",
+  },
+};
+
 export default function Landing() {
   return (
     <div className="min-h-screen bg-brand-cream text-foreground animate-fade-in-up">
+      <JsonLd data={[ORGANIZATION_LD, SOFTWARE_LD]} />
       <LoggedInRedirect />
       <header className="sticky top-0 z-30 backdrop-blur-xl bg-brand-cream/85 border-b border-brand-border">
         <div className="flex items-center justify-between px-4 sm:px-6 lg:px-10 py-3 sm:py-4 gap-3">
           <Link href="/" className="inline-flex items-center shrink-0" data-testid="landing-brand">
-            <img
+            <Image
               src="/brand/mealhq-logo-horizontal.png"
               alt="MealHQ"
+              width={280}
+              height={96}
               className="h-16 sm:h-20 lg:h-24 w-auto"
+              priority
             />
           </Link>
           <nav className="flex items-center gap-2 sm:gap-2.5">
+            <Link href="/pricing" className="hidden md:inline-flex pill-btn btn-outline text-sm h-9 sm:h-10 px-4">
+              Pricing
+            </Link>
+            <Link href="/for-tiffin-providers" className="hidden lg:inline-flex pill-btn btn-outline text-sm h-9 sm:h-10 px-4">
+              For providers
+            </Link>
             <a
               data-testid="landing-contact-link"
               href="#contact"
@@ -66,14 +92,14 @@ export default function Landing() {
             className="font-display font-black tracking-tight text-foreground"
             style={{ fontSize: "clamp(1.65rem, 3.5vw, 3rem)", lineHeight: 1.08 }}
           >
-            Run your tiffin business without the{" "}
+            Run your Canadian tiffin business without the{" "}
             <span className="text-primary">spreadsheet chaos.</span>
           </p>
           <p
             className="text-muted-foreground max-w-[42rem] leading-snug"
             style={{ fontSize: "clamp(1.125rem, 1.5vw, 1.5rem)" }}
           >
-            MealHQ is the operating system for independent tiffin providers. Manage customers, delivery lists, Interac payments and outstanding balances — all from your phone. Sign in with Google to create your MealHQ account using your name and email.
+            MealHQ is the operating system for independent tiffin providers across Canada. Manage customers, delivery lists, Interac e-Transfer payments and outstanding balances — all from your phone.
           </p>
           <div className="flex flex-col gap-3 sm:gap-4 pt-1">
             <div className="flex flex-wrap gap-3 sm:gap-4 items-center">
@@ -95,7 +121,11 @@ export default function Landing() {
               </div>
             </div>
             <p className="text-sm sm:text-base text-muted-foreground">
-              Providers open a free workspace · Already with MealHQ?{" "}
+              Providers open a free workspace · See{" "}
+              <Link href="/pricing" className="font-semibold text-primary hover:underline">pricing</Link>
+              {" · "}
+              <Link href="/faq" className="font-semibold text-primary hover:underline">FAQ</Link>
+              {" · Already with MealHQ? "}
               <Link href="/login" className="font-semibold text-primary hover:underline" data-testid="hero-cta-login">
                 Log in
               </Link>
@@ -118,10 +148,13 @@ export default function Landing() {
         </div>
 
         <div className="relative min-h-[52vh] sm:min-h-[58vh] lg:min-h-full">
-          <img
+          <Image
             src={HERO_IMG}
-            alt="Partitioned Indian lunchbox"
-            className="absolute inset-0 w-full h-full object-cover"
+            alt="Partitioned Indian lunchbox — Canadian tiffin delivery"
+            fill
+            priority
+            sizes="(max-width: 1024px) 100vw, 50vw"
+            className="object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/10 to-transparent" />
           <div className="absolute inset-x-0 bottom-0 p-6 sm:p-8 lg:p-10">
@@ -146,7 +179,7 @@ export default function Landing() {
             className="font-display font-bold leading-[1.1] tracking-tight"
             style={{ fontSize: "clamp(1.75rem, 3vw, 2.5rem)" }}
           >
-            What MealHQ is — and why we use Google Sign-In
+            Tiffin delivery software built for Canada
           </h2>
           <p className="text-base sm:text-lg text-muted-foreground leading-relaxed">
             MealHQ is a multi-tenant SaaS for Canadian tiffin kitchens and their customers. Providers run delivery lists,
@@ -154,22 +187,24 @@ export default function Landing() {
             references inside their provider&apos;s workspace.
           </p>
           <p className="text-base sm:text-lg text-muted-foreground leading-relaxed">
-            Sign in with Google lets you create or access a MealHQ account using your Google account. MealHQ requests
-            your basic Google profile (name, email address, and profile photo) only to authenticate you and set up your
-            MealHQ user record. We do not read your Gmail, contacts, or Drive, and we do not post to Google on your behalf.
-            See our{" "}
-            <Link href="/privacy" className="font-semibold text-primary hover:underline">
-              Privacy Policy
-            </Link>{" "}
-            and{" "}
-            <Link href="/terms" className="font-semibold text-primary hover:underline">
-              Terms of Service
+            Explore{" "}
+            <Link href="/for-tiffin-providers" className="font-semibold text-primary hover:underline">
+              features for providers
             </Link>
-            . Full details:{" "}
-            <Link href="/about" className="font-semibold text-primary hover:underline">
-              About MealHQ
+            ,{" "}
+            <Link href="/tiffin-software-canada" className="font-semibold text-primary hover:underline">
+              why MealHQ fits Canada
             </Link>
-            .
+            , or city guides for{" "}
+            <Link href="/cities/toronto" className="font-semibold text-primary hover:underline">Toronto</Link>
+            {" · "}
+            <Link href="/cities/vancouver" className="font-semibold text-primary hover:underline">Vancouver</Link>
+            {" · "}
+            <Link href="/cities/calgary" className="font-semibold text-primary hover:underline">Calgary</Link>
+            . See our{" "}
+            <Link href="/privacy" className="font-semibold text-primary hover:underline">Privacy Policy</Link>
+            {" and "}
+            <Link href="/about" className="font-semibold text-primary hover:underline">About MealHQ</Link>.
           </p>
         </div>
       </section>
@@ -199,14 +234,18 @@ export default function Landing() {
 
       <section className={`${shell} pb-16 sm:pb-20 lg:pb-28 grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8`}>
         <div className="card-tinted p-8 sm:p-10 lg:p-12 flex flex-col gap-5">
-          <img src={DRIVER_IMG} alt="MealHQ delivery courier" className="rounded-2xl h-56 sm:h-72 w-full object-cover object-center" />
+          <div className="relative h-56 sm:h-72 w-full rounded-2xl overflow-hidden">
+            <Image src={DRIVER_IMG} alt="MealHQ delivery courier" fill className="object-cover object-center" sizes="(max-width: 768px) 100vw, 50vw" />
+          </div>
           <span className="label-overline text-primary text-sm">For providers</span>
           <h3 className="font-display font-bold text-3xl sm:text-4xl leading-tight">Your daily route in your pocket</h3>
           <p className="text-base sm:text-lg text-muted-foreground leading-relaxed">Wake up to today&apos;s delivery list, sorted by area. Tap through as you go. Outstanding balances update the moment you mark delivered.</p>
           <Link href="/signup" data-testid="cta-provider" className="pill-btn btn-primary self-start h-14 px-7 text-base sm:text-lg">Start a workspace</Link>
         </div>
         <div className="card-tinted p-8 sm:p-10 lg:p-12 flex flex-col gap-5">
-          <img src={MEAL_IMG} alt="Meal" className="rounded-2xl h-56 sm:h-72 w-full object-cover" />
+          <div className="relative h-56 sm:h-72 w-full rounded-2xl overflow-hidden">
+            <Image src={MEAL_IMG} alt="Prepared meal flatlay" fill className="object-cover" sizes="(max-width: 768px) 100vw, 50vw" />
+          </div>
           <span className="label-overline text-secondary text-sm">For customers</span>
           <h3 className="font-display font-bold text-3xl sm:text-4xl leading-tight">Never lose track of your subscription</h3>
           <p className="text-base sm:text-lg text-muted-foreground leading-relaxed">See upcoming meals, your outstanding balance, and submit Interac references — all in one place.</p>
@@ -248,20 +287,16 @@ export default function Landing() {
 
       <footer className="border-t border-brand-border py-10 lg:py-12">
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 px-4 sm:px-6 lg:px-10">
-          <img src="/brand/mealhq-logo-horizontal.png" alt="MealHQ" className="h-14 sm:h-16 w-auto" />
+          <Image src="/brand/mealhq-logo-horizontal.png" alt="MealHQ" width={200} height={64} className="h-14 sm:h-16 w-auto" />
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
             <div className="text-sm sm:text-base text-muted-foreground">Made for Canadian tiffin providers · CAD · Interac e-Transfer</div>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm sm:text-base">
-              <Link href="/about" className="font-medium hover:text-primary transition-colors" data-testid="landing-footer-about">
-                About
-              </Link>
-              <Link href="/privacy" className="font-medium hover:text-primary transition-colors" data-testid="landing-footer-privacy">
-                Privacy Policy
-              </Link>
-              <Link href="/terms" className="font-medium hover:text-primary transition-colors" data-testid="landing-footer-terms">
-                Terms of Service
-              </Link>
-              <span className="text-muted-foreground">Contact</span>
+              <Link href="/about" className="font-medium hover:text-primary transition-colors" data-testid="landing-footer-about">About</Link>
+              <Link href="/pricing" className="font-medium hover:text-primary transition-colors">Pricing</Link>
+              <Link href="/faq" className="font-medium hover:text-primary transition-colors">FAQ</Link>
+              <Link href="/blog" className="font-medium hover:text-primary transition-colors">Blog</Link>
+              <Link href="/privacy" className="font-medium hover:text-primary transition-colors" data-testid="landing-footer-privacy">Privacy Policy</Link>
+              <Link href="/terms" className="font-medium hover:text-primary transition-colors" data-testid="landing-footer-terms">Terms of Service</Link>
               {CONTACT_EMAILS.map((email) => (
                 <a key={email} href={`mailto:${email}`} className="font-medium hover:text-primary transition-colors">
                   {email}

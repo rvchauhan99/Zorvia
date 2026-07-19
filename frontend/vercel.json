@@ -1,0 +1,10 @@
+{
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "mealhq.ca" }],
+      "destination": "https://www.mealhq.ca/:path*",
+      "permanent": true
+    }
+  ]
+}

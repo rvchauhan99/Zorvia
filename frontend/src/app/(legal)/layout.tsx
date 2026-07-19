@@ -23,6 +23,12 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
             <Link href="/about" className="hover:text-primary transition-colors" data-testid="legal-nav-about">
               About
             </Link>
+            <Link href="/pricing" className="hover:text-primary transition-colors">
+              Pricing
+            </Link>
+            <Link href="/faq" className="hover:text-primary transition-colors">
+              FAQ
+            </Link>
             <Link href="/privacy" className="hover:text-primary transition-colors" data-testid="legal-nav-privacy">
               Privacy Policy
             </Link>
