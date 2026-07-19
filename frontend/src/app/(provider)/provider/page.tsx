@@ -7,9 +7,10 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canMutateAdmin, isDriver, canSeePricing } from "@/lib/roles";
 import { fmtCAD, fmtDate, todayISO, fmtMealCount } from "@/lib/format";
-import { Truck, Receipt, CurrencyDollar, Users, ArrowRight, Copy, CheckCircle, Circle } from "@phosphor-icons/react";
+import { Truck, Receipt, CurrencyDollar, Users, ArrowRight, Copy, CheckCircle, Circle, Plus } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import StatusPill from "@/components/StatusPill";
+import AddExtraMealSheet from "@/components/AddExtraMealSheet";
 import { InlineLoader, KpiSkeleton } from "@/components/loaders";
 
 const ONBOARD_KEY = "zorvia_provider_onboarded";
@@ -54,6 +55,8 @@ export default function ProviderDashboard() {
   const [todayDeliveries, setTodayDeliveries] = useState<any[]>([]);
   const [deliveriesLoading, setDeliveriesLoading] = useState(true);
   const [dismissedOnboard, setDismissedOnboard] = useState(false);
+  const [extraOpen, setExtraOpen] = useState(false);
+  const [extraLocked, setExtraLocked] = useState<{ id: string; name: string } | null>(null);
 
   async function loadSummary() {
     setSummaryLoading(true);
@@ -160,16 +163,33 @@ export default function ProviderDashboard() {
         </div>
         {providerLoading ? (
           <div className="h-10 w-40 rounded-full bg-brand-surface animate-pulse" />
-        ) : provider?.signup_code ? (
-          <button
-            data-testid="copy-signup-code"
-            onClick={() => { navigator.clipboard.writeText(provider.signup_code); toast.success("Signup code copied"); }}
-            className="inline-flex items-center gap-2 px-3 h-10 rounded-full bg-white border border-brand-border hover:bg-brand-surface text-sm cursor-pointer"
-            title="Share this code with consumers"
-          >
-            <Copy size={16} /> Signup code: <span className="font-mono font-semibold">{provider.signup_code}</span>
-          </button>
-        ) : null}
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            {canQuickMark ? (
+              <button
+                type="button"
+                data-testid="dashboard-add-extra"
+                onClick={() => {
+                  setExtraLocked(null);
+                  setExtraOpen(true);
+                }}
+                className="inline-flex items-center gap-2 px-3 h-10 rounded-full bg-secondary text-secondary-foreground text-sm font-semibold hover:bg-brand-sageDark cursor-pointer"
+              >
+                <Plus size={16} weight="bold" /> Extra meal
+              </button>
+            ) : null}
+            {provider?.signup_code ? (
+              <button
+                data-testid="copy-signup-code"
+                onClick={() => { navigator.clipboard.writeText(provider.signup_code); toast.success("Signup code copied"); }}
+                className="inline-flex items-center gap-2 px-3 h-10 rounded-full bg-white border border-brand-border hover:bg-brand-surface text-sm cursor-pointer"
+                title="Share this code with consumers"
+              >
+                <Copy size={16} /> Signup code: <span className="font-mono font-semibold">{provider.signup_code}</span>
+              </button>
+            ) : null}
+          </div>
+        )}
       </div>
 
       {showChecklist ? (
@@ -269,6 +289,17 @@ export default function ProviderDashboard() {
                     <div className="text-sm font-semibold shrink-0 px-2.5 py-1 rounded-full bg-brand-surface">{fmtMealCount(d)}</div>
                     {d.status === "pending" && canQuickMark ? (
                       <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          data-testid={`quick-extra-${d.id}`}
+                          onClick={() => {
+                            setExtraLocked({ id: d.customer_id, name: d.customer_name });
+                            setExtraOpen(true);
+                          }}
+                          className="h-11 min-h-[44px] px-3 rounded-full border border-brand-border bg-white text-sm font-medium cursor-pointer hover:bg-brand-surface inline-flex items-center gap-1"
+                        >
+                          <Plus size={14} /> Extra
+                        </button>
                         <button data-testid={`quick-delivered-${d.id}`} onClick={() => markDelivery(d.id, "delivered")} className="h-11 min-h-[44px] px-4 rounded-full bg-secondary text-secondary-foreground text-sm font-medium active:scale-95 transition-transform cursor-pointer hover:bg-brand-sageDark">Deliver</button>
                         <button data-testid={`quick-missed-${d.id}`} onClick={() => markDelivery(d.id, "missed")} className="h-11 min-h-[44px] px-4 rounded-full border border-destructive/40 bg-white text-destructive text-sm font-medium cursor-pointer hover:bg-destructive/10">Miss</button>
                       </div>
@@ -316,6 +347,20 @@ export default function ProviderDashboard() {
           <button data-testid="dashboard-open-reports" onClick={() => router.push("/provider/reports")} className="mt-5 w-full pill-btn btn-outline cursor-pointer">Open reports</button>
         </div>
       </div>
+
+      <AddExtraMealSheet
+        open={extraOpen}
+        onClose={() => {
+          setExtraOpen(false);
+          setExtraLocked(null);
+        }}
+        onAdded={() => {
+          void loadDeliveries();
+          void loadSummary();
+        }}
+        lockedCustomer={extraLocked}
+        defaultDate={todayISO()}
+      />
     </div>
   );
 }

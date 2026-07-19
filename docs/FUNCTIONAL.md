@@ -100,7 +100,7 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 | Status filter UI | Compact horizontal chips with counts (mobile scroll); **default filter = Pending** |
 | Provider mark | One-tap delivered / missed / cancelled (**today or past only**; not future) |
 | Consumer cancel | Upcoming `pending` only; blocked for past dates; within `cutoff_hours` before assumed **local noon** (provider timezone) |
-| Extra meals | Consumer or provider admin adds tiffins for a date (bumps `quantity`, tracks `extra_quantity`); one stop/day; consumer uses same cutoff as cancel (auto-apply, no approval); priced at unit `meal_price`; outstanding when delivered |
+| Extra meals | Consumer or provider admin adds tiffins for a date (bumps `quantity`, tracks `extra_quantity`); one stop/day; consumer uses same cutoff as cancel (auto-apply, no approval); priced at unit `meal_price`; outstanding when delivered; provider quick access on Dashboard / Deliveries / Customers headers (admin) |
 
 ### 4.5 Payments (Interac)
 

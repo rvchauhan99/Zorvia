@@ -9,6 +9,7 @@ import { fmtDate, todayISO, fmtMealCount, deliveryQty, fmtExtraBadge } from "@/l
 import StatusPill from "@/components/StatusPill";
 import AppSheet from "@/components/AppSheet";
 import ExtraMealsSheet from "@/components/ExtraMealsSheet";
+import AddExtraMealSheet from "@/components/AddExtraMealSheet";
 import { StatusFilterCards } from "@/components/StatusFilterCards";
 import { InlineLoader } from "@/components/loaders";
 import { ArrowLeft, ArrowRight, CheckCircle, XCircle, Prohibit, CaretUp, CaretDown, MapPin, Plus } from "@phosphor-icons/react";
@@ -64,6 +65,7 @@ export default function Deliveries() {
   const [queueLen, setQueueLen] = useState(0);
   const [extraTarget, setExtraTarget] = useState<any | null>(null);
   const [extraBusy, setExtraBusy] = useState(false);
+  const [quickExtraOpen, setQuickExtraOpen] = useState(false);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -262,6 +264,16 @@ export default function Deliveries() {
           <button data-testid="prev-day" onClick={() => shiftDay(-1)} className="h-11 w-11 min-h-[44px] min-w-[44px] rounded-full bg-white border border-brand-border flex items-center justify-center hover:bg-brand-surface cursor-pointer transition-colors" aria-label="Previous day"><ArrowLeft size={16} /></button>
           <input data-testid="date-picker" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-11 px-3 rounded-xl bg-white border border-brand-border font-medium" />
           <button data-testid="next-day" onClick={() => shiftDay(1)} className="h-11 w-11 min-h-[44px] min-w-[44px] rounded-full bg-white border border-brand-border flex items-center justify-center hover:bg-brand-surface cursor-pointer transition-colors" aria-label="Next day"><ArrowRight size={16} /></button>
+          {canAddExtra ? (
+            <button
+              type="button"
+              data-testid="deliveries-add-extra"
+              onClick={() => setQuickExtraOpen(true)}
+              className="h-11 px-4 rounded-full border border-brand-border bg-white text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer hover:bg-brand-surface"
+            >
+              <Plus size={16} weight="bold" /> Extra meal
+            </button>
+          ) : null}
           {canMutate ? (
             <button
               data-testid="bulk-mark-delivered"
@@ -489,6 +501,13 @@ export default function Deliveries() {
         mealPrice={extraTarget ? Number(extraTarget.meal_price) || 0 : undefined}
         busy={extraBusy}
         confirmTestId="del-extra-confirm"
+      />
+
+      <AddExtraMealSheet
+        open={quickExtraOpen}
+        onClose={() => setQuickExtraOpen(false)}
+        onAdded={() => load()}
+        defaultDate={date}
       />
     </div>
   );

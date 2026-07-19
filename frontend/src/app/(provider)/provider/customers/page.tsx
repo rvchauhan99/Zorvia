@@ -11,6 +11,7 @@ import { canMutateAdmin, canSeePricing } from "@/lib/roles";
 import { fmtCAD, WEEKDAYS, todayISO } from "@/lib/format";
 import { asPageEnvelope, DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import AppSheet from "@/components/AppSheet";
+import AddExtraMealSheet from "@/components/AddExtraMealSheet";
 import LoadMoreButton from "@/components/LoadMoreButton";
 import { StatusFilterCards } from "@/components/StatusFilterCards";
 import { InlineLoader } from "@/components/loaders";
@@ -79,6 +80,7 @@ export default function Customers() {
   const [rejectTarget, setRejectTarget] = useState<any>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [showInvite, setShowInvite] = useState(false);
+  const [extraOpen, setExtraOpen] = useState(false);
   const [inviteForm, setInviteForm] = useState({ name: "", email: "" });
   const [importing, setImporting] = useState(false);
   const [scheduleMode, setScheduleMode] = useState<ScheduleMode>("same");
@@ -369,13 +371,23 @@ export default function Customers() {
         </div>
         {canMutate ? (
           <div className="flex flex-col gap-2 w-full sm:w-auto sm:items-end">
-            <button
-              data-testid="add-customer-btn"
-              onClick={openCreate}
-              className="pill-btn btn-primary gap-2 w-full sm:w-auto shrink-0 cursor-pointer h-11 inline-flex items-center justify-center"
-            >
-              <Plus size={16} weight="bold" /> Add customer
-            </button>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <button
+                type="button"
+                data-testid="customers-add-extra"
+                onClick={() => setExtraOpen(true)}
+                className="pill-btn btn-secondary gap-2 flex-1 sm:flex-none shrink-0 cursor-pointer h-11 inline-flex items-center justify-center"
+              >
+                <Plus size={16} weight="bold" /> Extra meal
+              </button>
+              <button
+                data-testid="add-customer-btn"
+                onClick={openCreate}
+                className="pill-btn btn-primary gap-2 flex-1 sm:flex-none shrink-0 cursor-pointer h-11 inline-flex items-center justify-center"
+              >
+                <Plus size={16} weight="bold" /> Add customer
+              </button>
+            </div>
             <div className="flex gap-2 w-full sm:w-auto">
               <button
                 type="button"
@@ -715,6 +727,12 @@ export default function Customers() {
           <textarea data-testid="reject-reason" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} className="min-h-[80px] w-full px-4 py-3 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all" />
         </label>
       </AppSheet>
+
+      <AddExtraMealSheet
+        open={extraOpen}
+        onClose={() => setExtraOpen(false)}
+        defaultDate={todayISO()}
+      />
     </div>
   );
 }
