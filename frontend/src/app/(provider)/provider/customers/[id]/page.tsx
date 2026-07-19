@@ -4,13 +4,14 @@ import React, { useEffect, useState, useTransition } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
-import { ArrowLeft, PencilSimple } from "@phosphor-icons/react";
+import { ArrowLeft, PencilSimple, Plus } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canMutateAdmin, canSeePricing } from "@/lib/roles";
-import { fmtCAD, fmtDate, WEEKDAYS, todayISO, fmtMealCount } from "@/lib/format";
+import { fmtCAD, fmtDate, WEEKDAYS, todayISO, fmtMealCount, fmtExtraBadge } from "@/lib/format";
 import StatusPill from "@/components/StatusPill";
 import RecordPaymentSheet from "@/components/RecordPaymentSheet";
+import ExtraMealsSheet from "@/components/ExtraMealsSheet";
 import { type CustomerInsights, type CustomerTimelineEvent, type PeriodKey } from "@/lib/analytics";
 import { KpiCard } from "@/components/analytics/KpiCard";
 import { PeriodToggle } from "@/components/analytics/PeriodToggle";
@@ -96,6 +97,8 @@ export default function CustomerDetail() {
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [recordOpen, setRecordOpen] = useState(false);
+  const [extraOpen, setExtraOpen] = useState(false);
+  const [extraBusy, setExtraBusy] = useState(false);
 
   async function load() {
     try {
@@ -105,6 +108,21 @@ export default function CustomerDetail() {
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || "Customer not found");
       router.push("/provider/customers");
+    }
+  }
+
+  async function confirmExtra({ date, quantity }: { date: string; quantity: number }) {
+    if (!id) return;
+    setExtraBusy(true);
+    try {
+      await api.post("/deliveries/extra", { customer_id: id, date, quantity });
+      toast.success(quantity === 1 ? "Extra meal added" : `${quantity} extra meals added`);
+      setExtraOpen(false);
+      load();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || "Failed to add extra meal");
+    } finally {
+      setExtraBusy(false);
     }
   }
 
@@ -369,22 +387,46 @@ export default function CustomerDetail() {
       ) : null}
 
       {tab === "deliveries" ? (
-        <div className="card-tinted overflow-hidden">
-          <ul className="divide-y divide-brand-border">
-            {(c.deliveries || []).length === 0 ? (
-              <li className="p-6 text-center text-sm text-muted-foreground">No deliveries yet.</li>
-            ) : (
-              (c.deliveries || []).map((d: any) => (
-                <li key={d.id} className="p-4 flex items-center gap-3">
-                  <div className="flex-1">
-                    <div className="font-medium">{fmtDate(d.delivery_date)}</div>
-                    <div className="text-xs text-muted-foreground">{fmtMealCount(d)}</div>
-                  </div>
-                  <StatusPill status={d.status} />
-                </li>
-              ))
-            )}
-          </ul>
+        <div className="flex flex-col gap-3">
+          {canMutate ? (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                data-testid="customer-add-extra"
+                onClick={() => setExtraOpen(true)}
+                className="pill-btn btn-secondary h-10 px-4 text-sm inline-flex items-center gap-1.5"
+              >
+                <Plus size={16} /> Add extra meal
+              </button>
+            </div>
+          ) : null}
+          <div className="card-tinted overflow-hidden">
+            <ul className="divide-y divide-brand-border">
+              {(c.deliveries || []).length === 0 ? (
+                <li className="p-6 text-center text-sm text-muted-foreground">No deliveries yet.</li>
+              ) : (
+                (c.deliveries || []).map((d: any) => {
+                  const badge = fmtExtraBadge(d);
+                  return (
+                    <li key={d.id} className="p-4 flex items-center gap-3">
+                      <div className="flex-1">
+                        <div className="font-medium">{fmtDate(d.delivery_date)}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {fmtMealCount(d)}
+                          {badge ? (
+                            <span className="ml-1.5 text-primary font-medium" data-testid={`cust-extra-badge-${d.id}`}>
+                              {badge}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                      <StatusPill status={d.status} />
+                    </li>
+                  );
+                })
+              )}
+            </ul>
+          </div>
         </div>
       ) : null}
 
@@ -477,6 +519,18 @@ export default function CustomerDetail() {
           ) : null}
         </div>
       ) : null}
+
+      <ExtraMealsSheet
+        open={extraOpen}
+        onClose={() => setExtraOpen(false)}
+        onConfirm={confirmExtra}
+        title={`Extra meal for ${c.name}`}
+        defaultDate={todayISO()}
+        showDate
+        mealPrice={showMoney ? Number(c.meal_price) || 0 : undefined}
+        busy={extraBusy}
+        confirmTestId="customer-extra-confirm"
+      />
     </div>
   );
 }

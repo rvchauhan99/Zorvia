@@ -4,13 +4,14 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { canMutateDeliveries } from "@/lib/roles";
-import { fmtDate, todayISO, fmtMealCount, deliveryQty } from "@/lib/format";
+import { canMutateDeliveries, canMutateAdmin } from "@/lib/roles";
+import { fmtDate, todayISO, fmtMealCount, deliveryQty, fmtExtraBadge } from "@/lib/format";
 import StatusPill from "@/components/StatusPill";
 import AppSheet from "@/components/AppSheet";
+import ExtraMealsSheet from "@/components/ExtraMealsSheet";
 import { StatusFilterCards } from "@/components/StatusFilterCards";
 import { InlineLoader } from "@/components/loaders";
-import { ArrowLeft, ArrowRight, CheckCircle, XCircle, Prohibit, CaretUp, CaretDown, MapPin } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, CheckCircle, XCircle, Prohibit, CaretUp, CaretDown, MapPin, Plus } from "@phosphor-icons/react";
 
 const OFFLINE_QUEUE_KEY = "tiffin_delivery_status_queue";
 
@@ -52,6 +53,7 @@ function writeQueue(q: { id: string; status: string }[]) {
 export default function Deliveries() {
   const { session } = useAuth();
   const canMutate = canMutateDeliveries(session);
+  const canAddExtra = canMutateAdmin(session);
   const [date, setDate] = useState(todayISO());
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,6 +62,8 @@ export default function Deliveries() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [confirmBulkDeliver, setConfirmBulkDeliver] = useState(false);
   const [queueLen, setQueueLen] = useState(0);
+  const [extraTarget, setExtraTarget] = useState<any | null>(null);
+  const [extraBusy, setExtraBusy] = useState(false);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -175,6 +179,25 @@ export default function Deliveries() {
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || "Reorder failed");
       load();
+    }
+  }
+
+  async function confirmExtra({ date: extraDate, quantity }: { date: string; quantity: number }) {
+    if (!extraTarget || !canAddExtra) return;
+    setExtraBusy(true);
+    try {
+      await api.post("/deliveries/extra", {
+        customer_id: extraTarget.customer_id,
+        date: extraDate || date,
+        quantity,
+      });
+      toast.success(quantity === 1 ? "Extra meal added" : `${quantity} extra meals added`);
+      setExtraTarget(null);
+      load();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || "Failed to add extra meal");
+    } finally {
+      setExtraBusy(false);
     }
   }
 
@@ -350,6 +373,9 @@ export default function Deliveries() {
                       data-testid={`del-meals-${d.id}`}
                     >
                       {fmtMealCount(d)}
+                      {fmtExtraBadge(d) ? (
+                        <span className="ml-1 text-primary font-medium">{fmtExtraBadge(d)}</span>
+                      ) : null}
                     </span>
                   </div>
                   <div className="text-xs text-muted-foreground truncate mt-0.5">
@@ -376,9 +402,24 @@ export default function Deliveries() {
                   data-testid={`del-meals-desktop-${d.id}`}
                 >
                   {fmtMealCount(d)}
+                  {fmtExtraBadge(d) ? (
+                    <span className="ml-1.5 text-primary font-medium text-xs">{fmtExtraBadge(d)}</span>
+                  ) : null}
                 </div>
                 {canMarkStatuses && d.status === "pending" ? (
                   <div className="flex items-center gap-2 w-full sm:w-auto">
+                    {canAddExtra ? (
+                      <button
+                        type="button"
+                        data-testid={`del-extra-${d.id}`}
+                        onClick={() => setExtraTarget(d)}
+                        className="h-11 min-h-[44px] px-3 rounded-full border border-brand-border bg-white text-sm inline-flex items-center justify-center gap-1 cursor-pointer hover:bg-brand-surface"
+                        aria-label="Add extra meal"
+                      >
+                        <Plus size={16} />
+                        <span className="hidden sm:inline">Extra</span>
+                      </button>
+                    ) : null}
                     <button data-testid={`mark-delivered-${d.id}`} onClick={() => mark(d.id, "delivered")} className="flex-1 sm:flex-none h-11 min-h-[44px] px-4 rounded-full bg-secondary text-secondary-foreground text-sm font-semibold active:scale-95 transition-transform inline-flex items-center justify-center gap-1 cursor-pointer hover:bg-brand-sageDark">
                       <CheckCircle size={16} weight="bold" /> Delivered
                     </button>
@@ -436,6 +477,19 @@ export default function Deliveries() {
           This cannot be undone in bulk — you would need to undo each stop individually.
         </p>
       </AppSheet>
+
+      <ExtraMealsSheet
+        open={!!extraTarget}
+        onClose={() => setExtraTarget(null)}
+        onConfirm={confirmExtra}
+        title={extraTarget ? `Extra for ${extraTarget.customer_name}` : "Add extra meal"}
+        defaultDate={date}
+        showDate={false}
+        currentQty={extraTarget ? deliveryQty(extraTarget) : 1}
+        mealPrice={extraTarget ? Number(extraTarget.meal_price) || 0 : undefined}
+        busy={extraBusy}
+        confirmTestId="del-extra-confirm"
+      />
     </div>
   );
 }

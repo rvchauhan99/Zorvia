@@ -18,6 +18,10 @@ node_modules/
 
 # Testing
 /coverage
+test_result.md
+test_reports/iteration_*.json
+test_reports/pytest/*.xml
+!test_reports/**/.gitkeep
 
 # Next.js
 /.next/

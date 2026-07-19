@@ -38,6 +38,13 @@ export function fmtMealCount(d: { quantity?: number } | null | undefined) {
   return qty === 1 ? "1 meal" : `${qty} meals`;
 }
 
+/** Extra portion badge, e.g. "+2 extra"; empty string when none. */
+export function fmtExtraBadge(d: { extra_quantity?: number } | null | undefined) {
+  const n = Math.max(0, Math.floor(Number(d?.extra_quantity) || 0));
+  if (n < 1) return "";
+  return n === 1 ? "+1 extra" : `+${n} extra`;
+}
+
 /** e.g. "$24.00 · ×2" when qty > 1, else "$12.00" (admin money contexts only). */
 export function fmtDeliveryLine(d: { meal_price?: number; quantity?: number } | null | undefined) {
   const qty = deliveryQty(d);

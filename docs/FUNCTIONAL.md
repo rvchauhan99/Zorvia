@@ -100,6 +100,7 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 | Status filter UI | Compact horizontal chips with counts (mobile scroll); **default filter = Pending** |
 | Provider mark | One-tap delivered / missed / cancelled (**today or past only**; not future) |
 | Consumer cancel | Upcoming `pending` only; blocked for past dates; within `cutoff_hours` before assumed **local noon** (provider timezone) |
+| Extra meals | Consumer or provider admin adds tiffins for a date (bumps `quantity`, tracks `extra_quantity`); one stop/day; consumer uses same cutoff as cancel (auto-apply, no approval); priced at unit `meal_price`; outstanding when delivered |
 
 ### 4.5 Payments (Interac)
 
@@ -163,7 +164,7 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 
 ### 4.7c Activity audit
 
-- Writers on login, customer soft-delete/reject, payment verify/reject/record, settings patch, plan activate.  
+- Writers on login, customer soft-delete/reject, payment verify/reject/record, settings patch, plan activate, extra meals.  
 - List via `GET /providers/me/activity` or `GET /reports/activity`.  
 - Simple list on provider More page.
 
@@ -246,7 +247,8 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 8. **Mark status:** Provider may mark delivered/missed/cancelled only for `delivery_date <= provider today` and only from `pending`. Undo to `pending` only from delivered/missed/cancelled.  
 9. **Payments:** Submit amount must be `> 0`; verify/reject only from `pending`.  
 10. **Pause:** `end` must be on or after `start`.
-11. **Meal schedule:** Provider sets weekday→quantity; consumers may change days only (new days get qty 1).
+11. **Meal schedule:** Provider sets weekday→quantity; consumers may change days only (new days get qty 1).  
+12. **Extra meals:** Add-only bump to delivery `quantity` (cap 20); consumer before cancel cutoff; provider admin anytime for future/today pending; off-schedule days create a new pending stop.
 
 ---
 
