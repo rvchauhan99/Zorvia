@@ -64,8 +64,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     async function hydrate() {
       const existing = getSession();
+      // Paint immediately from localStorage — soft-refresh /auth/me in background
       if (existing && !cancelled) {
         setSession(existing);
+        setReady(true);
       }
       try {
         const { data } = await api.get("/auth/me");

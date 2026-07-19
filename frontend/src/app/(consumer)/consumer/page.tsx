@@ -13,8 +13,10 @@ export default function ConsumerHome() {
   const [me, setMe] = useState<any>(null);
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [cancelTarget, setCancelTarget] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   async function load() {
+    setLoading(true);
     try {
       const [{ data: m }, { data: d }] = await Promise.all([
         api.get("/consumer/me"),
@@ -23,6 +25,8 @@ export default function ConsumerHome() {
       setMe(m); setDeliveries(d);
     } catch (e) {
       toast.error("Failed to load");
+    } finally {
+      setLoading(false);
     }
   }
   useEffect(() => { load(); }, []);
@@ -43,6 +47,18 @@ export default function ConsumerHome() {
   const history = deliveries.filter((d) => d.delivery_date < todayISO()).reverse();
   const nextDelivery = upcoming.find((d) => d.status === "pending");
   const cutoffHours = me?.provider?.settings?.cutoff_hours ?? 4;
+
+  if (loading && !me) {
+    return (
+      <div className="flex flex-col gap-5 animate-fade-in-up" data-testid="consumer-home-loading">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="stat-card h-28 animate-pulse bg-brand-surface/80" />
+          <div className="stat-card h-28 animate-pulse bg-brand-surface/80" />
+        </div>
+        <div className="card-tinted h-40 animate-pulse bg-brand-surface/60" />
+      </div>
+    );
+  }
 
   if (me?.customer?.pending_approval) {
     return (

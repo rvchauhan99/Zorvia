@@ -41,6 +41,7 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 dump.rdb
+.atlas-migrate-dump/
 
 # System files
 .DS_Store

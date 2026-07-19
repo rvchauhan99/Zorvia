@@ -56,10 +56,19 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
   const pathname = usePathname();
   const [sub, setSub] = useState<any>(null);
   const [badges, setBadges] = useState({ pendingPayments: 0, pendingCustomers: 0 });
+  const [isDesktop, setIsDesktop] = useState(false);
 
   const role = staffRole(session);
   const isDriver = roleIsDriver(session);
   const canMutate = canMutateAdmin(session);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const apply = () => setIsDesktop(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
 
   const items = useMemo(() => {
     if (isDriver) {
@@ -91,12 +100,14 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
 
   const loadBadges = useCallback(() => {
     if (session?.user_type !== "provider" || isDriver) return;
-    Promise.all([
-      api.get("/payments?status=pending").then(({ data }) => (Array.isArray(data) ? data.length : 0)).catch(() => 0),
-      api.get("/customers").then(({ data }) => (Array.isArray(data) ? data.filter((c: any) => c.pending_approval).length : 0)).catch(() => 0),
-    ]).then(([pendingPayments, pendingCustomers]) => {
-      setBadges({ pendingPayments, pendingCustomers });
-    });
+    api.get("/providers/me/nav-badges")
+      .then(({ data }) => {
+        setBadges({
+          pendingPayments: data?.pending_payments || 0,
+          pendingCustomers: data?.pending_approvals || 0,
+        });
+      })
+      .catch(() => {});
   }, [session, isDriver]);
 
   useEffect(() => {
@@ -116,12 +127,24 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
     return () => clearInterval(id);
   }, [loadBadges]);
 
-  useEffect(() => {
-    loadSub();
-  }, [pathname, loadSub]);
+  if (!ready && !session) {
+    return (
+      <div className="min-h-screen bg-brand-cream flex items-center justify-center" data-testid="provider-shell-loading">
+        <div className="text-sm text-muted-foreground">Loading…</div>
+      </div>
+    );
+  }
 
-  if (!ready || !session || session.user_type !== "provider") {
+  if (ready && (!session || session.user_type !== "provider")) {
     return null;
+  }
+
+  if (!session || session.user_type !== "provider") {
+    return (
+      <div className="min-h-screen bg-brand-cream flex items-center justify-center" data-testid="provider-shell-loading">
+        <div className="text-sm text-muted-foreground">Loading…</div>
+      </div>
+    );
   }
 
   const status = sub?.status;
@@ -151,7 +174,9 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
             <div className="text-xs text-muted-foreground mt-1">{session?.display_name}</div>
             {role !== "admin" ? <div className="text-[10px] uppercase tracking-wider text-muted-foreground mt-0.5">{role}</div> : null}
           </div>
-          <NotificationBell testid="provider-notification-bell" />
+          <div className="hidden lg:block">
+            {isDesktop ? <NotificationBell testid="provider-notification-bell" /> : null}
+          </div>
         </div>
         <nav className="flex flex-col gap-1">
           {(isDriver ? items : items.slice(0, 4)).map((it) => {
@@ -239,7 +264,9 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
             className="h-8 w-auto"
             data-testid="provider-brand-logo-mobile"
           />
-          <NotificationBell testid="provider-notification-bell-mobile" />
+          <div className="lg:hidden">
+            {!isDesktop ? <NotificationBell testid="provider-notification-bell-mobile" /> : null}
+          </div>
         </div>
         <div className="max-w-6xl mx-auto px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
           {banner ? (

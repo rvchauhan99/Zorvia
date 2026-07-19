@@ -64,13 +64,27 @@ export default function Customers() {
   const [inviteForm, setInviteForm] = useState({ name: "", email: "" });
   const [importing, setImporting] = useState(false);
   const [staff, setStaff] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [debouncedQ, setDebouncedQ] = useState("");
 
   const input = "h-11 w-full px-4 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all";
   const drivers = useMemo(() => staff.filter((s) => (s.role || "admin") === "driver"), [staff]);
 
+  useEffect(() => {
+    const id = window.setTimeout(() => setDebouncedQ(q.trim()), 350);
+    return () => window.clearTimeout(id);
+  }, [q]);
+
   async function load() {
-    const { data } = await api.get(`/customers${q ? `?q=${encodeURIComponent(q)}` : ""}`);
-    setItems(data);
+    setLoading(true);
+    try {
+      const { data } = await api.get(`/customers${debouncedQ ? `?q=${encodeURIComponent(debouncedQ)}` : ""}`);
+      setItems(data);
+    } catch {
+      toast.error("Failed to load customers");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function loadStaff() {
@@ -83,7 +97,7 @@ export default function Customers() {
     }
   }
 
-  useEffect(() => { load(); }, [q]);
+  useEffect(() => { load(); }, [debouncedQ]);
   useEffect(() => { loadStaff(); }, [canMutate]);
 
   const isPaused = (c: any) => (c.pauses || []).some((p: any) => p.start <= todayISO() && todayISO() <= p.end);
@@ -283,7 +297,9 @@ export default function Customers() {
       />
 
       <div className="card-tinted overflow-hidden">
-        {filtered.length === 0 ? (
+        {loading ? (
+          <div className="p-6 sm:p-8 text-center text-muted-foreground text-sm" data-testid="customers-loading">Loading customers…</div>
+        ) : filtered.length === 0 ? (
           <div className="p-6 sm:p-8 text-center text-muted-foreground text-sm">No customers match this filter.</div>
         ) : (
           <>

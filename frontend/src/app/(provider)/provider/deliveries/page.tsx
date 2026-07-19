@@ -74,17 +74,19 @@ export default function Deliveries() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Live board: poll every 10s while document has focus
+  // Live board: poll every 30s while tab is visible
   useEffect(() => {
     const tick = () => {
-      if (document.hasFocus()) load(true);
+      if (!document.hidden) load(true);
     };
-    const id = setInterval(tick, 10000);
-    const onFocus = () => load(true);
-    window.addEventListener("focus", onFocus);
+    const id = setInterval(tick, 30000);
+    const onVis = () => {
+      if (!document.hidden) load(true);
+    };
+    document.addEventListener("visibilitychange", onVis);
     return () => {
       clearInterval(id);
-      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVis);
     };
   }, [load]);
 

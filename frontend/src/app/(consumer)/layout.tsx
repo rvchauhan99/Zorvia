@@ -25,8 +25,24 @@ export default function ConsumerLayout({ children }: { children: React.ReactNode
     }
   }, [ready, session, router]);
 
-  if (!ready || !session || session.user_type !== "consumer") {
+  if (!ready && !session) {
+    return (
+      <div className="min-h-screen bg-brand-cream flex items-center justify-center" data-testid="consumer-shell-loading">
+        <div className="text-sm text-muted-foreground">Loading…</div>
+      </div>
+    );
+  }
+
+  if (ready && (!session || session.user_type !== "consumer")) {
     return null;
+  }
+
+  if (!session || session.user_type !== "consumer") {
+    return (
+      <div className="min-h-screen bg-brand-cream flex items-center justify-center" data-testid="consumer-shell-loading">
+        <div className="text-sm text-muted-foreground">Loading…</div>
+      </div>
+    );
   }
 
   return (

@@ -23,14 +23,22 @@ export default function Payments() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [batchBusy, setBatchBusy] = useState(false);
   const [confirmBatchVerify, setConfirmBatchVerify] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   async function load() {
-    const params = new URLSearchParams();
-    if (filter !== "all") params.set("status", filter);
-    if (q.trim()) params.set("q", q.trim());
-    const { data } = await api.get(`/payments?${params.toString()}`);
-    setItems(data);
-    setSelected(new Set());
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (filter !== "all") params.set("status", filter);
+      if (q.trim()) params.set("q", q.trim());
+      const { data } = await api.get(`/payments?${params.toString()}`);
+      setItems(data);
+      setSelected(new Set());
+    } catch {
+      toast.error("Failed to load payments");
+    } finally {
+      setLoading(false);
+    }
   }
   useEffect(() => { load(); }, [filter]);
 
@@ -138,7 +146,9 @@ export default function Payments() {
       />
 
       <div className="card-tinted overflow-hidden">
-        {items.length === 0 ? (
+        {loading ? (
+          <div className="p-8 text-center text-muted-foreground text-sm" data-testid="payments-loading">Loading payments…</div>
+        ) : items.length === 0 ? (
           <div className="p-6 sm:p-10 text-center text-muted-foreground text-sm">No {filter === "all" ? "" : filter} payments.</div>
         ) : (
           <ul className="divide-y divide-brand-border">
