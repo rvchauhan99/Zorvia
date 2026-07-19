@@ -14,7 +14,7 @@ function tabButton(active: boolean, label: string, onClick: () => void, testid: 
     <button
       data-testid={testid}
       onClick={onClick}
-      className={`snap-start shrink-0 whitespace-nowrap px-3.5 h-9 sm:h-10 rounded-full text-sm font-medium border cursor-pointer transition-colors ${active ? "bg-primary text-primary-foreground border-primary" : "bg-white border-brand-border hover:bg-brand-surface"}`}
+      className={`snap-start shrink-0 whitespace-nowrap px-3.5 h-11 min-h-[44px] rounded-full text-sm font-medium border cursor-pointer transition-colors ${active ? "bg-primary text-primary-foreground border-primary" : "bg-white border-brand-border hover:bg-brand-surface"}`}
     >{label}</button>
   );
 }
@@ -46,7 +46,14 @@ export default function Reports() {
   const [range, setRange] = useState({ start: "", end: todayISO() });
   const [statementMonth, setStatementMonth] = useState(todayISO().slice(0, 7));
 
+  const moneyTab = tab === "outstanding" || tab === "collections" || tab === "statement";
+  const canExport = showMoney || !moneyTab;
+
   async function load() {
+    if (!showMoney && moneyTab) {
+      setData({});
+      return;
+    }
     try {
       let url;
       if (tab === "daily") url = `/reports/daily-deliveries${range.start ? `?start=${range.start}&end=${range.end}` : ""}`;
@@ -61,10 +68,11 @@ export default function Reports() {
       toast.error("Failed to load report");
     }
   }
-  useEffect(() => { load(); }, [tab, range.start, range.end, statementMonth]);
+  useEffect(() => { load(); }, [tab, range.start, range.end, statementMonth, showMoney]);
 
   function exportCSV() {
-    if (!data) return;
+    if (!data || !canExport) return;
+    if (moneyTab && !showMoney) return;
     const rows = data.rows || (tab === "active" ? [data] : tab === "statement" ? (data.rows || []) : []);
     downloadCSV(`tiffin-${tab}-${todayISO()}`, rows.length ? rows : [data.totals || data]);
     toast.success("CSV downloaded");
@@ -72,12 +80,16 @@ export default function Reports() {
 
   return (
     <div className="flex flex-col gap-3 sm:gap-5 animate-fade-in-up">
-      <div className="flex items-center justify-between gap-3">
-        <div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
           <span className="label-overline">Insights</span>
           <h1 className="font-display font-black text-2xl sm:text-4xl mt-0.5 sm:mt-1">Reports</h1>
         </div>
-        <button data-testid="export-csv" onClick={exportCSV} className="pill-btn btn-outline gap-2 cursor-pointer hover:bg-brand-surface h-10"><DownloadSimple size={16} /> Export CSV</button>
+        {canExport ? (
+          <button data-testid="export-csv" onClick={exportCSV} className="pill-btn btn-outline gap-2 cursor-pointer hover:bg-brand-surface h-11 min-h-[44px] shrink-0">
+            <DownloadSimple size={16} /> Export CSV
+          </button>
+        ) : null}
       </div>
 
       <div className="flex gap-1.5 overflow-x-auto pb-0.5 snap-x snap-mandatory sm:flex-wrap sm:overflow-visible [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -147,7 +159,8 @@ export default function Reports() {
                   </li>
                 ))}
               </ul>
-              <table className="hidden md:table w-full text-sm">
+              <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm min-w-[560px]">
                 <thead className="text-left bg-brand-surface">
                   <tr>
                     <th className="px-3 py-2 label-overline">Date</th>
@@ -171,6 +184,7 @@ export default function Reports() {
                   ))}
                 </tbody>
               </table>
+              </div>
             </>
           )
         ) : tab === "outstanding" ? (
@@ -191,7 +205,8 @@ export default function Reports() {
                     </li>
                   ))}
                 </ul>
-                <table className="hidden md:table w-full text-sm">
+                <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm min-w-[560px]">
                   <thead className="text-left bg-brand-surface">
                     <tr>
                       <th className="px-3 py-2 label-overline">Customer</th>
@@ -211,6 +226,7 @@ export default function Reports() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               </>
             )}
           </>
@@ -232,7 +248,8 @@ export default function Reports() {
                     </li>
                   ))}
                 </ul>
-                <table className="hidden md:table w-full text-sm">
+                <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm min-w-[560px]">
                   <thead className="text-left bg-brand-surface">
                     <tr>
                       <th className="px-3 py-2 label-overline">Date</th>
@@ -250,6 +267,7 @@ export default function Reports() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               </>
             )}
           </>
@@ -305,7 +323,8 @@ export default function Reports() {
                     </li>
                   ))}
                 </ul>
-                <table className="hidden md:table w-full text-sm">
+                <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm min-w-[560px]">
                   <thead className="text-left bg-brand-surface">
                     <tr>
                       <th className="px-3 py-2 label-overline">Customer</th>
@@ -327,6 +346,7 @@ export default function Reports() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               </>
             )}
           </>
@@ -343,7 +363,8 @@ export default function Reports() {
                   </li>
                 ))}
               </ul>
-              <table className="hidden md:table w-full text-sm">
+              <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm min-w-[560px]">
                 <thead className="text-left bg-brand-surface">
                   <tr>
                     <th className="px-3 py-2 label-overline">Area (postal prefix)</th>
@@ -359,6 +380,7 @@ export default function Reports() {
                   ))}
                 </tbody>
               </table>
+              </div>
             </>
           )
         )}

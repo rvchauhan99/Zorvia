@@ -42,10 +42,10 @@ export default function Landing() {
             >
               Contact
             </a>
-            <Link data-testid="landing-login-link" href="/login" className="pill-btn btn-outline text-sm h-9 sm:h-10 px-4 sm:px-5">
+            <Link data-testid="landing-login-link" href="/login" className="pill-btn btn-outline text-sm h-11 min-h-[44px] px-4 sm:px-5">
               Log in
             </Link>
-            <Link data-testid="landing-signup-link" href="/signup" className="pill-btn btn-primary text-sm h-9 sm:h-10 px-4 sm:px-5">
+            <Link data-testid="landing-signup-link" href="/signup" className="pill-btn btn-primary text-sm h-11 min-h-[44px] px-4 sm:px-5">
               Start free
             </Link>
           </nav>

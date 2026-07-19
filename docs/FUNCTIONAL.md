@@ -41,10 +41,10 @@ There are **staff roles** on `platform_users`: `admin` (default), `driver` (deli
 | Area | Admin | Viewer | Driver |
 |------|-------|--------|--------|
 | Dashboard | Full + quick mark + money KPIs | Ops KPIs only (no CAD); meal counts on route | Redirect → Deliveries |
-| Customers | Full (price + outstanding) | Read; meal schedule qty only — no CAD | Blocked (API + redirect) |
+| Customers | Full (price + outstanding; High balance filter) | Read; meal schedule qty only — no CAD; High balance filter hidden | Blocked (API + redirect) |
 | Deliveries | Full; **meal count on every stop** (never price) | Read; meal count only | Full mark/reorder/bulk; meal count only |
 | Payments | Full (amounts) | Read; status/ref without CAD amounts | Blocked |
-| Analysis / Reports | Full money KPIs | Meal/stop metrics; CAD hidden | Blocked (API 403 + redirect) |
+| Analysis / Reports | Full money KPIs + CSV | Meal/stop metrics; CAD hidden (area chart = customer counts; money tabs + Export CSV gated) | Blocked (API 403 + redirect) |
 | Settings / Subscription | Full | No access | No access |
 | More | Reports + Subscription + Settings + activity + logout | Reports + activity + logout | N/A (not in nav) |
 

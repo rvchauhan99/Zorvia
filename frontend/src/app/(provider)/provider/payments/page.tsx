@@ -194,14 +194,16 @@ export default function Payments() {
               <li key={p.id} data-testid={`pay-row-${p.id}`} className="p-4 flex flex-col gap-3 hover:bg-brand-surface/60 transition-colors">
                 <div className="flex items-start gap-3">
                   {canMutate && p.status === "pending" ? (
-                    <input
-                      type="checkbox"
-                      data-testid={`pay-select-${p.id}`}
-                      checked={selected.has(p.id)}
-                      onChange={() => toggle(p.id)}
-                      className="mt-1.5 h-4 w-4"
-                    />
-                  ) : <span className="w-4" />}
+                    <label className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] -ml-1.5 shrink-0 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        data-testid={`pay-select-${p.id}`}
+                        checked={selected.has(p.id)}
+                        onChange={() => toggle(p.id)}
+                        className="h-4 w-4"
+                      />
+                    </label>
+                  ) : <span className="w-11 shrink-0" />}
                   <div className="flex-1 min-w-0">
                     <div className="font-medium truncate">{p.customer_name}</div>
                     <div className="text-xs text-muted-foreground truncate">Ref: <span className="font-mono">{p.reference}</span> · {fmtDateTime(p.submitted_at)}</div>
@@ -220,7 +222,7 @@ export default function Payments() {
                   </div>
                 </div>
                 {(p.screenshot_url || (canMutate && p.status === "pending")) ? (
-                  <div className="flex items-center gap-2 flex-wrap pl-7">
+                  <div className="flex items-center gap-2 flex-wrap pl-0 sm:pl-11">
                     {p.screenshot_url ? (
                       <button data-testid={`view-shot-${p.id}`} onClick={() => setViewing(p)} className="h-11 min-h-[44px] min-w-[44px] px-3 rounded-full bg-white border border-brand-border hover:bg-brand-surface inline-flex items-center justify-center gap-1 text-sm cursor-pointer transition-colors" aria-label="View screenshot">
                         <Eye size={16} /> <span className="sm:inline">View</span>

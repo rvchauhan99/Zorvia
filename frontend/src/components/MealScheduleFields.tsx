@@ -92,7 +92,7 @@ export default function MealScheduleFields({
           data-testid="schedule-mode-same"
           disabled={disabled}
           onClick={() => onModeChange("same")}
-          className={`h-9 px-3 rounded-full text-xs font-semibold border cursor-pointer ${
+          className={`h-11 min-h-[44px] px-3 rounded-full text-sm font-semibold border cursor-pointer ${
             mode === "same" ? "bg-primary text-primary-foreground border-primary" : "bg-white border-brand-border"
           }`}
         >
@@ -103,7 +103,7 @@ export default function MealScheduleFields({
           data-testid="schedule-mode-custom"
           disabled={disabled}
           onClick={() => onModeChange("custom")}
-          className={`h-9 px-3 rounded-full text-xs font-semibold border cursor-pointer ${
+          className={`h-11 min-h-[44px] px-3 rounded-full text-sm font-semibold border cursor-pointer ${
             mode === "custom" ? "bg-primary text-primary-foreground border-primary" : "bg-white border-brand-border"
           }`}
         >
@@ -123,7 +123,7 @@ export default function MealScheduleFields({
                 data-testid={`cf-day-${d.s}`}
                 disabled={disabled}
                 onClick={() => onToggleDay(d.i)}
-                className={`w-10 h-10 rounded-full text-xs font-medium cursor-pointer ${
+                className={`w-11 h-11 min-h-[44px] min-w-[44px] rounded-full text-xs font-medium cursor-pointer ${
                   on ? "bg-primary text-primary-foreground" : "bg-brand-surface text-muted-foreground"
                 }`}
               >

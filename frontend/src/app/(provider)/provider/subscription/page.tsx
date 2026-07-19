@@ -167,7 +167,7 @@ function SubscriptionInner() {
           <button
             type="button"
             aria-label="Dismiss"
-            className="absolute top-3 right-3 icon-btn-neutral size-8"
+            className="absolute top-3 right-3 icon-btn icon-btn-neutral"
             onClick={() => setCheckoutBanner(null)}
           >
             <X size={16} />
@@ -192,7 +192,7 @@ function SubscriptionInner() {
           <button
             type="button"
             aria-label="Dismiss"
-            className="absolute top-3 right-3 icon-btn-neutral size-8"
+            className="absolute top-3 right-3 icon-btn icon-btn-neutral"
             onClick={() => setCheckoutBanner(null)}
           >
             <X size={16} />

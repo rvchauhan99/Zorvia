@@ -75,15 +75,15 @@ export default function ConsumerPayments() {
 
   return (
     <div className="flex flex-col gap-5 animate-fade-in-up">
-      <div className="flex items-start justify-between gap-3">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
           <span className="label-overline">Interac e-Transfer</span>
           <h1 className="font-display font-black text-3xl mt-1">Payments</h1>
         </div>
         <button
           data-testid="pay-download-statement"
           onClick={downloadStatement}
-          className="pill-btn btn-outline gap-2 shrink-0 cursor-pointer hover:bg-brand-surface"
+          className="pill-btn btn-outline gap-2 shrink-0 cursor-pointer hover:bg-brand-surface h-11 min-h-[44px] w-full sm:w-auto justify-center"
         >
           <DownloadSimple size={16} /> Statement
         </button>
@@ -119,7 +119,7 @@ export default function ConsumerPayments() {
           uploadInputTestId="pay-file"
           emptyHint="Take a photo or upload your Interac confirmation"
         />
-        <button data-testid="pay-submit" disabled={submitting} className="pill-btn btn-primary h-12 disabled:opacity-60 cursor-pointer hover:bg-brand-sageDark">
+        <button data-testid="pay-submit" disabled={submitting} className="pill-btn btn-primary h-12 w-full disabled:opacity-60 cursor-pointer hover:bg-brand-sageDark">
           {submitting ? "Submitting…" : "Submit payment"}
         </button>
       </form>

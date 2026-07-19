@@ -65,6 +65,10 @@ export default function Customers() {
   const [items, setItems] = useState<any[]>([]);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+
+  useEffect(() => {
+    if (!showMoney && filter === "high_balance") setFilter("all");
+  }, [showMoney, filter]);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState<any>(empty);
@@ -364,25 +368,41 @@ export default function Customers() {
           <h1 className="font-display font-black text-2xl sm:text-4xl mt-0.5 sm:mt-1">Customers</h1>
         </div>
         {canMutate ? (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col gap-2 w-full sm:w-auto sm:items-end">
             <button
-              type="button"
-              data-testid="download-sample-csv"
-              onClick={() => { downloadSampleCsv(); toast.success("Sample CSV downloaded"); }}
-              className="pill-btn btn-outline gap-2 shrink-0 cursor-pointer h-11 inline-flex items-center"
+              data-testid="add-customer-btn"
+              onClick={openCreate}
+              className="pill-btn btn-primary gap-2 w-full sm:w-auto shrink-0 cursor-pointer h-11 inline-flex items-center justify-center"
             >
-              <DownloadSimple size={16} /> Sample CSV
-            </button>
-            <label className="pill-btn btn-outline gap-2 shrink-0 cursor-pointer h-11 inline-flex items-center">
-              <UploadSimple size={16} /> {importing ? "Importing…" : "Import CSV"}
-              <input data-testid="import-customers-input" type="file" accept=".csv,.json,text/csv,application/json" className="hidden" onChange={onImportFile} disabled={importing} />
-            </label>
-            <button data-testid="invite-customer-btn" onClick={() => setShowInvite(true)} className="pill-btn btn-outline gap-2 shrink-0 cursor-pointer">
-              <EnvelopeSimple size={16} /> Invite
-            </button>
-            <button data-testid="add-customer-btn" onClick={openCreate} className="pill-btn btn-primary gap-2 shrink-0 cursor-pointer">
               <Plus size={16} weight="bold" /> Add customer
             </button>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <button
+                type="button"
+                data-testid="download-sample-csv"
+                onClick={() => { downloadSampleCsv(); toast.success("Sample CSV downloaded"); }}
+                className="pill-btn btn-outline gap-1.5 sm:gap-2 flex-1 sm:flex-none shrink-0 cursor-pointer h-11 inline-flex items-center justify-center"
+                title="Download sample CSV"
+              >
+                <DownloadSimple size={16} />
+                <span className="sm:inline">Sample</span>
+              </button>
+              <label
+                className="pill-btn btn-outline gap-1.5 sm:gap-2 flex-1 sm:flex-none shrink-0 cursor-pointer h-11 inline-flex items-center justify-center"
+                title="Import CSV"
+              >
+                <UploadSimple size={16} />
+                <span className="truncate">{importing ? "…" : "Import"}</span>
+                <input data-testid="import-customers-input" type="file" accept=".csv,.json,text/csv,application/json" className="hidden" onChange={onImportFile} disabled={importing} />
+              </label>
+              <button
+                data-testid="invite-customer-btn"
+                onClick={() => setShowInvite(true)}
+                className="pill-btn btn-outline gap-1.5 sm:gap-2 flex-1 sm:flex-none shrink-0 cursor-pointer h-11 inline-flex items-center justify-center"
+              >
+                <EnvelopeSimple size={16} /> Invite
+              </button>
+            </div>
           </div>
         ) : null}
       </div>
@@ -398,7 +418,11 @@ export default function Customers() {
         testid="customers-filters"
         value={filter}
         onChange={(id) => setFilter(id as Filter)}
-        options={FILTERS.map((f) => ({ id: f.id, label: f.label, count: filterCounts[f.id] }))}
+        options={FILTERS.filter((f) => showMoney || f.id !== "high_balance").map((f) => ({
+          id: f.id,
+          label: f.label,
+          count: filterCounts[f.id],
+        }))}
       />
 
       <div className="card-tinted overflow-hidden">
@@ -486,8 +510,8 @@ export default function Customers() {
               ))}
             </ul>
 
-            <div className="hidden md:block">
-              <table className="w-full text-sm">
+            <div className="hidden md:block overflow-x-auto">
+              <table className={`w-full text-sm ${showMoney ? "min-w-[960px]" : "min-w-[720px]"}`}>
                 <thead className="bg-brand-surface">
                   <tr className="text-left">
                     <th className="px-4 py-3 label-overline">Name</th>
@@ -498,12 +522,12 @@ export default function Customers() {
                     <th className="px-4 py-3 label-overline">Meals</th>
                     {showMoney ? <th className="px-4 py-3 label-overline">Price</th> : null}
                     {showMoney ? <th className="px-4 py-3 label-overline">Outstanding</th> : null}
-                    {canMutate ? <th className="px-4 py-3 label-overline text-right">Actions</th> : null}
+                    {canMutate ? <th className="px-4 py-3 label-overline text-right sticky right-0 bg-brand-surface">Actions</th> : null}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-brand-border">
                   {filtered.map((c) => (
-                    <tr key={c.id} data-testid={`customer-row-${c.id}`} className="hover:bg-brand-surface/60 transition-colors">
+                    <tr key={c.id} data-testid={`customer-row-${c.id}`} className="hover:bg-brand-surface/60 transition-colors group">
                       <td className="px-4 py-3">
                         <Link href={`/provider/customers/${c.id}?tab=analysis`} data-testid={`customer-link-${c.id}`} className="font-medium hover:text-primary hover:underline">
                           {c.name}
@@ -529,7 +553,7 @@ export default function Customers() {
                           ))}
                         </div>
                       </td>
-                      <td className="px-4 py-3 font-mono text-muted-foreground">
+                      <td className="px-4 py-3 font-mono text-muted-foreground text-center">
                         {c.delivery_sequence != null ? c.delivery_sequence : "—"}
                       </td>
                       <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground text-xs">
@@ -543,8 +567,8 @@ export default function Customers() {
                         <td className={`px-4 py-3 font-semibold ${c.outstanding > 0 ? "text-primary" : "text-muted-foreground"}`}>{fmtCAD(c.outstanding || 0)}</td>
                       ) : null}
                       {canMutate ? (
-                        <td className="px-4 py-3">
-                          <div className="flex justify-end items-center gap-0.5">
+                        <td className="px-4 py-3 whitespace-nowrap sticky right-0 bg-white group-hover:bg-brand-surface/60">
+                          <div className="flex justify-end items-center gap-0.5 shrink-0">
                             {c.pending_approval ? (
                               <>
                                 <button data-testid={`approve-${c.id}`} onClick={() => approve(c)} className="icon-btn icon-btn-success" title="Approve"><CheckCircle size={18} /></button>

@@ -221,7 +221,7 @@ export default function Deliveries() {
   ];
 
   return (
-    <div className="flex flex-col gap-3 sm:gap-5 animate-fade-in-up pb-24 sm:pb-0">
+    <div className="flex flex-col gap-3 sm:gap-5 animate-fade-in-up">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 sm:gap-3">
         <div>
           <span className="label-overline">Route · by order / area</span>
@@ -236,15 +236,15 @@ export default function Deliveries() {
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button data-testid="prev-day" onClick={() => shiftDay(-1)} className="w-10 h-10 rounded-full bg-white border border-brand-border flex items-center justify-center hover:bg-brand-surface cursor-pointer transition-colors"><ArrowLeft size={16} /></button>
-          <input data-testid="date-picker" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-10 px-3 rounded-xl bg-white border border-brand-border font-medium" />
-          <button data-testid="next-day" onClick={() => shiftDay(1)} className="w-10 h-10 rounded-full bg-white border border-brand-border flex items-center justify-center hover:bg-brand-surface cursor-pointer transition-colors"><ArrowRight size={16} /></button>
+          <button data-testid="prev-day" onClick={() => shiftDay(-1)} className="h-11 w-11 min-h-[44px] min-w-[44px] rounded-full bg-white border border-brand-border flex items-center justify-center hover:bg-brand-surface cursor-pointer transition-colors" aria-label="Previous day"><ArrowLeft size={16} /></button>
+          <input data-testid="date-picker" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-11 px-3 rounded-xl bg-white border border-brand-border font-medium" />
+          <button data-testid="next-day" onClick={() => shiftDay(1)} className="h-11 w-11 min-h-[44px] min-w-[44px] rounded-full bg-white border border-brand-border flex items-center justify-center hover:bg-brand-surface cursor-pointer transition-colors" aria-label="Next day"><ArrowRight size={16} /></button>
           {canMutate ? (
             <button
               data-testid="bulk-mark-delivered"
               disabled={bulkBusy || isFutureDate || !(counts.pending > 0)}
               onClick={() => setConfirmBulkDeliver(true)}
-              className="h-10 px-4 rounded-full bg-secondary text-secondary-foreground text-sm font-semibold disabled:opacity-50 cursor-pointer"
+              className="h-11 px-4 rounded-full bg-secondary text-secondary-foreground text-sm font-semibold disabled:opacity-50 cursor-pointer"
             >
               Mark all delivered
             </button>
@@ -259,7 +259,7 @@ export default function Deliveries() {
       ) : null}
 
       {nextPending && canMarkStatuses ? (
-        <div data-testid="next-stop" className="sm:hidden card-tinted p-3 border-primary/30 ring-1 ring-primary/20 sticky top-[calc(env(safe-area-inset-top,0px)+3.5rem)] z-20 bg-white">
+        <div data-testid="next-stop" className="sm:hidden card-tinted p-3 border-primary/30 ring-1 ring-primary/20 bg-white">
           <div className="label-overline">Next stop</div>
           <div className="font-display font-bold text-lg mt-0.5 truncate">{nextPending.customer_name}</div>
           <div className="text-xs text-muted-foreground truncate">{nextPending.address}{nextPending.postal_code ? ` · ${nextPending.postal_code}` : ""}</div>
@@ -270,7 +270,7 @@ export default function Deliveries() {
               target="_blank"
               rel="noreferrer"
               data-testid={`next-maps-${nextPending.id}`}
-              className="h-11 w-11 rounded-full border border-brand-border bg-white inline-flex items-center justify-center text-primary"
+              className="h-11 w-11 min-h-[44px] min-w-[44px] rounded-full border border-brand-border bg-white inline-flex items-center justify-center text-primary"
               aria-label="Open in Maps"
             >
               <MapPin size={18} />
@@ -318,12 +318,12 @@ export default function Deliveries() {
             {filtered.map((d, i) => (
               <li key={d.id} data-testid={`del-row-${d.id}`} className="p-3 sm:p-4 flex flex-col gap-2 sm:gap-3 sm:flex-row sm:items-center hover:bg-brand-surface/60 transition-colors">
                 {canMutate ? (
-                  <div className="hidden sm:flex flex-col gap-1 shrink-0">
+                  <div className="flex flex-row sm:flex-col gap-1 shrink-0">
                     <button
                       data-testid={`route-up-${d.id}`}
                       disabled={i === 0}
                       onClick={() => reorder(d.id, -1)}
-                      className="h-9 w-9 rounded-full border border-brand-border bg-white disabled:opacity-30 inline-flex items-center justify-center cursor-pointer"
+                      className="h-11 w-11 min-h-[44px] min-w-[44px] rounded-full border border-brand-border bg-white disabled:opacity-30 inline-flex items-center justify-center cursor-pointer"
                       aria-label="Move up"
                     >
                       <CaretUp size={16} />
@@ -332,7 +332,7 @@ export default function Deliveries() {
                       data-testid={`route-down-${d.id}`}
                       disabled={i === filtered.length - 1}
                       onClick={() => reorder(d.id, 1)}
-                      className="h-9 w-9 rounded-full border border-brand-border bg-white disabled:opacity-30 inline-flex items-center justify-center cursor-pointer"
+                      className="h-11 w-11 min-h-[44px] min-w-[44px] rounded-full border border-brand-border bg-white disabled:opacity-30 inline-flex items-center justify-center cursor-pointer"
                       aria-label="Move down"
                     >
                       <CaretDown size={16} />
@@ -361,10 +361,10 @@ export default function Deliveries() {
                       target="_blank"
                       rel="noreferrer"
                       data-testid={`maps-${d.id}`}
-                      className="text-xs text-primary inline-flex items-center gap-1"
+                      className="min-h-[44px] min-w-[44px] px-2 -ml-2 rounded-full text-sm text-primary inline-flex items-center gap-1.5 hover:bg-brand-surface"
                       aria-label="Open in Maps"
                     >
-                      <MapPin size={12} />
+                      <MapPin size={16} />
                       <span className="sm:hidden">Maps</span>
                       <span className="hidden sm:inline">Open in Maps</span>
                     </a>

@@ -112,6 +112,7 @@ export default function ProviderDashboard() {
   const hasInterac = !!(provider?.interac_email || "").trim();
   const hasCustomers = (summary?.active_customers ?? 0) > 0 || (summary?.pending_customers ?? 0) > 0;
   const showChecklist =
+    canQuickMark &&
     !providerLoading &&
     !summaryLoading &&
     !dismissedOnboard &&
@@ -178,14 +179,14 @@ export default function ProviderDashboard() {
               <h2 className="font-display font-bold text-lg sm:text-xl">Get set up</h2>
               <p className="text-sm text-muted-foreground mt-1">A few steps so you can start delivering and collecting.</p>
             </div>
-            <button data-testid="dismiss-onboarding" onClick={dismissChecklist} className="text-xs text-muted-foreground hover:underline cursor-pointer shrink-0">Dismiss</button>
+            <button data-testid="dismiss-onboarding" onClick={dismissChecklist} className="min-h-[44px] min-w-[44px] px-2 text-sm text-muted-foreground hover:underline cursor-pointer shrink-0">Dismiss</button>
           </div>
           <ul className="space-y-3 text-sm">
             <li className="flex items-center gap-3">
               {hasInterac ? <CheckCircle size={20} className="text-secondary shrink-0" weight="fill" /> : <Circle size={20} className="text-muted-foreground shrink-0" />}
               <span className="flex-1">Add your Interac e-Transfer email</span>
               {!hasInterac ? (
-                <button onClick={() => router.push("/provider/settings")} className="text-primary text-xs font-medium hover:underline cursor-pointer">Settings</button>
+                <button onClick={() => router.push("/provider/settings")} className="text-primary text-sm font-medium hover:underline cursor-pointer min-h-[44px] inline-flex items-center">Settings</button>
               ) : null}
             </li>
             <li className="flex items-center gap-3">

@@ -171,12 +171,12 @@ export default function Settings() {
       </div>
 
       <div className="card-tinted p-4 sm:p-6 flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
             <div className="label-overline">Signup code</div>
-            <div className="font-mono font-semibold text-lg">{prov.signup_code}</div>
+            <div className="font-mono font-semibold text-lg break-all">{prov.signup_code}</div>
           </div>
-          <button data-testid="copy-code-settings" onClick={() => { navigator.clipboard.writeText(prov.signup_code); toast.success("Copied"); }} className="pill-btn btn-outline cursor-pointer hover:bg-brand-surface">Copy</button>
+          <button data-testid="copy-code-settings" onClick={() => { navigator.clipboard.writeText(prov.signup_code); toast.success("Copied"); }} className="pill-btn btn-outline cursor-pointer hover:bg-brand-surface h-11 min-h-[44px] shrink-0">Copy</button>
         </div>
         <p className="text-xs text-muted-foreground">Share this with consumers to let them sign themselves up. You approve them from the Customers page.</p>
       </div>
@@ -369,8 +369,8 @@ export default function Settings() {
         </form>
       </div>
 
-      <div className="flex justify-end">
-        <button data-testid="s-save" disabled={saving} onClick={save} className="pill-btn btn-primary disabled:opacity-60 cursor-pointer">
+      <div className="flex justify-stretch sm:justify-end">
+        <button data-testid="s-save" disabled={saving} onClick={save} className="pill-btn btn-primary disabled:opacity-60 cursor-pointer h-12 w-full sm:w-auto">
           {saving ? "Saving…" : "Save settings"}
         </button>
       </div>

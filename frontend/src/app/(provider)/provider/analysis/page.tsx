@@ -181,30 +181,34 @@ export default function AnalysisPage() {
                 <div className="animate-fade-in-up" style={stagger(4)}><AgingChart data={data.ar_aging} /></div>
               </>
             ) : null}
-            <div className="animate-fade-in-up" style={stagger(5)}><AreaChart data={data.areas} /></div>
+            <div className="animate-fade-in-up" style={stagger(5)}><AreaChart data={data.areas} showMoney={showMoney} /></div>
           </section>
 
           <section className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
-            <div className="animate-fade-in-up" style={stagger(6)}>
-              <TopList
-                title="Top outstanding"
-                description="Customers with the highest current receivables."
-                rows={data.top_outstanding}
-                amountKey="outstanding"
-                testid="analysis-top-outstanding"
-                showMoney={showMoney}
-              />
-            </div>
-            <div className="animate-fade-in-up" style={stagger(7)}>
-              <TopList
-                title="Top collectors"
-                description="Customers with the most verified payments in this period."
-                rows={data.top_collectors}
-                amountKey="amount"
-                testid="analysis-top-collectors"
-                showMoney={showMoney}
-              />
-            </div>
+            {showMoney ? (
+              <>
+                <div className="animate-fade-in-up" style={stagger(6)}>
+                  <TopList
+                    title="Top outstanding"
+                    description="Customers with the highest current receivables."
+                    rows={data.top_outstanding}
+                    amountKey="outstanding"
+                    testid="analysis-top-outstanding"
+                    showMoney={showMoney}
+                  />
+                </div>
+                <div className="animate-fade-in-up" style={stagger(7)}>
+                  <TopList
+                    title="Top collectors"
+                    description="Customers with the most verified payments in this period."
+                    rows={data.top_collectors}
+                    amountKey="amount"
+                    testid="analysis-top-collectors"
+                    showMoney={showMoney}
+                  />
+                </div>
+              </>
+            ) : null}
           </section>
 
           <section className="card-tinted p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 justify-between animate-fade-in-up" style={stagger(8)}>

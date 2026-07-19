@@ -34,7 +34,7 @@ function tabBtn(active: boolean, label: string, onClick: () => void, testid: str
     <button
       data-testid={testid}
       onClick={onClick}
-      className={`snap-start shrink-0 px-3.5 h-9 sm:h-10 rounded-full text-sm font-medium border cursor-pointer transition-colors ${
+      className={`snap-start shrink-0 px-3.5 h-11 min-h-[44px] rounded-full text-sm font-medium border cursor-pointer transition-colors ${
         active ? "bg-primary text-primary-foreground border-primary" : "bg-white border-brand-border hover:bg-brand-surface"
       }`}
     >
