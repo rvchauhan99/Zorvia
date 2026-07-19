@@ -1,0 +1,13 @@
+file '/Users/ravatrajsinhchauhan/Documents/Programs/Zorvia-main/frontend/public/brand/social/reel-01-first-impression/frames/00-ai-cover.png'
+duration 2.0
+file '/Users/ravatrajsinhchauhan/Documents/Programs/Zorvia-main/frontend/public/brand/social/reel-01-first-impression/frames/01-hook.png'
+duration 3.0
+file '/Users/ravatrajsinhchauhan/Documents/Programs/Zorvia-main/frontend/public/brand/social/reel-01-first-impression/frames/02-position.png'
+duration 3.2
+file '/Users/ravatrajsinhchauhan/Documents/Programs/Zorvia-main/frontend/public/brand/social/reel-01-first-impression/frames/03-pillars.png'
+duration 4.5
+file '/Users/ravatrajsinhchauhan/Documents/Programs/Zorvia-main/frontend/public/brand/social/reel-01-first-impression/frames/04-canada.png'
+duration 3.0
+file '/Users/ravatrajsinhchauhan/Documents/Programs/Zorvia-main/frontend/public/brand/social/reel-01-first-impression/frames/05-cta.png'
+duration 4.0
+file '/Users/ravatrajsinhchauhan/Documents/Programs/Zorvia-main/frontend/public/brand/social/reel-01-first-impression/frames/05-cta.png'

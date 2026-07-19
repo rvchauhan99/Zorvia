@@ -31,7 +31,9 @@ Wordmark: bold geometric sans. “Meal” in Ink, “HQ” in Lagoon.
 | `mealhq-logo-horizontal.png` | Header / auth wordmark |
 | `mealhq-logo-email.png` | Email header (lightweight, ~400px wide) |
 | `mealhq-logo-stacked.png` | Splash / OG |
-| `mealhq-icon-1024.png` | App icon master |
+| `mealhq-icon-1024.png` | App icon master — **also canonical FB/IG profile mark** |
+| `social/page/` | Page profile + cover (see `social/README.md`) |
+| `social/post-*/` | One folder per social post |
 | `../icons/icon-192.png` | PWA 192 |
 | `../icons/icon-512.png` | PWA 512 |
 | `../icons/apple-touch-icon.png` | iOS home screen 180 |

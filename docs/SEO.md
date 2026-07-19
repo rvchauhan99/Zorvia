@@ -60,3 +60,4 @@ After EN rankings stabilize for GTA/Vancouver, add `/fr` mirrors for pricing + f
 
 - Domains / OAuth: [`DEPLOY_CLOUD_RUN.md`](./DEPLOY_CLOUD_RUN.md)
 - Product: [`FUNCTIONAL.md`](./FUNCTIONAL.md)
+- Facebook + Instagram (Canada B2B reach): [`SOCIAL_MEDIA_SETUP.md`](./SOCIAL_MEDIA_SETUP.md)
