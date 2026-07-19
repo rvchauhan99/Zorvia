@@ -23,6 +23,28 @@ export function todayISO() {
   return `${y}-${m}-${day}`;
 }
 
+export function deliveryQty(d: { quantity?: number } | null | undefined) {
+  const q = Number(d?.quantity);
+  return Number.isFinite(q) && q >= 1 ? Math.floor(q) : 1;
+}
+
+export function deliveryLineAmount(d: { meal_price?: number; quantity?: number } | null | undefined) {
+  return (Number(d?.meal_price) || 0) * deliveryQty(d);
+}
+
+/** Always-clear meal count for ops UIs: "1 meal" / "N meals". */
+export function fmtMealCount(d: { quantity?: number } | null | undefined) {
+  const qty = deliveryQty(d);
+  return qty === 1 ? "1 meal" : `${qty} meals`;
+}
+
+/** e.g. "$24.00 · ×2" when qty > 1, else "$12.00" (admin money contexts only). */
+export function fmtDeliveryLine(d: { meal_price?: number; quantity?: number } | null | undefined) {
+  const qty = deliveryQty(d);
+  const total = fmtCAD(deliveryLineAmount(d));
+  return qty > 1 ? `${total} · ×${qty}` : total;
+}
+
 export const WEEKDAYS = [
   { i: 0, s: "Mon" },
   { i: 1, s: "Tue" },

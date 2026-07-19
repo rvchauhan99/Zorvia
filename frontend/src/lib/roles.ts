@@ -19,6 +19,11 @@ export function isViewer(session: UserSession | null | undefined): boolean {
   return staffRole(session) === "viewer";
 }
 
+/** CAD / outstanding / payment amounts — admins only (drivers & viewers never see prices). */
+export function canSeePricing(session: UserSession | null | undefined): boolean {
+  return isAdmin(session);
+}
+
 /** Customers, payments, settings, subscription, dashboard quick-mark. */
 export function canMutateAdmin(session: UserSession | null | undefined): boolean {
   return isAdmin(session);

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { fmtCAD, fmtDate, todayISO } from "@/lib/format";
+import { fmtCAD, fmtDate, todayISO, fmtDeliveryLine } from "@/lib/format";
 import { toast } from "sonner";
 import StatusPill from "@/components/StatusPill";
 import AppSheet from "@/components/AppSheet";
@@ -125,7 +125,7 @@ export default function ConsumerHome() {
               <div className="flex-1 min-w-0 flex items-center gap-3">
                 <div className="flex-1">
                   <div className="font-medium">{fmtDate(d.delivery_date)}</div>
-                  <div className="text-xs text-muted-foreground">{fmtCAD(d.meal_price)} · Meal</div>
+                  <div className="text-xs text-muted-foreground">{fmtDeliveryLine(d)} · Meal</div>
                 </div>
                 <StatusPill status={d.status} />
               </div>
@@ -148,7 +148,7 @@ export default function ConsumerHome() {
             <li key={d.id} className="p-4 flex items-center gap-3 hover:bg-brand-surface/60 transition-colors">
               <div className="flex-1">
                 <div className="font-medium">{fmtDate(d.delivery_date)}</div>
-                <div className="text-xs text-muted-foreground">{fmtCAD(d.meal_price)}</div>
+                <div className="text-xs text-muted-foreground">{fmtDeliveryLine(d)}</div>
               </div>
               <StatusPill status={d.status} />
             </li>

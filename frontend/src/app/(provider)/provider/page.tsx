@@ -5,11 +5,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { canMutateAdmin, isDriver } from "@/lib/roles";
-import { fmtCAD, fmtDate, todayISO } from "@/lib/format";
+import { canMutateAdmin, isDriver, canSeePricing } from "@/lib/roles";
+import { fmtCAD, fmtDate, todayISO, fmtMealCount } from "@/lib/format";
 import { Truck, Receipt, CurrencyDollar, Users, ArrowRight, Copy, CheckCircle, Circle } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import StatusPill from "@/components/StatusPill";
+import { InlineLoader, KpiSkeleton } from "@/components/loaders";
 
 const ONBOARD_KEY = "zorvia_provider_onboarded";
 
@@ -21,7 +22,7 @@ function StatCard({ icon: Icon, label, value, hint, tone = "primary", testid }: 
     ink: "text-foreground",
   };
   return (
-    <div data-testid={testid} className="stat-card card-tinted-hover">
+    <div data-testid={testid} className="stat-card card-tinted-hover animate-fade-in-up">
       <div className="flex items-center justify-between">
         <span className="label-overline">{label}</span>
         <Icon size={22} className={toneMap[tone]} weight="duotone" />
@@ -32,39 +33,68 @@ function StatCard({ icon: Icon, label, value, hint, tone = "primary", testid }: 
   );
 }
 
+function sortDeliveries(dels: any[]) {
+  return [...dels].sort((a, b) => {
+    const fa = String(a.postal_code || "").replace(/\s+/g, "").slice(0, 3).toUpperCase() || "ZZZ";
+    const fb = String(b.postal_code || "").replace(/\s+/g, "").slice(0, 3).toUpperCase() || "ZZZ";
+    if (fa !== fb) return fa.localeCompare(fb);
+    return String(a.customer_name || "").localeCompare(String(b.customer_name || ""));
+  });
+}
+
 export default function ProviderDashboard() {
   const router = useRouter();
   const { session } = useAuth();
   const canQuickMark = canMutateAdmin(session);
+  const showMoney = canSeePricing(session);
   const [summary, setSummary] = useState<any>(null);
+  const [summaryLoading, setSummaryLoading] = useState(true);
   const [provider, setProvider] = useState<any>(null);
+  const [providerLoading, setProviderLoading] = useState(true);
   const [todayDeliveries, setTodayDeliveries] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [deliveriesLoading, setDeliveriesLoading] = useState(true);
   const [dismissedOnboard, setDismissedOnboard] = useState(false);
 
-  async function load() {
-    setLoading(true);
+  async function loadSummary() {
+    setSummaryLoading(true);
     try {
-      const [{ data: s }, { data: p }, { data: dels }] = await Promise.all([
-        api.get("/reports/dashboard-summary"),
-        api.get("/providers/me"),
-        api.get(`/deliveries?date=${todayISO()}`),
-      ]);
+      const { data: s } = await api.get("/reports/dashboard-summary");
       setSummary(s);
-      setProvider(p);
-      setTodayDeliveries(
-        [...dels].sort((a, b) => {
-          const fa = String(a.postal_code || "").replace(/\s+/g, "").slice(0, 3).toUpperCase() || "ZZZ";
-          const fb = String(b.postal_code || "").replace(/\s+/g, "").slice(0, 3).toUpperCase() || "ZZZ";
-          if (fa !== fb) return fa.localeCompare(fb);
-          return String(a.customer_name || "").localeCompare(String(b.customer_name || ""));
-        })
-      );
-    } catch (e) {
-      toast.error("Failed to load dashboard");
+    } catch {
+      toast.error("Failed to load dashboard summary");
     } finally {
-      setLoading(false);
+      setSummaryLoading(false);
     }
+  }
+
+  async function loadProvider() {
+    setProviderLoading(true);
+    try {
+      const { data: p } = await api.get("/providers/me");
+      setProvider(p);
+    } catch {
+      toast.error("Failed to load kitchen profile");
+    } finally {
+      setProviderLoading(false);
+    }
+  }
+
+  async function loadDeliveries() {
+    setDeliveriesLoading(true);
+    try {
+      const { data: dels } = await api.get(`/deliveries?date=${todayISO()}`);
+      setTodayDeliveries(sortDeliveries(dels));
+    } catch {
+      toast.error("Failed to load today's deliveries");
+    } finally {
+      setDeliveriesLoading(false);
+    }
+  }
+
+  function refreshAll() {
+    void loadSummary();
+    void loadProvider();
+    void loadDeliveries();
   }
 
   useEffect(() => {
@@ -73,7 +103,7 @@ export default function ProviderDashboard() {
       router.replace("/provider/deliveries");
       return;
     }
-    load();
+    refreshAll();
     try {
       setDismissedOnboard(localStorage.getItem(ONBOARD_KEY) === "1");
     } catch { /* ignore */ }
@@ -81,7 +111,11 @@ export default function ProviderDashboard() {
 
   const hasInterac = !!(provider?.interac_email || "").trim();
   const hasCustomers = (summary?.active_customers ?? 0) > 0 || (summary?.pending_customers ?? 0) > 0;
-  const showChecklist = !dismissedOnboard && (!hasInterac || !hasCustomers);
+  const showChecklist =
+    !providerLoading &&
+    !summaryLoading &&
+    !dismissedOnboard &&
+    (!hasInterac || !hasCustomers);
 
   function dismissChecklist() {
     try { localStorage.setItem(ONBOARD_KEY, "1"); } catch { /* ignore */ }
@@ -92,13 +126,13 @@ export default function ProviderDashboard() {
     try {
       await api.patch(`/deliveries/${id}`, { status });
       toast.success(`Marked ${status}`);
-      load();
+      void loadDeliveries();
+      void loadSummary();
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || "Failed");
     }
   }
 
-  // Drivers never use the dashboard; layout + resolveAppHome send them to deliveries.
   if (isDriver(session)) {
     return null;
   }
@@ -107,15 +141,25 @@ export default function ProviderDashboard() {
     <div className="flex flex-col gap-4 sm:gap-6 animate-fade-in-up">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 sm:gap-3">
         <div className="flex items-center gap-3">
-          {provider?.logo_url ? (
+          {providerLoading ? (
+            <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl bg-brand-surface animate-pulse" />
+          ) : provider?.logo_url ? (
             <img src={provider.logo_url} alt="" className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl object-cover border border-brand-border" data-testid="dashboard-logo" />
           ) : null}
           <div>
             <span className="label-overline">Today · {fmtDate(todayISO())}</span>
-            <h1 className="font-display font-black text-2xl sm:text-4xl mt-0.5 sm:mt-1">Good day, {(provider?.name || "there").split(" ")[0]}</h1>
+            {providerLoading ? (
+              <div className="mt-1 h-8 w-48 sm:w-64 rounded bg-brand-surface animate-pulse" />
+            ) : (
+              <h1 className="font-display font-black text-2xl sm:text-4xl mt-0.5 sm:mt-1">
+                Good day, {(provider?.name || "there").split(" ")[0]}
+              </h1>
+            )}
           </div>
         </div>
-        {provider?.signup_code ? (
+        {providerLoading ? (
+          <div className="h-10 w-40 rounded-full bg-brand-surface animate-pulse" />
+        ) : provider?.signup_code ? (
           <button
             data-testid="copy-signup-code"
             onClick={() => { navigator.clipboard.writeText(provider.signup_code); toast.success("Signup code copied"); }}
@@ -128,7 +172,7 @@ export default function ProviderDashboard() {
       </div>
 
       {showChecklist ? (
-        <div data-testid="onboarding-checklist" className="card-tinted p-4 sm:p-5 border border-brand-amber/30 bg-amber-50/40">
+        <div data-testid="onboarding-checklist" className="card-tinted p-4 sm:p-5 border border-brand-amber/30 bg-amber-50/40 animate-fade-in-up">
           <div className="flex items-start justify-between gap-3 mb-3">
             <div>
               <h2 className="font-display font-bold text-lg sm:text-xl">Get set up</h2>
@@ -167,12 +211,32 @@ export default function ProviderDashboard() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard testid="stat-deliveries" icon={Truck} label="Today's Deliveries" value={summary?.deliveries?.total ?? "—"} hint={summary ? `${summary.deliveries.delivered} delivered · ${summary.deliveries.pending} pending` : ""} />
-        <StatCard testid="stat-pending" icon={Receipt} label="Pending Payments" value={summary?.pending_payments ?? "—"} hint="Awaiting your verification" tone="amber" />
-        <StatCard testid="stat-outstanding" icon={CurrencyDollar} label="Outstanding" value={fmtCAD(summary?.outstanding_total ?? 0)} hint="Across all customers" tone="ink" />
-        <StatCard testid="stat-collections" icon={Users} label="Today's Collections" value={fmtCAD(summary?.collections_today?.amount ?? 0)} hint={`${summary?.collections_today?.count ?? 0} verified today`} tone="secondary" />
-      </div>
+      {summaryLoading && !summary ? (
+        <KpiSkeleton testid="dashboard-kpi-skeleton" />
+      ) : (
+        <div className={`grid gap-3 sm:gap-4 ${showMoney ? "grid-cols-2 lg:grid-cols-4" : "grid-cols-2"}`}>
+          <StatCard
+            testid="stat-deliveries"
+            icon={Truck}
+            label="Today's Deliveries"
+            value={summary?.deliveries?.total ?? "—"}
+            hint={
+              summary
+                ? `${summary.deliveries.delivered} delivered · ${summary.deliveries.pending} pending${
+                    summary.deliveries.meals != null ? ` · ${summary.deliveries.meals} meal${summary.deliveries.meals === 1 ? "" : "s"}` : ""
+                  }`
+                : ""
+            }
+          />
+          <StatCard testid="stat-pending" icon={Receipt} label="Pending Payments" value={summary?.pending_payments ?? "—"} hint="Awaiting your verification" tone="amber" />
+          {showMoney ? (
+            <>
+              <StatCard testid="stat-outstanding" icon={CurrencyDollar} label="Outstanding" value={fmtCAD(summary?.outstanding_total ?? 0)} hint="Across all customers" tone="ink" />
+              <StatCard testid="stat-collections" icon={Users} label="Today's Collections" value={fmtCAD(summary?.collections_today?.amount ?? 0)} hint={`${summary?.collections_today?.count ?? 0} verified today`} tone="secondary" />
+            </>
+          ) : null}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
         <div className="lg:col-span-2 card-tinted p-4 sm:p-5">
@@ -182,12 +246,12 @@ export default function ProviderDashboard() {
               Open list <ArrowRight size={14} />
             </button>
           </div>
-          {loading ? (
-            <div className="text-sm text-muted-foreground">Loading…</div>
+          {deliveriesLoading ? (
+            <InlineLoader testid="dashboard-route-loader" label="Loading route…" />
           ) : todayDeliveries.length === 0 ? (
             <div className="p-6 text-center text-sm text-muted-foreground">No deliveries today. Add customers with delivery days that include today.</div>
           ) : (
-            <ul className="flex flex-col divide-y divide-brand-border">
+            <ul className="flex flex-col divide-y divide-brand-border animate-fade-in-up">
               {todayDeliveries.slice(0, 6).map((d) => (
                 <li key={d.id} data-testid={`dashboard-del-${d.id}`} className="py-3 flex flex-col gap-2 sm:flex-row sm:items-center">
                   <div className="flex-1 min-w-0">
@@ -201,7 +265,7 @@ export default function ProviderDashboard() {
                     <div className="text-xs text-muted-foreground truncate">{d.address} {d.apartment ? `· ${d.apartment}` : ""}</div>
                   </div>
                   <div className="flex items-center justify-between sm:justify-end gap-2">
-                    <div className="text-sm font-medium">{fmtCAD(d.meal_price)}</div>
+                    <div className="text-sm font-semibold shrink-0 px-2.5 py-1 rounded-full bg-brand-surface">{fmtMealCount(d)}</div>
                     {d.status === "pending" && canQuickMark ? (
                       <div className="flex items-center gap-2">
                         <button data-testid={`quick-delivered-${d.id}`} onClick={() => markDelivery(d.id, "delivered")} className="h-11 min-h-[44px] px-4 rounded-full bg-secondary text-secondary-foreground text-sm font-medium active:scale-95 transition-transform cursor-pointer hover:bg-brand-sageDark">Deliver</button>
@@ -217,26 +281,37 @@ export default function ProviderDashboard() {
           )}
         </div>
 
-        <div className="card-tinted p-4 sm:p-5">
+        <div className={`card-tinted p-4 sm:p-5 ${summaryLoading && !summary ? "opacity-70" : ""}`}>
           <h2 className="font-display font-bold text-xl mb-3">At a glance</h2>
-          <div className="space-y-3 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Active customers</span>
-              <span className="font-semibold">{summary?.active_customers ?? "—"}</span>
+          {summaryLoading && !summary ? (
+            <div className="space-y-3 animate-pulse" data-testid="glance-skeleton">
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="flex items-center justify-between">
+                  <div className="h-3 w-28 rounded bg-brand-surface" />
+                  <div className="h-3 w-8 rounded bg-brand-surface" />
+                </div>
+              ))}
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Pending approval</span>
-              <span className="font-semibold">{summary?.pending_customers ?? "—"}</span>
+          ) : (
+            <div className="space-y-3 text-sm animate-fade-in-up">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Active customers</span>
+                <span className="font-semibold">{summary?.active_customers ?? "—"}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Pending approval</span>
+                <span className="font-semibold">{summary?.pending_customers ?? "—"}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Missed today</span>
+                <span className="font-semibold">{summary?.deliveries?.missed ?? "—"}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Cancelled today</span>
+                <span className="font-semibold">{summary?.deliveries?.cancelled ?? "—"}</span>
+              </div>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Missed today</span>
-              <span className="font-semibold">{summary?.deliveries?.missed ?? "—"}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Cancelled today</span>
-              <span className="font-semibold">{summary?.deliveries?.cancelled ?? "—"}</span>
-            </div>
-          </div>
+          )}
           <button data-testid="dashboard-open-reports" onClick={() => router.push("/provider/reports")} className="mt-5 w-full pill-btn btn-outline cursor-pointer">Open reports</button>
         </div>
       </div>

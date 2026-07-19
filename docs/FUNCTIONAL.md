@@ -40,15 +40,15 @@ There are **staff roles** on `platform_users`: `admin` (default), `driver` (deli
 
 | Area | Admin | Viewer | Driver |
 |------|-------|--------|--------|
-| Dashboard | Full + quick mark | Read only (no Deliver/Miss) | Redirect → Deliveries |
-| Customers | Full | Read (no actions/forms) | Blocked (API + redirect) |
-| Deliveries | Full | Read (no mark/reorder/bulk) | Full mark/reorder/bulk |
-| Payments | Full | Read | Blocked |
-| Reports | Read | Read | Blocked (API 403 + redirect) |
+| Dashboard | Full + quick mark + money KPIs | Ops KPIs only (no CAD); meal counts on route | Redirect → Deliveries |
+| Customers | Full (price + outstanding) | Read; meal schedule qty only — no CAD | Blocked (API + redirect) |
+| Deliveries | Full; **meal count on every stop** (never price) | Read; meal count only | Full mark/reorder/bulk; meal count only |
+| Payments | Full (amounts) | Read; status/ref without CAD amounts | Blocked |
+| Analysis / Reports | Full money KPIs | Meal/stop metrics; CAD hidden | Blocked (API 403 + redirect) |
 | Settings / Subscription | Full | No access | No access |
 | More | Reports + Subscription + Settings + activity + logout | Reports + activity + logout | N/A (not in nav) |
 
-Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliveries`). Backend uses `require_roles` / `require_roles_active` on mutating routes.
+Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliveries`, `canSeePricing` — CAD for admins only). Backend uses `require_roles` / `require_roles_active` on mutating routes. Ops surfaces (`/provider/deliveries`, dashboard route) always show `fmtMealCount` (e.g. `2 meals`), never unit price.
 
 ## 4. Feature catalog
 
@@ -73,8 +73,8 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 | Profile | Org name, contact, Interac email, address fields |
 | Settings | `cutoff_hours`, default meal price, timezone, signup code (shareable), kitchen logo (512×512), `closed_dates` (holidays), change password |
 | Signup code | Chosen by provider at signup; **letters/numbers only** (3–32); stored uppercase; unique case-insensitively across tenants; consumers join with case-insensitive match |
-| Kitchen logo | Optional; upload on settings → Pillow square resize 512 → R2 (`logos/`) or data-URL fallback |
-| Consumer avatar | Optional on signup (deferred upload after verify) and profile; 256×256 → R2 (`avatars/`) |
+| Kitchen logo | Optional; Camera or Upload on settings → Pillow square resize 512 → R2 (`logos/`) or data-URL fallback |
+| Consumer avatar | Optional on signup (deferred upload after verify) and profile; Camera or Upload; 256×256 → R2 (`avatars/`) |
 | Closed dates | No delivery generation on dates in `settings.closed_dates` |
 
 ### 4.3 Customer CRM (provider)
@@ -95,7 +95,7 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 
 | Feature | Behavior |
 |---------|----------|
-| Auto-generate | Idempotent per `(tenant_id, customer_id, delivery_date)`; skips pending-approval, closed dates; respects delivery days + pauses |
+| Auto-generate | Idempotent per `(tenant_id, customer_id, delivery_date)`; skips pending-approval, closed dates; respects meal schedule (or legacy delivery days) + pauses; snapshots unit `meal_price` and `quantity` |
 | Statuses | `pending`, `delivered`, `missed`, `cancelled`, `paused` |
 | Status filter UI | Compact horizontal chips with counts (mobile scroll); **default filter = Pending** |
 | Provider mark | One-tap delivered / missed / cancelled (**today or past only**; not future) |
@@ -106,16 +106,22 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 | Feature | Behavior |
 |---------|----------|
 | Consumer submit | Multipart: `amount`, `reference` (unique per tenant), optional `screenshot` (jpeg/png/webp ≤5MB) |
+| Provider record | Admin multipart `POST /payments`: `customer_id`, `amount`, `reference`, optional screenshot — saved as **verified** immediately (`source=provider_recorded`) for offline Interac |
+| Screenshot / images UI | **Camera** (mobile rear camera via `capture`) or **Upload** (gallery/files) on payment screenshots, avatars, and kitchen logo |
 | Screenshot storage | Cloudflare R2 when configured; else **base64 data URL** fallback |
 | Provider verify | Sets verified; notifies consumer (DB + email if Resend set) |
 | Provider reject | Requires reason; notifies consumer |
-| Status filter UI | Compact horizontal chips (Pending / Verified / Rejected / All); **default = Pending** |
-| Outstanding | Σ `meal_price` for `delivered` − Σ `amount` for `verified` payments |
+| Status filter UI | Compact horizontal chips (Pending / Verified / Rejected / All); **default = Pending**; label-only (no page-local counts) |
+| Outstanding | Σ `meal_price × quantity` for `delivered` − Σ `amount` for `verified` payments (quantity defaults to 1) |
+| Meal schedule | Customer `meal_schedule` maps weekday → tiffin count; UI supports same-every-day or custom-per-day; one delivery stop per day still |
+| List pagination | Provider payments + customers CRM use cursor pages (Load more, page size 25); statement report uses batched aggregations |
 
 ### 4.6 Reports (provider)
 
 - Dashboard remains the day-of-operations cockpit: today’s required meals, pending / delivered / missed / cancelled deliveries, today’s collections, outstanding balance, pending payment approvals, pending customer approvals, and route quick actions.
+- Dashboard loads sections independently (summary KPIs, kitchen profile, today’s route) so KPI cards paint as soon as their request finishes—without waiting for the slowest call.
 - Analysis (`/provider/analysis`) is the period business-health report: 7d / 30d / 90d / MTD KPIs, charts, receivables aging, top outstanding customers, top collectors, area concentration, and rule-based highlights. Top customer rows deep-link to `/provider/customers/{id}?tab=analysis`.
+- Analysis and customer Analysis use shared KPI/section skeletons on first load; period changes keep previous KPIs visible (stale-while-revalidate) with a small spinner on the period toggle, then staggered reveal of charts/lists.
 - Per-customer Analysis (customer detail tab) reuses the same analytics kit scoped via `GET /customers/{id}/insights` plus the activity timeline.
 - Daily deliveries  
 - Outstanding balances  
@@ -155,7 +161,7 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 
 ### 4.7c Activity audit
 
-- Writers on login, customer soft-delete/reject, payment verify/reject, settings patch, plan activate.  
+- Writers on login, customer soft-delete/reject, payment verify/reject/record, settings patch, plan activate.  
 - List via `GET /providers/me/activity` or `GET /reports/activity`.  
 - Simple list on provider More page.
 
@@ -202,11 +208,11 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 
 ### Journey D — Pay and reconcile
 
-1. Consumer submits Interac amount + reference (+ screenshot)  
-2. Provider verifies or rejects  
-3. Outstanding recalculates; email sent if Resend configured  
+1. Consumer submits Interac amount + reference (+ screenshot), **or** provider admin records an offline payment via **Record payment** (Payments page or customer 360)  
+2. Consumer-submitted: provider verifies or rejects; provider-recorded: already verified  
+3. Outstanding recalculates; email/notify sent if Resend configured  
 
-**Done when:** Verified payment reduces outstanding; reject shows reason path.
+**Done when:** Verified payment reduces outstanding on provider and consumer views; reject shows reason path.
 
 ### Journey E — Subscription gate
 
@@ -229,15 +235,16 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 ## 6. Business rules (must not break)
 
 1. **Tenant isolation:** Never return or mutate another tenant’s data.  
-2. **Outstanding:** `sum(delivered.meal_price) - sum(verified.payment.amount)`.  
+2. **Outstanding:** `sum(delivered.meal_price × quantity) - sum(verified.payment.amount)` (quantity defaults to 1; tax applies to the line amount).  
 3. **Cancel cutoff:** `cutoff_hours` before local noon on delivery date in provider `settings.timezone` (default America/Toronto). Past dates cannot be cancelled.  
 4. **Pending approval:** No auto-deliveries until approved.  
-5. **Idempotent generation:** Unique index on tenant + customer + date.  
+5. **Idempotent generation:** Unique index on tenant + customer + date (one stop; multi-tiffin via `quantity`).  
 6. **Subscription:** Gated deps use effective status (lazy expiry of trial).  
 7. **Integrations degrade:** Missing Resend → log stub; missing R2 → base64; missing Firebase → Google auth 501.  
 8. **Mark status:** Provider may mark delivered/missed/cancelled only for `delivery_date <= provider today` and only from `pending`. Undo to `pending` only from delivered/missed/cancelled.  
 9. **Payments:** Submit amount must be `> 0`; verify/reject only from `pending`.  
 10. **Pause:** `end` must be on or after `start`.
+11. **Meal schedule:** Provider sets weekday→quantity; consumers may change days only (new days get qty 1).
 
 ---
 
@@ -269,7 +276,7 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 | Timezone cancel cutoff | Provider `settings.timezone` local noon (default America/Toronto) |
 | Notification inbox | `GET/POST /notifications`; bell UI; emits on pay/cancel/signup |
 | Delivery day ops | FSA sort, bulk mark delivered, sticky next stop |
-| Interac reconcile | Search, outstanding hint, batch verify, unique references |
+| Interac reconcile | Search, outstanding hint, batch verify, unique references; admin **Record payment** for offline Interac |
 | Security hardening | Prod JWT guard, rate limits, soft-delete, upload limits |
 
 ### Wave B (shipped)

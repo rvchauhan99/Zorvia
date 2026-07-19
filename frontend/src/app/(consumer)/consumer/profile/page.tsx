@@ -7,6 +7,9 @@ import { useAuth } from "@/lib/auth";
 import { SignOut, DownloadSimple } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import ImageSourceField from "@/components/ImageSourceField";
+import { PageLoader } from "@/components/loaders";
+import { scheduleSummaryLabel } from "@/components/MealScheduleFields";
 
 function toCSV(rows: any[]) {
   if (!rows || !rows.length) return "";
@@ -80,8 +83,7 @@ export default function ConsumerProfile() {
     }
   }
 
-  async function onAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+  async function onAvatarPick(file: File | null) {
     if (!file) return;
     setAvatarBusy(true);
     try {
@@ -94,7 +96,6 @@ export default function ConsumerProfile() {
       toast.error(err?.response?.data?.detail || "Upload failed");
     } finally {
       setAvatarBusy(false);
-      e.target.value = "";
     }
   }
 
@@ -153,7 +154,7 @@ export default function ConsumerProfile() {
     }
   }
 
-  if (!me) return <div className="text-muted-foreground">Loading…</div>;
+  if (!me) return <PageLoader testid="consumer-profile-loader" />;
   const c = me.customer || {};
 
   return (
@@ -173,22 +174,22 @@ export default function ConsumerProfile() {
       </div>
 
       <div className="card-tinted p-5 flex flex-col gap-3" data-testid="avatar-section">
-        <span className="label-overline">Profile picture (optional)</span>
-        <div className="flex items-center gap-4">
-          {c.avatar_url ? (
-            <img src={c.avatar_url} alt="" className="h-16 w-16 rounded-full object-cover border border-brand-border" data-testid="avatar-preview" />
-          ) : (
-            <div className="h-16 w-16 rounded-full bg-brand-surface border border-brand-border" />
-          )}
-          <div className="flex flex-col gap-2">
-            <input data-testid="avatar-input" type="file" accept="image/jpeg,image/png,image/webp" disabled={avatarBusy} onChange={onAvatarChange} className="text-sm" />
-            {c.avatar_url ? (
-              <button type="button" data-testid="avatar-remove" disabled={avatarBusy} onClick={removeAvatar} className="text-sm text-destructive hover:underline cursor-pointer text-left disabled:opacity-60">
-                Remove photo
-              </button>
-            ) : null}
-          </div>
-        </div>
+        <ImageSourceField
+          label="Profile picture"
+          optional
+          onChange={onAvatarPick}
+          disabled={avatarBusy}
+          testid="avatar"
+          uploadInputTestId="avatar-input"
+          previewShape="circle"
+          remotePreviewUrl={c.avatar_url || null}
+          showClear={false}
+        />
+        {c.avatar_url ? (
+          <button type="button" data-testid="avatar-remove" disabled={avatarBusy} onClick={removeAvatar} className="text-sm text-destructive hover:underline cursor-pointer text-left disabled:opacity-60 self-start">
+            Remove photo
+          </button>
+        ) : null}
       </div>
 
       <form onSubmit={save} className="card-tinted p-5 flex flex-col gap-4">
@@ -241,8 +242,8 @@ export default function ConsumerProfile() {
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <div className="label-overline">Meal price</div>
-            <div className="font-medium">{fmtCAD(c.meal_price)}</div>
+            <div className="label-overline">Price per meal</div>
+            <div className="font-medium">{fmtCAD(c.meal_price)} <span className="text-sm text-muted-foreground font-normal">{scheduleSummaryLabel(c.meal_schedule)}</span></div>
           </div>
           <div>
             <div className="label-overline">Provider</div>

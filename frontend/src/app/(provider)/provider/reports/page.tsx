@@ -2,9 +2,12 @@
 
 import React, { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import { canSeePricing } from "@/lib/roles";
 import { fmtCAD, todayISO } from "@/lib/format";
 import { toast } from "sonner";
 import { DownloadSimple } from "@phosphor-icons/react";
+import { InlineLoader } from "@/components/loaders";
 
 function tabButton(active: boolean, label: string, onClick: () => void, testid: string) {
   return (
@@ -36,6 +39,8 @@ function downloadCSV(name: string, rows: any[]) {
 }
 
 export default function Reports() {
+  const { session } = useAuth();
+  const showMoney = canSeePricing(session);
   const [tab, setTab] = useState("daily");
   const [data, setData] = useState<any>(null);
   const [range, setRange] = useState({ start: "", end: todayISO() });
@@ -113,8 +118,12 @@ export default function Reports() {
       ) : null}
 
       <div className="card-tinted p-4 sm:p-5 overflow-hidden">
-        {!data ? <div className="text-muted-foreground">Loading…</div> :
-         tab === "daily" ? (
+        {!data ? <InlineLoader /> :
+         !showMoney && (tab === "outstanding" || tab === "collections" || tab === "statement") ? (
+          <div className="p-8 text-center text-sm text-muted-foreground" data-testid="reports-money-hidden">
+            Balance and payment amounts are visible to admins only. Use the Daily deliveries tab for stop counts, or ask an admin for financial reports.
+          </div>
+         ) : tab === "daily" ? (
           data.rows.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground">No data in range.</div>
           ) : (

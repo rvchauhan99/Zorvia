@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { WEEKDAYS } from "@/lib/format";
 import { useAuth } from "@/lib/auth";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
+import ImageSourceField from "@/components/ImageSourceField";
 
 function ConsumerSignupForm() {
   const { consumerSignup } = useAuth();
@@ -119,16 +120,17 @@ function ConsumerSignupForm() {
               <span className="label-overline">Confirm password</span>
               <input data-testid="csignup-confirm-password" required type="password" minLength={6} className={input} value={form.confirm_password} onChange={upd("confirm_password")} placeholder="re-enter password" />
             </label>
-            <label className={`${label} sm:col-span-2`}>
-              <span className="label-overline">Profile picture (optional)</span>
-              <input
-                data-testid="csignup-avatar"
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                className={input}
-                onChange={(e) => setAvatarFile(e.target.files?.[0] || null)}
+            <div className="sm:col-span-2">
+              <ImageSourceField
+                label="Profile picture"
+                optional
+                value={avatarFile}
+                onChange={setAvatarFile}
+                testid="csignup-avatar"
+                uploadInputTestId="csignup-avatar"
+                previewShape="circle"
               />
-            </label>
+            </div>
             <label className={`${label} sm:col-span-2`}>
               <span className="label-overline">Address</span>
               <input data-testid="csignup-address" className={input} value={form.address} onChange={upd("address")} placeholder="45 Bloor St W" />

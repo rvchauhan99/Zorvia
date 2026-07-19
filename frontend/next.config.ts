@@ -4,7 +4,8 @@ import path from "path";
 const backend =
   process.env.BACKEND_URL ||
   process.env.NEXT_PUBLIC_BACKEND_URL ||
-  "http://localhost:8000";
+  // Prefer IPv4: macOS resolves `localhost` to ::1 first; uvicorn --host 0.0.0.0 is IPv4-only.
+  "http://127.0.0.1:8000";
 
 const nextConfig: NextConfig = {
   // Turbopack walks up looking for a workspace root; the monorepo root has

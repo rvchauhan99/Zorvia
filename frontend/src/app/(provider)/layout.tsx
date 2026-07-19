@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
 import { isAdmin, isDriver as roleIsDriver, canMutateAdmin, staffRole } from "@/lib/roles";
 import NotificationBell from "@/components/NotificationBell";
+import { PageLoader } from "@/components/loaders";
 import { SUBSCRIPTION_REFRESH_EVENT } from "@/lib/subscription-events";
 
 const allItems = [
@@ -128,11 +129,7 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
   }, [loadBadges]);
 
   if (!ready && !session) {
-    return (
-      <div className="min-h-screen bg-brand-cream flex items-center justify-center" data-testid="provider-shell-loading">
-        <div className="text-sm text-muted-foreground">Loading…</div>
-      </div>
-    );
+    return <PageLoader testid="provider-shell-loading" className="min-h-screen bg-brand-cream" />;
   }
 
   if (ready && (!session || session.user_type !== "provider")) {
@@ -140,11 +137,7 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
   }
 
   if (!session || session.user_type !== "provider") {
-    return (
-      <div className="min-h-screen bg-brand-cream flex items-center justify-center" data-testid="provider-shell-loading">
-        <div className="text-sm text-muted-foreground">Loading…</div>
-      </div>
-    );
+    return <PageLoader testid="provider-shell-loading" className="min-h-screen bg-brand-cream" />;
   }
 
   const status = sub?.status;

@@ -8,6 +8,8 @@ import { Plus, Trash } from "@phosphor-icons/react";
 import { todayISO } from "@/lib/format";
 import { useAuth } from "@/lib/auth";
 import { canMutateAdmin } from "@/lib/roles";
+import ImageSourceField from "@/components/ImageSourceField";
+import { PageLoader } from "@/components/loaders";
 
 export default function Settings() {
   const { session, ready } = useAuth();
@@ -44,7 +46,7 @@ export default function Settings() {
     load().catch(() => toast.error("Failed to load settings"));
   }, [ready, session, router]);
 
-  if (!prov) return <div className="text-muted-foreground">Loading…</div>;
+  if (!prov) return <PageLoader testid="settings-loader" />;
 
   function upd(k: string, v: string) {
     setProv((p: any) => ({ ...p, [k]: v }));
@@ -109,8 +111,7 @@ export default function Settings() {
     }
   }
 
-  async function onLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+  async function onLogoPick(file: File | null) {
     if (!file) return;
     setLogoBusy(true);
     try {
@@ -123,7 +124,6 @@ export default function Settings() {
       toast.error(err?.response?.data?.detail || "Logo upload failed");
     } finally {
       setLogoBusy(false);
-      e.target.value = "";
     }
   }
 
@@ -186,21 +186,19 @@ export default function Settings() {
           <h2 className="font-display font-bold text-lg sm:text-xl">Kitchen logo</h2>
           <p className="text-sm text-muted-foreground mt-1">Stored as a 512×512 JPEG on Cloudflare R2 (or inline fallback).</p>
         </div>
-        <div className="flex items-center gap-4">
-          {prov.logo_url ? (
-            <img src={prov.logo_url} alt="Kitchen logo" className="h-20 w-20 rounded-xl object-cover border border-brand-border" data-testid="kitchen-logo-preview" />
-          ) : (
-            <div className="h-20 w-20 rounded-xl bg-brand-surface border border-brand-border" />
-          )}
-          <div className="flex flex-col gap-2">
-            <input data-testid="kitchen-logo-input" type="file" accept="image/jpeg,image/png,image/webp" disabled={logoBusy} onChange={onLogoChange} className="text-sm" />
-            {prov.logo_url ? (
-              <button type="button" data-testid="kitchen-logo-remove" disabled={logoBusy} onClick={removeLogo} className="text-sm text-destructive hover:underline cursor-pointer disabled:opacity-60">
-                Remove logo
-              </button>
-            ) : null}
-          </div>
-        </div>
+        <ImageSourceField
+          onChange={onLogoPick}
+          disabled={logoBusy}
+          testid="kitchen-logo"
+          uploadInputTestId="kitchen-logo-input"
+          remotePreviewUrl={prov.logo_url || null}
+          showClear={false}
+        />
+        {prov.logo_url ? (
+          <button type="button" data-testid="kitchen-logo-remove" disabled={logoBusy} onClick={removeLogo} className="text-sm text-destructive hover:underline cursor-pointer disabled:opacity-60 self-start">
+            Remove logo
+          </button>
+        ) : null}
       </div>
 
       <div className="card-tinted p-4 sm:p-6 flex flex-col gap-4" data-testid="change-password-section">

@@ -5,7 +5,8 @@ import { api } from "@/lib/api";
 import { fmtCAD, fmtDateTime, todayISO } from "@/lib/format";
 import { toast } from "sonner";
 import StatusPill from "@/components/StatusPill";
-import { UploadSimple, DownloadSimple } from "@phosphor-icons/react";
+import ImageSourceField from "@/components/ImageSourceField";
+import { DownloadSimple } from "@phosphor-icons/react";
 
 function toCSV(rows: any[]) {
   if (!rows || !rows.length) return "";
@@ -108,14 +109,16 @@ export default function ConsumerPayments() {
             <input data-testid="pay-reference" required className={`${input} font-mono`} value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} placeholder="e.g. TX-A1B2C3" />
           </label>
         </div>
-        <label className="flex flex-col gap-1.5">
-          <span className="label-overline">Screenshot (optional)</span>
-          <label className="cursor-pointer flex items-center gap-3 h-11 px-4 rounded-xl border border-dashed border-brand-border bg-white hover:bg-brand-surface transition-colors">
-            <UploadSimple size={18} />
-            <span className="text-sm text-muted-foreground truncate">{form.file ? form.file.name : "Attach payment screenshot (jpg/png)"}</span>
-            <input data-testid="pay-file" type="file" accept="image/*" className="hidden" onChange={(e) => setForm({ ...form, file: e.target.files?.[0] || null })} />
-          </label>
-        </label>
+        <ImageSourceField
+          label="Screenshot"
+          optional
+          value={form.file}
+          onChange={(file) => setForm({ ...form, file })}
+          disabled={submitting}
+          testid="pay-file"
+          uploadInputTestId="pay-file"
+          emptyHint="Take a photo or upload your Interac confirmation"
+        />
         <button data-testid="pay-submit" disabled={submitting} className="pill-btn btn-primary h-12 disabled:opacity-60 cursor-pointer hover:bg-brand-sageDark">
           {submitting ? "Submitting…" : "Submit payment"}
         </button>

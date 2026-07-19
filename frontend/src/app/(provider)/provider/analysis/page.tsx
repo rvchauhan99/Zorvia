@@ -5,6 +5,8 @@ import Link from "next/link";
 import { ArrowRight, ChartLine, Receipt, Users } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import { canSeePricing } from "@/lib/roles";
 import { fmtCAD } from "@/lib/format";
 import { type BusinessInsights, type PeriodKey } from "@/lib/analytics";
 import { KpiCard } from "@/components/analytics/KpiCard";
@@ -14,9 +16,14 @@ import { DeliveryTrendChart } from "@/components/analytics/DeliveryTrendChart";
 import { CollectionsChart } from "@/components/analytics/CollectionsChart";
 import { AgingChart } from "@/components/analytics/AgingChart";
 import { AreaChart } from "@/components/analytics/AreaChart";
+import { KpiSkeleton, SectionSkeleton } from "@/components/loaders";
 
 function percent(value?: number) {
   return `${Number(value || 0).toFixed(1)}%`;
+}
+
+function stagger(index: number) {
+  return { animationDelay: `${index * 70}ms` } as React.CSSProperties;
 }
 
 function TopList({
@@ -25,12 +32,14 @@ function TopList({
   rows,
   amountKey,
   testid,
+  showMoney,
 }: {
   title: string;
   description: string;
   rows: Array<Record<string, any>>;
   amountKey: string;
   testid: string;
+  showMoney: boolean;
 }) {
   return (
     <div className="card-tinted p-4 sm:p-5" data-testid={testid}>
@@ -60,7 +69,11 @@ function TopList({
                 )}
                 {row.count ? <div className="text-xs text-muted-foreground">{row.count} payment{row.count === 1 ? "" : "s"}</div> : null}
               </div>
-              <div className="font-semibold">{fmtCAD(row[amountKey] || 0)}</div>
+              {showMoney ? (
+                <div className="font-semibold">{fmtCAD(row[amountKey] || 0)}</div>
+              ) : (
+                <div className="text-xs text-muted-foreground shrink-0">View</div>
+              )}
             </li>
           ))}
         </ul>
@@ -70,6 +83,8 @@ function TopList({
 }
 
 export default function AnalysisPage() {
+  const { session } = useAuth();
+  const showMoney = canSeePricing(session);
   const [period, setPeriod] = useState<PeriodKey>("30d");
   const [data, setData] = useState<BusinessInsights | null>(null);
   const [loading, setLoading] = useState(true);
@@ -98,6 +113,7 @@ export default function AnalysisPage() {
 
   const k = data?.kpis || {};
   const busy = loading || isPending;
+  const refreshing = busy && !!data;
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6 animate-fade-in-up">
@@ -110,7 +126,7 @@ export default function AnalysisPage() {
           </p>
         </div>
         <div className="flex flex-col sm:items-end gap-2">
-          <PeriodToggle value={period} onChange={changePeriod} />
+          <PeriodToggle value={period} onChange={changePeriod} busy={busy} />
           {data ? (
             <span className="text-xs text-muted-foreground" data-testid="analysis-period-range">
               {data.period.start} to {data.period.end}
@@ -120,51 +136,78 @@ export default function AnalysisPage() {
       </div>
 
       {busy && !data ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="card-tinted p-5 min-h-[132px] animate-pulse bg-white" />
-          ))}
+        <div className="flex flex-col gap-4 sm:gap-6" data-testid="analysis-loading">
+          <KpiSkeleton count={8} testid="analysis-kpi-skeleton" className="md:grid-cols-2" />
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 sm:gap-4">
+            <SectionSkeleton testid="analysis-chart-skeleton-0" />
+            <SectionSkeleton testid="analysis-chart-skeleton-1" />
+            <SectionSkeleton testid="analysis-chart-skeleton-2" />
+          </div>
         </div>
       ) : data ? (
         <>
-          <HighlightsPanel highlights={data.highlights} />
+          <div className={refreshing ? "opacity-80 transition-opacity" : ""}>
+            {showMoney ? (
+              <div className="animate-fade-in-up" style={stagger(0)}>
+                <HighlightsPanel highlights={data.highlights} />
+              </div>
+            ) : null}
 
-          <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
-            <KpiCard testid="kpi-collections" label="Collections" value={fmtCAD(k.collections_amount?.value || 0)} kpi={k.collections_amount} hint={`${k.collections_count?.value || 0} verified payments`} />
-            <KpiCard testid="kpi-delivered-revenue" label="Delivered revenue" value={fmtCAD(k.delivered_revenue?.value || 0)} kpi={k.delivered_revenue} hint={`${k.delivered_count?.value || 0} delivered meals`} />
-            <KpiCard testid="kpi-outstanding" label="Outstanding" value={fmtCAD(k.outstanding_total?.value || 0)} kpi={k.outstanding_total} hint="Current receivables" inverseDelta />
-            <KpiCard testid="kpi-pending-payments" label="Pending payments" value={String(k.pending_payments_count?.value || 0)} kpi={k.pending_payments_count} hint="Awaiting approval" inverseDelta />
-            <KpiCard testid="kpi-active-customers" label="Active customers" value={String(k.active_customers?.value || 0)} kpi={k.active_customers} hint={`${k.pending_customers?.value || 0} pending · ${k.on_pause?.value || 0} paused`} />
-            <KpiCard testid="kpi-delivery-rate" label="Delivery rate" value={percent(k.delivery_rate?.value)} kpi={k.delivery_rate} hint="Delivered vs missed" />
-            <KpiCard testid="kpi-miss-rate" label="Miss rate" value={percent(k.miss_rate?.value)} kpi={k.miss_rate} hint="Missed outcome share" inverseDelta />
-            <KpiCard testid="kpi-collection-efficiency" label="Collection efficiency" value={percent(k.collection_efficiency?.value)} kpi={k.collection_efficiency} hint="Collections vs delivered value" />
-          </section>
+            <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 mt-4 sm:mt-6 animate-fade-in-up" style={stagger(1)}>
+              {showMoney ? (
+                <>
+                  <KpiCard testid="kpi-collections" label="Collections" value={fmtCAD(k.collections_amount?.value || 0)} kpi={k.collections_amount} hint={`${k.collections_count?.value || 0} verified payments`} />
+                  <KpiCard testid="kpi-delivered-revenue" label="Delivered revenue" value={fmtCAD(k.delivered_revenue?.value || 0)} kpi={k.delivered_revenue} hint={`${k.delivered_count?.value || 0} delivered meals`} />
+                  <KpiCard testid="kpi-outstanding" label="Outstanding" value={fmtCAD(k.outstanding_total?.value || 0)} kpi={k.outstanding_total} hint="Current receivables" inverseDelta />
+                </>
+              ) : (
+                <KpiCard testid="kpi-delivered-meals" label="Delivered meals" value={String(k.delivered_count?.value || 0)} kpi={k.delivered_count} hint="Meals marked delivered this period" />
+              )}
+              <KpiCard testid="kpi-pending-payments" label="Pending payments" value={String(k.pending_payments_count?.value || 0)} kpi={k.pending_payments_count} hint="Awaiting approval" inverseDelta />
+              <KpiCard testid="kpi-active-customers" label="Active customers" value={String(k.active_customers?.value || 0)} kpi={k.active_customers} hint={`${k.pending_customers?.value || 0} pending · ${k.on_pause?.value || 0} paused`} />
+              <KpiCard testid="kpi-delivery-rate" label="Delivery rate" value={percent(k.delivery_rate?.value)} kpi={k.delivery_rate} hint="Delivered vs missed" />
+              <KpiCard testid="kpi-miss-rate" label="Miss rate" value={percent(k.miss_rate?.value)} kpi={k.miss_rate} hint="Missed outcome share" inverseDelta />
+              {showMoney ? (
+                <KpiCard testid="kpi-collection-efficiency" label="Collection efficiency" value={percent(k.collection_efficiency?.value)} kpi={k.collection_efficiency} hint="Collections vs delivered value" />
+              ) : null}
+            </section>
+          </div>
 
           <section className="grid grid-cols-1 xl:grid-cols-2 gap-3 sm:gap-4">
-            <DeliveryTrendChart data={data.series} />
-            <CollectionsChart data={data.series} />
-            <AgingChart data={data.ar_aging} />
-            <AreaChart data={data.areas} />
+            <div className="animate-fade-in-up" style={stagger(2)}><DeliveryTrendChart data={data.series} /></div>
+            {showMoney ? (
+              <>
+                <div className="animate-fade-in-up" style={stagger(3)}><CollectionsChart data={data.series} /></div>
+                <div className="animate-fade-in-up" style={stagger(4)}><AgingChart data={data.ar_aging} /></div>
+              </>
+            ) : null}
+            <div className="animate-fade-in-up" style={stagger(5)}><AreaChart data={data.areas} /></div>
           </section>
 
           <section className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
-            <TopList
-              title="Top outstanding"
-              description="Customers with the highest current receivables."
-              rows={data.top_outstanding}
-              amountKey="outstanding"
-              testid="analysis-top-outstanding"
-            />
-            <TopList
-              title="Top collectors"
-              description="Customers with the most verified payments in this period."
-              rows={data.top_collectors}
-              amountKey="amount"
-              testid="analysis-top-collectors"
-            />
+            <div className="animate-fade-in-up" style={stagger(6)}>
+              <TopList
+                title="Top outstanding"
+                description="Customers with the highest current receivables."
+                rows={data.top_outstanding}
+                amountKey="outstanding"
+                testid="analysis-top-outstanding"
+                showMoney={showMoney}
+              />
+            </div>
+            <div className="animate-fade-in-up" style={stagger(7)}>
+              <TopList
+                title="Top collectors"
+                description="Customers with the most verified payments in this period."
+                rows={data.top_collectors}
+                amountKey="amount"
+                testid="analysis-top-collectors"
+                showMoney={showMoney}
+              />
+            </div>
           </section>
 
-          <section className="card-tinted p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 justify-between">
+          <section className="card-tinted p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 justify-between animate-fade-in-up" style={stagger(8)}>
             <div>
               <h2 className="font-display font-bold text-lg sm:text-xl">Need exports?</h2>
               <p className="text-sm text-muted-foreground">Use detailed reports for CSV and monthly statement workflows.</p>

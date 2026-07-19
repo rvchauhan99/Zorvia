@@ -7,21 +7,34 @@ import { toast } from "sonner";
 import { Plus, MagnifyingGlass, PencilSimple, Trash, PauseCircle, PlayCircle, CheckCircle, XCircle, UploadSimple, EnvelopeSimple, DownloadSimple } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { canMutateAdmin } from "@/lib/roles";
+import { canMutateAdmin, canSeePricing } from "@/lib/roles";
 import { fmtCAD, WEEKDAYS, todayISO } from "@/lib/format";
+import { asPageEnvelope, DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import AppSheet from "@/components/AppSheet";
+import LoadMoreButton from "@/components/LoadMoreButton";
 import { StatusFilterCards } from "@/components/StatusFilterCards";
+import { InlineLoader } from "@/components/loaders";
+import MealScheduleFields, {
+  type ScheduleMode,
+  scheduleFromDays,
+  daysFromSchedule,
+  detectScheduleMode,
+  uniformQty,
+  scheduleSummaryLabel,
+} from "@/components/MealScheduleFields";
 
 const empty = {
   name: "", email: "", phone: "", address: "", apartment: "", postal_code: "",
   notes: "", delivery_days: [0, 1, 2, 3, 4], meal_price: "",
+  meal_schedule: scheduleFromDays([0, 1, 2, 3, 4], 1),
+  meal_quantity: 1,
   driver_id: "", delivery_sequence: "",
 };
 
-const SAMPLE_CSV = `name,phone,email,address,apartment,postal_code,delivery_days,meal_price,driver_email,delivery_sequence
-Aarav Sharma,4165551212,aarav@example.com,45 Bloor St W,Unit 302,M5S1M2,"0,1,2,3,4",12,,1
-Priya Patel,6475559898,priya@example.com,100 King St E,,M5C1G6,"0,2,4",14,,2
-Neha Gupta,9055553344,neha@example.com,12 Queen St W,Suite 5,M5H2N2,"1,3,5",12,driver@yourkitchen.ca,3
+const SAMPLE_CSV = `name,phone,email,address,apartment,postal_code,delivery_days,meal_price,meal_quantity,driver_email,delivery_sequence
+Aarav Sharma,4165551212,aarav@example.com,45 Bloor St W,Unit 302,M5S1M2,"0,1,2,3,4",12,2,,1
+Priya Patel,6475559898,priya@example.com,100 King St E,,M5C1G6,"0,2,4",14,1,,2
+Neha Gupta,9055553344,neha@example.com,12 Queen St W,Suite 5,M5H2N2,"1,3,5",12,1,driver@yourkitchen.ca,3
 `;
 
 function downloadSampleCsv() {
@@ -48,6 +61,7 @@ export default function Customers() {
   const router = useRouter();
   const { session } = useAuth();
   const canMutate = canMutateAdmin(session);
+  const showMoney = canSeePricing(session);
   const [items, setItems] = useState<any[]>([]);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
@@ -63,9 +77,16 @@ export default function Customers() {
   const [showInvite, setShowInvite] = useState(false);
   const [inviteForm, setInviteForm] = useState({ name: "", email: "" });
   const [importing, setImporting] = useState(false);
+  const [scheduleMode, setScheduleMode] = useState<ScheduleMode>("same");
   const [staff, setStaff] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [debouncedQ, setDebouncedQ] = useState("");
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [filterCounts, setFilterCounts] = useState({
+    all: 0, pending: 0, paused: 0, inactive: 0, high_balance: 0,
+  });
 
   const input = "h-11 w-full px-4 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all";
   const drivers = useMemo(() => staff.filter((s) => (s.role || "admin") === "driver"), [staff]);
@@ -75,15 +96,41 @@ export default function Customers() {
     return () => window.clearTimeout(id);
   }, [q]);
 
-  async function load() {
-    setLoading(true);
+  async function loadCounts() {
     try {
-      const { data } = await api.get(`/customers${debouncedQ ? `?q=${encodeURIComponent(debouncedQ)}` : ""}`);
-      setItems(data);
+      const { data } = await api.get("/customers/summary-counts");
+      setFilterCounts({
+        all: data?.all || 0,
+        pending: data?.pending || 0,
+        paused: data?.paused || 0,
+        inactive: data?.inactive || 0,
+        high_balance: data?.high_balance || 0,
+      });
+    } catch {
+      /* non-fatal */
+    }
+  }
+
+  async function load(opts?: { cursor?: string | null; append?: boolean }) {
+    const append = Boolean(opts?.append);
+    if (append) setLoadingMore(true);
+    else setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("page_size", String(DEFAULT_PAGE_SIZE));
+      if (filter !== "all") params.set("status", filter);
+      if (debouncedQ) params.set("q", debouncedQ);
+      if (opts?.cursor) params.set("cursor", opts.cursor);
+      const { data } = await api.get(`/customers?${params.toString()}`);
+      const page = asPageEnvelope<any>(data);
+      setItems((prev) => (append ? [...prev, ...page.items] : page.items));
+      setNextCursor(page.next_cursor);
+      setHasMore(page.has_more);
     } catch {
       toast.error("Failed to load customers");
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   }
 
@@ -97,48 +144,92 @@ export default function Customers() {
     }
   }
 
-  useEffect(() => { load(); }, [debouncedQ]);
+  useEffect(() => { load(); }, [debouncedQ, filter]);
+  useEffect(() => { loadCounts(); }, []);
   useEffect(() => { loadStaff(); }, [canMutate]);
+
+  function reloadAll() {
+    load();
+    loadCounts();
+  }
 
   const isPaused = (c: any) => (c.pauses || []).some((p: any) => p.start <= todayISO() && todayISO() <= p.end);
 
-  const filtered = useMemo(() => {
-    return items.filter((c) => {
-      if (filter === "pending") return !!c.pending_approval;
-      if (filter === "paused") return isPaused(c);
-      if (filter === "inactive") return !c.active;
-      if (filter === "high_balance") return (c.outstanding || 0) > 0;
-      return true;
-    });
-  }, [items, filter]);
+  const filtered = items;
 
-  const filterCounts = useMemo(() => ({
-    all: items.length,
-    pending: items.filter((c) => !!c.pending_approval).length,
-    paused: items.filter((c) => isPaused(c)).length,
-    inactive: items.filter((c) => !c.active).length,
-    high_balance: items.filter((c) => (c.outstanding || 0) > 0).length,
-  }), [items]);
-
-  function openCreate() { setEditing(null); setForm(empty); setShowForm(true); }
+  function openCreate() {
+    setEditing(null);
+    setForm(empty);
+    setScheduleMode("same");
+    setShowForm(true);
+  }
   function openEdit(c: any) {
     setEditing(c);
+    const schedule =
+      c.meal_schedule && Object.keys(c.meal_schedule).length
+        ? Object.fromEntries(
+            Object.entries(c.meal_schedule).map(([k, v]) => [String(k), Number(v) || 1])
+          )
+        : scheduleFromDays(c.delivery_days || [], 1);
+    const days = daysFromSchedule(schedule);
     setForm({
       name: c.name, email: c.email || "", phone: c.phone || "", address: c.address || "",
       apartment: c.apartment || "", postal_code: c.postal_code || "", notes: c.notes || "",
-      delivery_days: c.delivery_days || [], meal_price: c.meal_price ?? "",
+      delivery_days: days.length ? days : (c.delivery_days || []),
+      meal_price: c.meal_price ?? "",
+      meal_schedule: schedule,
+      meal_quantity: uniformQty(schedule),
       driver_id: c.driver_id || "",
       delivery_sequence: c.delivery_sequence != null ? String(c.delivery_sequence) : "",
     });
+    setScheduleMode(detectScheduleMode(schedule));
     setShowForm(true);
   }
 
   function toggleDay(i: number) {
+    setForm((f: any) => {
+      const on = f.delivery_days.includes(i);
+      const days = on ? f.delivery_days.filter((d: number) => d !== i) : [...f.delivery_days, i];
+      let schedule = { ...f.meal_schedule };
+      if (on) {
+        delete schedule[String(i)];
+      } else {
+        schedule[String(i)] = scheduleMode === "same" ? f.meal_quantity : 1;
+      }
+      if (scheduleMode === "same") {
+        schedule = scheduleFromDays(days, f.meal_quantity);
+      }
+      return { ...f, delivery_days: days, meal_schedule: schedule };
+    });
+  }
+
+  function changeMode(mode: ScheduleMode) {
+    setScheduleMode(mode);
+    setForm((f: any) => {
+      if (mode === "same") {
+        const qty = uniformQty(f.meal_schedule) || f.meal_quantity || 1;
+        return {
+          ...f,
+          meal_quantity: qty,
+          meal_schedule: scheduleFromDays(f.delivery_days, qty),
+        };
+      }
+      return f;
+    });
+  }
+
+  function changeQuantity(qty: number) {
     setForm((f: any) => ({
       ...f,
-      delivery_days: f.delivery_days.includes(i)
-        ? f.delivery_days.filter((d: number) => d !== i)
-        : [...f.delivery_days, i],
+      meal_quantity: qty,
+      meal_schedule: scheduleFromDays(f.delivery_days, qty),
+    }));
+  }
+
+  function changeDayQuantity(day: number, qty: number) {
+    setForm((f: any) => ({
+      ...f,
+      meal_schedule: { ...f.meal_schedule, [String(day)]: qty },
     }));
   }
 
@@ -146,13 +237,27 @@ export default function Customers() {
     e.preventDefault();
     setSaving(true);
     try {
-      const payload: any = { ...form };
-      if (payload.meal_price === "" || payload.meal_price === null) delete payload.meal_price;
-      else payload.meal_price = Number(payload.meal_price);
-      if (!payload.email) delete payload.email;
-      if (!payload.driver_id) payload.driver_id = null;
-      if (payload.delivery_sequence === "" || payload.delivery_sequence == null) payload.delivery_sequence = null;
-      else payload.delivery_sequence = Number(payload.delivery_sequence);
+      const schedule =
+        scheduleMode === "same"
+          ? scheduleFromDays(form.delivery_days, form.meal_quantity)
+          : form.meal_schedule;
+      const payload: any = {
+        name: form.name,
+        phone: form.phone,
+        address: form.address,
+        apartment: form.apartment,
+        postal_code: form.postal_code,
+        notes: form.notes,
+        delivery_days: daysFromSchedule(schedule),
+        meal_schedule: schedule,
+        driver_id: form.driver_id || null,
+        delivery_sequence:
+          form.delivery_sequence === "" || form.delivery_sequence == null
+            ? null
+            : Number(form.delivery_sequence),
+      };
+      if (form.email) payload.email = form.email;
+      if (form.meal_price !== "" && form.meal_price != null) payload.meal_price = Number(form.meal_price);
 
       if (editing) {
         await api.patch(`/customers/${editing.id}`, payload);
@@ -162,7 +267,7 @@ export default function Customers() {
         toast.success("Customer added");
       }
       setShowForm(false);
-      load();
+      reloadAll();
     } catch (err: any) {
       toast.error(err?.response?.data?.detail || "Save failed");
     } finally {
@@ -176,7 +281,7 @@ export default function Customers() {
       await api.delete(`/customers/${deleteTarget.id}`);
       toast.success("Deleted");
       setDeleteTarget(null);
-      load();
+      reloadAll();
     } catch (err: any) {
       toast.error(err?.response?.data?.detail || "Delete failed");
     }
@@ -185,7 +290,7 @@ export default function Customers() {
   async function approve(c: any) {
     await api.post(`/customers/${c.id}/approve`);
     toast.success("Approved");
-    load();
+    reloadAll();
   }
 
   async function confirmReject() {
@@ -195,7 +300,7 @@ export default function Customers() {
       toast.success("Rejected");
       setRejectTarget(null);
       setRejectReason("");
-      load();
+      reloadAll();
     } catch (err: any) {
       toast.error(err?.response?.data?.detail || "Reject failed");
     }
@@ -207,7 +312,7 @@ export default function Customers() {
       await api.post(`/customers/${pauseTarget.id}/pause`, pauseRange);
       toast.success(`${pauseTarget.name} paused`);
       setPauseTarget(null);
-      load();
+      reloadAll();
     } catch (err: any) {
       toast.error(err?.response?.data?.detail || "Failed");
     }
@@ -216,7 +321,7 @@ export default function Customers() {
   async function resume(c: any) {
     await api.post(`/customers/${c.id}/resume`);
     toast.success("Resumed");
-    load();
+    reloadAll();
   }
 
   async function submitInvite(e: React.FormEvent) {
@@ -226,7 +331,7 @@ export default function Customers() {
       toast.success("Invite sent");
       setShowInvite(false);
       setInviteForm({ name: "", email: "" });
-      load();
+      reloadAll();
     } catch (err: any) {
       toast.error(err?.response?.data?.detail || "Invite failed");
     }
@@ -243,7 +348,7 @@ export default function Customers() {
       const { data } = await api.post("/customers/import", fd);
       toast.success(`Imported ${data.created} customer(s)`);
       if (data.errors?.length) toast.message(`${data.errors.length} row(s) skipped`);
-      load();
+      reloadAll();
     } catch (err: any) {
       toast.error(err?.response?.data?.detail || "Import failed");
     } finally {
@@ -298,7 +403,7 @@ export default function Customers() {
 
       <div className="card-tinted overflow-hidden">
         {loading ? (
-          <div className="p-6 sm:p-8 text-center text-muted-foreground text-sm" data-testid="customers-loading">Loading customers…</div>
+          <InlineLoader testid="customers-loading" label="Loading customers…" />
         ) : filtered.length === 0 ? (
           <div className="p-6 sm:p-8 text-center text-muted-foreground text-sm">No customers match this filter.</div>
         ) : (
@@ -343,10 +448,17 @@ export default function Customers() {
                       </div>
                     </div>
                     <div className="text-right shrink-0">
-                      <div className="text-sm font-medium">{fmtCAD(c.meal_price)}</div>
-                      <div className={`text-sm font-semibold ${c.outstanding > 0 ? "text-primary" : "text-muted-foreground"}`}>
-                        {fmtCAD(c.outstanding || 0)}
+                      <div className="text-sm font-semibold px-2 py-0.5 rounded-full bg-brand-surface inline-block">
+                        {scheduleSummaryLabel(c.meal_schedule)}
                       </div>
+                      {showMoney ? (
+                        <>
+                          <div className="text-sm font-medium mt-1">{fmtCAD(c.meal_price)}</div>
+                          <div className={`text-sm font-semibold ${c.outstanding > 0 ? "text-primary" : "text-muted-foreground"}`}>
+                            {fmtCAD(c.outstanding || 0)}
+                          </div>
+                        </>
+                      ) : null}
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -383,8 +495,9 @@ export default function Customers() {
                     <th className="px-4 py-3 label-overline hidden lg:table-cell">Days</th>
                     <th className="px-4 py-3 label-overline">Seq</th>
                     <th className="px-4 py-3 label-overline hidden lg:table-cell">Driver</th>
-                    <th className="px-4 py-3 label-overline">Price</th>
-                    <th className="px-4 py-3 label-overline">Outstanding</th>
+                    <th className="px-4 py-3 label-overline">Meals</th>
+                    {showMoney ? <th className="px-4 py-3 label-overline">Price</th> : null}
+                    {showMoney ? <th className="px-4 py-3 label-overline">Outstanding</th> : null}
                     {canMutate ? <th className="px-4 py-3 label-overline text-right">Actions</th> : null}
                   </tr>
                 </thead>
@@ -422,8 +535,13 @@ export default function Customers() {
                       <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground text-xs">
                         {c.driver_name || "—"}
                       </td>
-                      <td className="px-4 py-3">{fmtCAD(c.meal_price)}</td>
-                      <td className={`px-4 py-3 font-semibold ${c.outstanding > 0 ? "text-primary" : "text-muted-foreground"}`}>{fmtCAD(c.outstanding || 0)}</td>
+                      <td className="px-4 py-3 font-semibold">{scheduleSummaryLabel(c.meal_schedule)}</td>
+                      {showMoney ? (
+                        <td className="px-4 py-3">{fmtCAD(c.meal_price)}</td>
+                      ) : null}
+                      {showMoney ? (
+                        <td className={`px-4 py-3 font-semibold ${c.outstanding > 0 ? "text-primary" : "text-muted-foreground"}`}>{fmtCAD(c.outstanding || 0)}</td>
+                      ) : null}
                       {canMutate ? (
                         <td className="px-4 py-3">
                           <div className="flex justify-end items-center gap-0.5">
@@ -452,6 +570,13 @@ export default function Customers() {
         )}
       </div>
 
+      <LoadMoreButton
+        hasMore={hasMore}
+        loading={loadingMore}
+        testid="customers-load-more"
+        onClick={() => load({ cursor: nextCursor, append: true })}
+      />
+
       <AppSheet open={showForm} onClose={() => setShowForm(false)} title={editing ? "Edit customer" : "Add customer"} size="2xl" as="form" onSubmit={save} closeTestId="close-customer-form" footer={(
         <button data-testid="cf-save" type="submit" disabled={saving} className="pill-btn btn-primary h-12 w-full disabled:opacity-60 cursor-pointer">
           {saving ? "Saving..." : (editing ? "Save changes" : "Add customer")}
@@ -461,7 +586,9 @@ export default function Customers() {
           <label className="flex flex-col gap-1.5"><span className="label-overline">Name</span><input required data-testid="cf-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={input} /></label>
           <label className="flex flex-col gap-1.5"><span className="label-overline">Phone</span><input data-testid="cf-phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className={input} /></label>
           <label className="flex flex-col gap-1.5"><span className="label-overline">Email</span><input type="email" data-testid="cf-email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={input} /></label>
-          <label className="flex flex-col gap-1.5"><span className="label-overline">Meal price (CAD)</span><input type="number" step="0.5" data-testid="cf-price" value={form.meal_price} onChange={(e) => setForm({ ...form, meal_price: e.target.value })} className={input} placeholder="Uses default if empty" /></label>
+          {canMutate ? (
+            <label className="flex flex-col gap-1.5"><span className="label-overline">Price per meal (CAD)</span><input type="number" step="0.5" data-testid="cf-price" value={form.meal_price} onChange={(e) => setForm({ ...form, meal_price: e.target.value })} className={input} placeholder="Uses default if empty" /></label>
+          ) : null}
           <label className="flex flex-col gap-1.5 sm:col-span-2"><span className="label-overline">Address</span><input data-testid="cf-address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className={input} /></label>
           <label className="flex flex-col gap-1.5"><span className="label-overline">Apartment</span><input data-testid="cf-apt" value={form.apartment} onChange={(e) => setForm({ ...form, apartment: e.target.value })} className={input} /></label>
           <label className="flex flex-col gap-1.5"><span className="label-overline">Postal code</span><input data-testid="cf-postal" value={form.postal_code} onChange={(e) => setForm({ ...form, postal_code: e.target.value.toUpperCase() })} className={`${input} uppercase`} /></label>
@@ -500,15 +627,19 @@ export default function Customers() {
           </label>
           <label className="flex flex-col gap-1.5 sm:col-span-2"><span className="label-overline">Notes</span><textarea data-testid="cf-notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="min-h-[80px] w-full px-4 py-3 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all" /></label>
           <div className="flex flex-col gap-2 sm:col-span-2">
-            <span className="label-overline">Delivery days</span>
-            <div className="flex flex-wrap gap-2">
-              {WEEKDAYS.map((d) => {
-                const on = form.delivery_days.includes(d.i);
-                return (
-                  <button type="button" key={d.i} data-testid={`cf-day-${d.s}`} onClick={() => toggleDay(d.i)} className={`px-4 h-11 min-h-[44px] rounded-full border text-sm font-medium cursor-pointer transition-colors ${on ? "bg-primary text-primary-foreground border-primary" : "bg-white border-brand-border text-foreground hover:bg-brand-surface"}`}>{d.s}</button>
-                );
-              })}
-            </div>
+            <span className="label-overline">Meal schedule</span>
+            <MealScheduleFields
+              mode={scheduleMode}
+              onModeChange={changeMode}
+              deliveryDays={form.delivery_days}
+              mealSchedule={form.meal_schedule}
+              mealQuantity={form.meal_quantity}
+              mealPrice={form.meal_price}
+              onToggleDay={toggleDay}
+              onQuantityChange={changeQuantity}
+              onDayQuantityChange={changeDayQuantity}
+              inputClassName={input}
+            />
           </div>
         </div>
       </AppSheet>

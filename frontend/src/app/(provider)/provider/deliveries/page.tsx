@@ -5,10 +5,11 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canMutateDeliveries } from "@/lib/roles";
-import { fmtCAD, fmtDate, todayISO } from "@/lib/format";
+import { fmtDate, todayISO, fmtMealCount, deliveryQty } from "@/lib/format";
 import StatusPill from "@/components/StatusPill";
 import AppSheet from "@/components/AppSheet";
 import { StatusFilterCards } from "@/components/StatusFilterCards";
+import { InlineLoader } from "@/components/loaders";
 import { ArrowLeft, ArrowRight, CheckCircle, XCircle, Prohibit, CaretUp, CaretDown, MapPin } from "@phosphor-icons/react";
 
 const OFFLINE_QUEUE_KEY = "tiffin_delivery_status_queue";
@@ -205,6 +206,11 @@ export default function Deliveries() {
 
   const nextPending = canMarkStatuses ? items.find((d) => d.status === "pending") : undefined;
 
+  const mealsToday = useMemo(
+    () => items.reduce((sum, d) => sum + deliveryQty(d), 0),
+    [items],
+  );
+
   const statusFilters = [
     { k: "all", label: "All", count: items.length },
     { k: "pending", label: "Pending", count: counts.pending || 0 },
@@ -220,6 +226,11 @@ export default function Deliveries() {
         <div>
           <span className="label-overline">Route · by order / area</span>
           <h1 className="font-display font-black text-2xl sm:text-4xl mt-0.5 sm:mt-1">Deliveries</h1>
+          {!loading && items.length > 0 ? (
+            <p className="text-xs text-muted-foreground mt-1" data-testid="deliveries-meals-total">
+              {items.length} stop{items.length === 1 ? "" : "s"} · {mealsToday} meal{mealsToday === 1 ? "" : "s"}
+            </p>
+          ) : null}
           {queueLen > 0 ? (
             <p className="text-xs text-amber-800 mt-1" data-testid="offline-queue-hint">{queueLen} offline update(s) pending sync</p>
           ) : null}
@@ -252,6 +263,7 @@ export default function Deliveries() {
           <div className="label-overline">Next stop</div>
           <div className="font-display font-bold text-lg mt-0.5 truncate">{nextPending.customer_name}</div>
           <div className="text-xs text-muted-foreground truncate">{nextPending.address}{nextPending.postal_code ? ` · ${nextPending.postal_code}` : ""}</div>
+          <div className="text-xs font-semibold text-primary mt-1" data-testid={`next-meals-${nextPending.id}`}>{fmtMealCount(nextPending)}</div>
           <div className="mt-2 flex items-center gap-2">
             <a
               href={mapsUrl(nextPending)}
@@ -292,7 +304,7 @@ export default function Deliveries() {
 
       <div className="card-tinted overflow-hidden">
         {loading ? (
-          <div className="p-6 sm:p-8 text-center text-muted-foreground text-sm">Loading…</div>
+          <InlineLoader testid="deliveries-loading" />
         ) : filtered.length === 0 ? (
           <div className="p-6 sm:p-8 text-center text-muted-foreground text-sm">
             {items.length === 0
@@ -333,7 +345,12 @@ export default function Deliveries() {
                       {d.route_order != null ? `#${d.route_order + 1}` : "—"} · {fsa(d.postal_code)}
                     </span>
                     <span className="font-medium truncate">{d.customer_name}</span>
-                    <span className="text-sm font-semibold sm:hidden ml-auto shrink-0">{fmtCAD(d.meal_price)}</span>
+                    <span
+                      className="text-xs font-semibold sm:hidden ml-auto shrink-0 px-2 py-0.5 rounded-full bg-brand-surface text-foreground"
+                      data-testid={`del-meals-${d.id}`}
+                    >
+                      {fmtMealCount(d)}
+                    </span>
                   </div>
                   <div className="text-xs text-muted-foreground truncate mt-0.5">
                     {d.address}{d.apartment ? ` · ${d.apartment}` : ""}{d.postal_code ? ` · ${d.postal_code}` : ""}
@@ -354,7 +371,12 @@ export default function Deliveries() {
                     {d.notes ? <span className="text-xs text-muted-foreground italic truncate">&quot;{d.notes}&quot;</span> : null}
                   </div>
                 </div>
-                <div className="text-sm font-semibold hidden sm:block shrink-0">{fmtCAD(d.meal_price)}</div>
+                <div
+                  className="text-sm font-semibold hidden sm:block shrink-0 px-2.5 py-1 rounded-full bg-brand-surface"
+                  data-testid={`del-meals-desktop-${d.id}`}
+                >
+                  {fmtMealCount(d)}
+                </div>
                 {canMarkStatuses && d.status === "pending" ? (
                   <div className="flex items-center gap-2 w-full sm:w-auto">
                     <button data-testid={`mark-delivered-${d.id}`} onClick={() => mark(d.id, "delivered")} className="flex-1 sm:flex-none h-11 min-h-[44px] px-4 rounded-full bg-secondary text-secondary-foreground text-sm font-semibold active:scale-95 transition-transform inline-flex items-center justify-center gap-1 cursor-pointer hover:bg-brand-sageDark">

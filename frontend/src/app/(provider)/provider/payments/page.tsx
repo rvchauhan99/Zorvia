@@ -1,22 +1,30 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { canMutateAdmin } from "@/lib/roles";
+import { canMutateAdmin, canSeePricing } from "@/lib/roles";
 import { fmtCAD, fmtDateTime } from "@/lib/format";
+import { asPageEnvelope, DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import StatusPill from "@/components/StatusPill";
 import AppSheet from "@/components/AppSheet";
+import RecordPaymentSheet from "@/components/RecordPaymentSheet";
+import LoadMoreButton from "@/components/LoadMoreButton";
 import { StatusFilterCards } from "@/components/StatusFilterCards";
-import { CheckCircle, XCircle, Eye } from "@phosphor-icons/react";
+import { InlineLoader } from "@/components/loaders";
+import { CheckCircle, XCircle, Eye, Plus } from "@phosphor-icons/react";
 
 export default function Payments() {
   const { session } = useAuth();
   const canMutate = canMutateAdmin(session);
+  const showMoney = canSeePricing(session);
   const [items, setItems] = useState<any[]>([]);
   const [filter, setFilter] = useState("pending");
   const [q, setQ] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
   const [viewing, setViewing] = useState<any>(null);
   const [rejectFor, setRejectFor] = useState<any>(null);
   const [rejectReason, setRejectReason] = useState("");
@@ -24,23 +32,45 @@ export default function Payments() {
   const [batchBusy, setBatchBusy] = useState(false);
   const [confirmBatchVerify, setConfirmBatchVerify] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [recordOpen, setRecordOpen] = useState(false);
 
-  async function load() {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (filter !== "all") params.set("status", filter);
-      if (q.trim()) params.set("q", q.trim());
-      const { data } = await api.get(`/payments?${params.toString()}`);
-      setItems(data);
-      setSelected(new Set());
-    } catch {
-      toast.error("Failed to load payments");
-    } finally {
-      setLoading(false);
-    }
-  }
-  useEffect(() => { load(); }, [filter]);
+  useEffect(() => {
+    const id = window.setTimeout(() => setDebouncedQ(q.trim()), 350);
+    return () => window.clearTimeout(id);
+  }, [q]);
+
+  const fetchPage = useCallback(
+    async (opts: { cursor?: string | null; append?: boolean; statusOverride?: string }) => {
+      const append = Boolean(opts.append);
+      if (append) setLoadingMore(true);
+      else setLoading(true);
+      try {
+        const params = new URLSearchParams();
+        const status = opts.statusOverride ?? filter;
+        if (status !== "all") params.set("status", status);
+        if (debouncedQ) params.set("q", debouncedQ);
+        params.set("limit", String(DEFAULT_PAGE_SIZE));
+        if (opts.cursor) params.set("cursor", opts.cursor);
+        const { data } = await api.get(`/payments?${params.toString()}`);
+        const page = asPageEnvelope<any>(data);
+        setItems((prev) => (append ? [...prev, ...page.items] : page.items));
+        setNextCursor(page.next_cursor);
+        setHasMore(page.has_more);
+        if (!append) setSelected(new Set());
+      } catch {
+        toast.error("Failed to load payments");
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    },
+    [filter, debouncedQ],
+  );
+
+  useEffect(() => {
+    fetchPage({ append: false });
+  }, [fetchPage]);
 
   const pendingIds = useMemo(
     () => items.filter((p) => p.status === "pending").map((p) => p.id),
@@ -51,7 +81,7 @@ export default function Payments() {
     try {
       await api.patch(`/payments/${id}/verify`);
       toast.success("Payment verified");
-      load();
+      fetchPage({ append: false });
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || "Failed");
     }
@@ -71,10 +101,10 @@ export default function Payments() {
       }
       toast.success(`Verified ${ids.length} payment(s)`);
       setConfirmBatchVerify(false);
-      load();
+      fetchPage({ append: false });
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || "Batch verify failed");
-      load();
+      fetchPage({ append: false });
     } finally {
       setBatchBusy(false);
     }
@@ -85,7 +115,7 @@ export default function Payments() {
       await api.patch(`/payments/${rejectFor.id}/reject`, { reason: rejectReason });
       toast.success("Payment rejected");
       setRejectFor(null); setRejectReason("");
-      load();
+      fetchPage({ append: false });
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || "Failed");
     }
@@ -113,21 +143,29 @@ export default function Payments() {
               data-testid="payment-search"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") load(); }}
               placeholder="Search name or ref"
               className="h-10 flex-1 sm:flex-none px-3 rounded-xl bg-white border border-brand-border text-sm min-w-0 sm:min-w-[180px]"
             />
-            <button data-testid="payment-search-btn" onClick={load} className="h-10 px-4 rounded-full border border-brand-border bg-white text-sm font-medium hover:bg-brand-surface shrink-0">Search</button>
           </div>
           {canMutate ? (
-            <button
-              data-testid="batch-verify"
-              disabled={batchBusy || selected.size === 0}
-              onClick={() => setConfirmBatchVerify(true)}
-              className="h-10 px-4 rounded-full bg-secondary text-secondary-foreground text-sm font-semibold disabled:opacity-50 w-full sm:w-auto"
-            >
-              Verify selected
-            </button>
+            <>
+              <button
+                data-testid="record-payment"
+                type="button"
+                onClick={() => setRecordOpen(true)}
+                className="h-10 px-4 rounded-full bg-primary text-primary-foreground text-sm font-semibold inline-flex items-center justify-center gap-1.5 w-full sm:w-auto cursor-pointer"
+              >
+                <Plus size={16} weight="bold" /> Record payment
+              </button>
+              <button
+                data-testid="batch-verify"
+                disabled={batchBusy || selected.size === 0}
+                onClick={() => setConfirmBatchVerify(true)}
+                className="h-10 px-4 rounded-full bg-secondary text-secondary-foreground text-sm font-semibold disabled:opacity-50 w-full sm:w-auto"
+              >
+                Verify selected
+              </button>
+            </>
           ) : null}
         </div>
       </div>
@@ -138,16 +176,16 @@ export default function Payments() {
         value={filter}
         onChange={setFilter}
         options={[
-          { id: "pending", label: "Pending", count: filter === "pending" ? items.length : undefined },
-          { id: "verified", label: "Verified", count: filter === "verified" ? items.length : undefined },
-          { id: "rejected", label: "Rejected", count: filter === "rejected" ? items.length : undefined },
-          { id: "all", label: "All", count: filter === "all" ? items.length : undefined },
+          { id: "pending", label: "Pending" },
+          { id: "verified", label: "Verified" },
+          { id: "rejected", label: "Rejected" },
+          { id: "all", label: "All" },
         ]}
       />
 
       <div className="card-tinted overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-muted-foreground text-sm" data-testid="payments-loading">Loading payments…</div>
+          <InlineLoader testid="payments-loading" label="Loading payments…" />
         ) : items.length === 0 ? (
           <div className="p-6 sm:p-10 text-center text-muted-foreground text-sm">No {filter === "all" ? "" : filter} payments.</div>
         ) : (
@@ -167,13 +205,17 @@ export default function Payments() {
                   <div className="flex-1 min-w-0">
                     <div className="font-medium truncate">{p.customer_name}</div>
                     <div className="text-xs text-muted-foreground truncate">Ref: <span className="font-mono">{p.reference}</span> · {fmtDateTime(p.submitted_at)}</div>
-                    {typeof p.outstanding === "number" ? (
+                    {showMoney && typeof p.outstanding === "number" ? (
                       <div className="text-xs text-muted-foreground mt-0.5">Outstanding: {fmtCAD(p.outstanding)}</div>
                     ) : null}
                     {p.reject_reason ? <div className="text-xs text-destructive italic mt-0.5">&quot;{p.reject_reason}&quot;</div> : null}
                   </div>
                   <div className="text-right shrink-0">
-                    <div className="text-lg font-display font-bold">{fmtCAD(p.amount)}</div>
+                    {showMoney ? (
+                      <div className="text-lg font-display font-bold">{fmtCAD(p.amount)}</div>
+                    ) : (
+                      <div className="text-sm font-medium text-muted-foreground">Submitted</div>
+                    )}
                     <div className="mt-1 flex justify-end"><StatusPill status={p.status} /></div>
                   </div>
                 </div>
@@ -201,6 +243,13 @@ export default function Payments() {
           </ul>
         )}
       </div>
+
+      <LoadMoreButton
+        hasMore={hasMore}
+        loading={loadingMore}
+        testid="payments-load-more"
+        onClick={() => fetchPage({ cursor: nextCursor, append: true })}
+      />
 
       <AppSheet
         open={confirmBatchVerify}
@@ -240,7 +289,7 @@ export default function Payments() {
         </p>
       </AppSheet>
 
-      <AppSheet open={!!viewing} onClose={() => setViewing(null)} title={viewing ? `${viewing.customer_name} · ${fmtCAD(viewing.amount)}` : "Screenshot"} size="2xl" showHandle={false}>
+      <AppSheet open={!!viewing} onClose={() => setViewing(null)} title={viewing ? `${viewing.customer_name}${showMoney ? ` · ${fmtCAD(viewing.amount)}` : ""}` : "Screenshot"} size="2xl" showHandle={false}>
         <p className="text-xs text-muted-foreground mb-3">Ref {viewing?.reference}</p>
         <div className="rounded-xl overflow-hidden bg-brand-surface flex items-center justify-center p-2">
           {viewing?.screenshot_url ? (
@@ -270,6 +319,15 @@ export default function Payments() {
           placeholder="Optional reason (e.g., reference not found in Interac)"
         />
       </AppSheet>
+
+      <RecordPaymentSheet
+        open={recordOpen}
+        onClose={() => setRecordOpen(false)}
+        onRecorded={() => {
+          setFilter("verified");
+          fetchPage({ append: false, statusOverride: "verified" });
+        }}
+      />
     </div>
   );
 }
