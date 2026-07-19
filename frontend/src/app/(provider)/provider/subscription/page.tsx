@@ -5,10 +5,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { fmtCAD } from "@/lib/format";
 import { toast } from "sonner";
-import { Check, Sparkle, Warning, X } from "@phosphor-icons/react";
+import { Check, Sparkle, Warning, X, Copy } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth";
 import { canMutateAdmin } from "@/lib/roles";
 import { SUBSCRIPTION_REFRESH_EVENT } from "@/lib/subscription-events";
+import ImageSourceField from "@/components/ImageSourceField";
+import AppSheet from "@/components/AppSheet";
 
 type CheckoutBanner =
   | { kind: "success"; phase: "activating" | "active"; plan?: string | null }
@@ -18,6 +20,9 @@ function SubscriptionInner() {
   const [data, setData] = useState<any>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [checkoutBanner, setCheckoutBanner] = useState<CheckoutBanner | null>(null);
+  const [manualPlan, setManualPlan] = useState<any>(null);
+  const [reference, setReference] = useState("");
+  const [screenshot, setScreenshot] = useState<File | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
   const { session, ready } = useAuth();
@@ -111,6 +116,13 @@ function SubscriptionInner() {
   }, [ready, session, searchParams, router, load]);
 
   async function activate(planId: string) {
+    if (data?.billing_provider === "manual") {
+      const plan = data.plans?.find((p: any) => p.id === planId);
+      setManualPlan(plan || { id: planId, label: planId, price_cad: 0 });
+      setReference("");
+      setScreenshot(null);
+      return;
+    }
     setBusy(planId);
     try {
       const { data: res } = await api.post("/providers/me/subscription/activate", { plan: planId });
@@ -129,10 +141,42 @@ function SubscriptionInner() {
     }
   }
 
+  async function submitManual() {
+    if (!manualPlan?.id) return;
+    const ref = reference.trim();
+    if (!ref) {
+      toast.error("Interac reference is required");
+      return;
+    }
+    setBusy(manualPlan.id);
+    try {
+      const fd = new FormData();
+      fd.append("plan", manualPlan.id);
+      fd.append("reference", ref);
+      if (screenshot) fd.append("screenshot", screenshot);
+      const { data: res } = await api.post("/providers/me/subscription/activate", fd);
+      toast.success("Plan active — payment under review");
+      setManualPlan(null);
+      await load();
+      window.dispatchEvent(new Event(SUBSCRIPTION_REFRESH_EVENT));
+      if (res?.review_status === "pending_review") {
+        /* stay on page so they see the pending banner */
+      } else {
+        setTimeout(() => router.replace("/provider"), 400);
+      }
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || "Submission failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   if (!data) return <div className="text-muted-foreground">Loading…</div>;
 
   const status = data.status;
   const dl = data.days_left;
+  const isManual = data.billing_provider === "manual";
+  const pending = data.pending_payment;
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6 animate-fade-in-up max-w-4xl">
@@ -140,6 +184,22 @@ function SubscriptionInner() {
         <span className="label-overline">Billing</span>
         <h1 className="font-display font-black text-2xl sm:text-4xl mt-0.5 sm:mt-1">Your subscription</h1>
       </div>
+
+      {pending ? (
+        <div
+          data-testid="manual-pending-banner"
+          className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 sm:p-5 flex items-start gap-3"
+        >
+          <Warning size={24} className="text-amber-700 shrink-0 mt-0.5" weight="fill" />
+          <div className="min-w-0">
+            <div className="font-display font-bold text-lg">Payment under review</div>
+            <div className="text-sm text-muted-foreground mt-0.5">
+              Your {pending.plan} plan is active while we verify Interac ref{" "}
+              <span className="font-mono text-foreground">{pending.reference}</span>.
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {checkoutBanner?.kind === "success" ? (
         <div
@@ -221,16 +281,37 @@ function SubscriptionInner() {
           <>
             <Warning size={28} className="text-primary" weight="fill" />
             <div className="flex-1">
-              <div className="font-display font-bold text-lg">Your trial has ended</div>
+              <div className="font-display font-bold text-lg">Subscription required</div>
               <div className="text-sm text-muted-foreground">Pick a plan to continue managing customers, deliveries, payments and reports.</div>
             </div>
           </>
         )}
       </div>
 
+      {isManual && data.platform_interac_email ? (
+        <div className="card-tinted p-4 sm:p-5" data-testid="manual-interac-instructions">
+          <div className="label-overline">Pay via Interac e-Transfer</div>
+          <div className="font-display font-bold text-lg mt-1">{data.platform_interac_name || "MealHQ"}</div>
+          <button
+            type="button"
+            className="mt-2 inline-flex items-center gap-2 h-11 px-3 rounded-xl bg-white border border-brand-border text-sm font-mono cursor-pointer hover:bg-brand-surface"
+            onClick={() => {
+              navigator.clipboard.writeText(data.platform_interac_email);
+              toast.success("Interac email copied");
+            }}
+            data-testid="copy-platform-interac"
+          >
+            <Copy size={16} /> {data.platform_interac_email}
+          </button>
+          <p className="text-sm text-muted-foreground mt-3">
+            Send Interac for the plan amount, then choose a plan and submit your reference. Your kitchen stays unlocked while we verify.
+          </p>
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
         {data.plans.map((p: any) => {
-          const isCurrent = data.subscription?.plan === p.id && status === "active";
+          const isCurrent = data.subscription?.plan === p.id && status === "active" && !pending;
           const isRecommended = p.id === "quarterly";
           return (
             <div key={p.id} className={`card-tinted p-4 sm:p-6 flex flex-col gap-3 relative ${isRecommended ? "border-primary ring-2 ring-primary/20" : ""}`}>
@@ -251,10 +332,10 @@ function SubscriptionInner() {
               <button
                 data-testid={`activate-${p.id}`}
                 onClick={() => activate(p.id)}
-                disabled={busy === p.id || isCurrent}
+                disabled={busy === p.id || isCurrent || !!pending}
                 className={`mt-3 pill-btn h-11 disabled:opacity-60 cursor-pointer ${isRecommended ? "btn-primary" : "btn-outline"}`}
               >
-                {isCurrent ? "Current plan" : busy === p.id ? "Activating…" : "Choose plan"}
+                {isCurrent ? "Current plan" : busy === p.id ? (isManual ? "Submitting…" : "Activating…") : isManual ? "Pay & activate" : "Choose plan"}
               </button>
             </div>
           );
@@ -264,10 +345,56 @@ function SubscriptionInner() {
       <div className="text-xs text-muted-foreground max-w-2xl">
         {data.billing_provider === "stripe" ? (
           <>Selecting a plan opens Stripe Checkout. Your subscription activates after payment succeeds.</>
+        ) : data.billing_provider === "manual" ? (
+          <>Pay MealHQ via Interac, then submit your reference. The plan activates immediately and stays active while we verify payment.</>
         ) : (
-          <><strong>Dev / none billing:</strong> selecting a plan self-activates without a payment gateway. Set <code>BILLING_PROVIDER=stripe</code> to use Checkout.</>
+          <><strong>Dev / none billing:</strong> selecting a plan self-activates without a payment gateway.</>
         )}
       </div>
+
+      <AppSheet
+        open={!!manualPlan}
+        onClose={() => { if (!busy) setManualPlan(null); }}
+        title={manualPlan ? `Activate ${manualPlan.label}` : "Submit Interac"}
+        size="md"
+        footer={(
+          <button
+            type="button"
+            data-testid="manual-submit-payment"
+            disabled={!!busy}
+            onClick={submitManual}
+            className="pill-btn btn-primary h-12 w-full disabled:opacity-60 cursor-pointer"
+          >
+            {busy ? "Submitting…" : `Submit · ${fmtCAD(manualPlan?.price_cad || 0)}`}
+          </button>
+        )}
+      >
+        <div className="flex flex-col gap-4 pb-2">
+          <p className="text-sm text-muted-foreground">
+            Send <strong className="text-foreground">{fmtCAD(manualPlan?.price_cad || 0)}</strong> via Interac to{" "}
+            <span className="font-mono text-foreground">{data.platform_interac_email}</span>, then enter the reference below.
+          </p>
+          <label className="flex flex-col gap-1.5">
+            <span className="label-overline">Interac reference</span>
+            <input
+              data-testid="manual-reference"
+              value={reference}
+              onChange={(e) => setReference(e.target.value)}
+              className="h-11 px-4 rounded-xl bg-white border border-brand-border font-mono outline-none focus:ring-2 focus:ring-primary/30"
+              placeholder="e.g. TX-A1B2C3"
+            />
+          </label>
+          <ImageSourceField
+            label="Screenshot"
+            optional
+            value={screenshot}
+            onChange={setScreenshot}
+            disabled={!!busy}
+            testid="manual-screenshot"
+            emptyHint="Optional confirmation screenshot"
+          />
+        </div>
+      </AppSheet>
     </div>
   );
 }

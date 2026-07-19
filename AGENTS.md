@@ -17,8 +17,9 @@ Do **not** re-derive platform architecture from scratch each session if these do
 - Tenancy: `tenant_id = provider_id`; always scope queries.
 - Do not invent Phase 2 features (notification inbox UI, WhatsApp) unless the user asks.
 - Waves A–D are **shipped** (staff/roles, Stripe-optional billing, audit log, GST/HST, brand rename).
-- Subscription activate: `BILLING_PROVIDER=none` self-activates; `stripe` uses Checkout + webhook.
+- Subscription activate: `BILLING_PROVIDER=none` self-activates; `stripe` uses Checkout + webhook; `manual` uses Interac + optimistic activate + `admin-frontend` review.
 - Integrations must degrade gracefully (Resend stub, R2 → base64, Firebase → 501 / disabled buttons, Stripe → 501 when mode=stripe without keys).
+- Platform admin UI lives in `admin-frontend/` (separate deploy); same FastAPI backend under `/api/platform/*` — dashboard, tenants, notes, inbox, SaaS review, reports, CSV exports, trial digest.
 - Never commit secrets (`.env`, `backend/secrets/`, service account JSON).
 - Preserve existing `data-testid` attributes.
 - Prefer TypeScript for the Next.js frontend (`frontend/`).

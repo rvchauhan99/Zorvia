@@ -6,8 +6,11 @@
     "dev": "npm run dev --prefix backend",
     "dev:backend": "npm run dev --prefix backend",
     "dev:frontend": "npm run dev --prefix frontend",
+    "dev:admin": "npm run dev --prefix admin-frontend",
     "start": "npm run start --prefix frontend",
     "install:frontend": "npm install --prefix frontend",
-    "build:frontend": "npm run build --prefix frontend"
+    "install:admin": "npm install --prefix admin-frontend",
+    "build:frontend": "npm run build --prefix frontend",
+    "build:admin": "npm run build --prefix admin-frontend"
   }
 }

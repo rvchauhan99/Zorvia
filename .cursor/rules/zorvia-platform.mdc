@@ -17,12 +17,12 @@ Before broad codebase exploration, prefer project docs:
 
 - Brand: **MealHQ** (user-facing + API title). Infra IDs may still be `zorvia-*` (GCP, DB name, secrets).
 - Multi-tenant tiffin SaaS: provider admin + consumer; `tenant_id = provider_id`.
-- Frontend: **Next.js** App Router (TypeScript) in `frontend/`.
+- Frontend: **Next.js** App Router (TypeScript) in `frontend/`. Platform admin: `admin-frontend/` (dashboard, tenants, inbox, SaaS review, reports).
 
 ## Do not reinvent
 
 - Waves A–D shipped (staff/roles, Stripe-optional billing, audit, GST/HST, brand rename).
-- SaaS activate: `BILLING_PROVIDER=none` (default self-activate) or `stripe` Checkout + webhook.
+- SaaS activate: `BILLING_PROVIDER=none` | `stripe` | `manual` (Interac + optimistic activate + admin review).
 - Notifications inbox **API** exists; inbox **UI** still deferred.
 - Activity logs have writers + More-page UI (Wave D).
 - Firebase: `FIREBASE_SERVICE_ACCOUNT_PATH` or `_JSON` + frontend `NEXT_PUBLIC_FIREBASE_*` (`mealhq-ca`).

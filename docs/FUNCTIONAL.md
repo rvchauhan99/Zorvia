@@ -150,8 +150,10 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 | Plans | `monthly` / `quarterly` / `yearly` CAD prices from env |
 | Activate (`BILLING_PROVIDER=none`) | Self-activate immediately; stores plan + `current_period_end` |
 | Activate (`BILLING_PROVIDER=stripe`) | Returns Stripe Checkout URL; webhook marks active |
+| Activate (`BILLING_PROVIDER=manual`) | Provider pays `PLATFORM_INTERAC_EMAIL`, submits Interac ref (+ optional screenshot). Plan **activates immediately**; creates `saas_payment_records` pending; emails `CONTACT_TO_EMAILS`. Platform admin approves/rejects in `admin-frontend`. **Reject** expires subscription (402) until a new payment is submitted. |
 | Renew / switch | While already `active`, period **extends** from remaining end |
 | Access | `trialing` or `active` required for gated provider/consumer operations |
+| Platform admin | Separate app (`admin-frontend/`); JWT `ut=platform`; allowlist `PLATFORM_ADMIN_EMAILS`. Console: **Dashboard**, **Tenants** (+ notes, anonymized kitchen health), **SaaS payments**, **Inbox** (persisted contact form), **Reports** (+ CSV export). Trial digest email via cron/`Email digest now`. Read-mostly except SaaS review, notes, contact status. |
 
 ### 4.7b Tax (GST/HST)
 
