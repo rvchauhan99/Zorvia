@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
-    "build": "next build && node scripts/vercel-copy-next.js",
+    "build": "next build && node scripts/vercel-link-monorepo-root.js",
     "start": "next start",
     "lint": "eslint"
   },

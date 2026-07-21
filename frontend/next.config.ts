@@ -10,9 +10,6 @@ const backend =
 const frontendRoot = path.resolve(__dirname);
 
 const nextConfig: NextConfig = {
-  // Keep file tracing / watches inside frontend/ (monorepo parent package.json otherwise
-  // pulls the watcher toward Documents/ and surfaces noisy Watchpack EINTR errors).
-  outputFileTracingRoot: frontendRoot,
   // Turbopack walks up looking for a workspace root; the monorepo root has
   // package.json but no `next` install → "Next.js package not found" (v0.0.0).
   turbopack: {
