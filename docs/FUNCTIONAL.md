@@ -155,7 +155,7 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 | Activate (`BILLING_PROVIDER=manual`) | Provider pays `PLATFORM_INTERAC_EMAIL`, submits Interac ref (+ optional screenshot). Plan **activates immediately**; creates `saas_payment_records` pending; emails `CONTACT_TO_EMAILS`. Platform admin approves/rejects in `admin-frontend`. **Reject** expires subscription (402) until a new payment is submitted. |
 | Renew / switch | While already `active`, period **extends** from remaining end |
 | Access | `trialing` or `active` required for gated provider/consumer operations |
-| Platform admin | Separate app (`admin-frontend/`); JWT `ut=platform`; allowlist `PLATFORM_ADMIN_EMAILS`. Console: **Dashboard**, **Tenants** (+ notes, anonymized kitchen health), **SaaS payments**, **Inbox** (persisted contact form), **Reports** (+ CSV export). Trial digest email via cron/`Email digest now`. Read-mostly except SaaS review, notes, contact status. |
+| Platform admin | Separate app (`admin-frontend/`); JWT `ut=platform`; allowlist `PLATFORM_ADMIN_EMAILS`. Console: **Dashboard**, **Tenants** (+ notes, anonymized kitchen health), **SaaS payments**, **WhatsApp credits**, **Inbox** (persisted contact form), **Reports** (+ CSV export). Trial digest email via cron/`Email digest now`. Read-mostly except SaaS/WA credit review, notes, contact status. |
 
 ### 4.7b Tax (GST/HST)
 
@@ -168,6 +168,21 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 - Writers on login, customer soft-delete/reject, payment verify/reject/record, settings patch, plan activate, extra meals.  
 - List via `GET /providers/me/activity` or `GET /reports/activity`.  
 - Simple list on provider More page.
+
+### 4.7d WhatsApp credit (provider)
+
+Gated by `WHATSAPP_FEATURES_ENABLED` (default off until Meta verification). When off, share/credit/admin WhatsApp UI and APIs are hidden/503.
+
+WhatsApp menu shares are **not** included in the SaaS subscription.
+
+| Rule | Behavior |
+|------|----------|
+| Wallet | `providers.whatsapp_billing.balance_cad` (CAD prepaid) |
+| Rate | `WHATSAPP_COST_PER_MSG_CAD` (default 0.10) deducted only for `status=sent` Meta messages |
+| Top-up | Packages CAD **25 / 50 / 100** (100 recommended). Provider pays `PLATFORM_INTERAC_EMAIL`, submits ref (+ optional screenshot) via `/provider/whatsapp-credit`. Creates `whatsapp_credit_purchases` **pending** — **no optimistic credit**. |
+| Admin settle | Platform admin approves/rejects in `admin-frontend` `/whatsapp-credits`. Approve `$inc`s balance + ledger; reject emails provider (no credit). |
+| Disable | When WhatsApp is configured and estimated blast cost &gt; balance → `402` `whatsapp_credit_required`. UI soft-warns when balance &lt; CAD 10. |
+| Once per menu | After a successful share (`share_status=shared` and `wa_sent > 0`), further shares for that menu → `409`. Stubbed/failed blasts may retry. |
 
 ### 4.8 Notifications
 
@@ -311,7 +326,8 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 | CSV import + invites | Sample CSV download on Customers; `POST /customers/import` (supports driver_email + delivery_sequence); invite HTML → `/consumer-signup?code=` |
 | Customer route master | Optional `driver_id` + `delivery_sequence`; unique per driver pool; insert/move at N auto-shifts later stops; new deliveries inherit `route_order` + driver |
 | SMS stub | `send_sms` + `sms_notifications` setting; cancel confirmation |
-| Weekly menu | Upload image; consumer in-app current menu; email notify (Resend); WhatsApp share (Meta Cloud API Utility template) — see `docs/WHATSAPP_SETUP.md` |
+| Menu | Upload image anytime; history kept; consumer sees current (latest); email notify (Resend); WhatsApp share (Meta Cloud API) — see `docs/WHATSAPP_SETUP.md` |
+| WhatsApp credit | Prepaid wallet separate from SaaS plan; packages CAD 25/50/100 via Interac; admin approve adds credit; share deducts `WHATSAPP_COST_PER_MSG_CAD` per successful send; one successful share per menu; share disabled when balance &lt; blast estimate. Product gated by `WHATSAPP_FEATURES_ENABLED` (default off). |
 
 ### Wave D (shipped)
 

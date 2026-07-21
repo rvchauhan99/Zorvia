@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import StatusPill from "@/components/StatusPill";
 import AppSheet from "@/components/AppSheet";
 import ExtraMealsSheet from "@/components/ExtraMealsSheet";
+import MenuImageLightbox from "@/components/MenuImageLightbox";
 import { CurrencyDollar, Truck, XCircle, Clock, CheckCircle, ForkKnife, Plus } from "@phosphor-icons/react";
 import Link from "next/link";
 
@@ -18,6 +19,7 @@ export default function ConsumerHome() {
   const [extraTarget, setExtraTarget] = useState<any | "new" | null>(null);
   const [extraBusy, setExtraBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [menuViewing, setMenuViewing] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -145,18 +147,25 @@ export default function ConsumerHome() {
       {menu?.image_url ? (
         <section className="card-tinted p-4 sm:p-5 flex flex-col gap-3" data-testid="consumer-menu-section">
           <div>
-            <h2 className="font-display font-bold text-xl">This week&apos;s menu</h2>
+            <h2 className="font-display font-bold text-xl">Current menu</h2>
             <p className="text-sm text-muted-foreground mt-0.5" data-testid="consumer-menu-label">
               {menu.label || "Latest menu"}
             </p>
           </div>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={menu.image_url}
-            alt={menu.label || "Menu"}
-            data-testid="consumer-menu-image"
-            className="w-full max-h-[420px] object-contain rounded-xl border border-brand-border bg-white"
-          />
+          <button
+            type="button"
+            onClick={() => setMenuViewing(true)}
+            className="block w-full cursor-pointer rounded-xl border border-brand-border bg-white p-0 overflow-hidden hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            aria-label="View full menu image"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={menu.image_url}
+              alt={menu.label || "Menu"}
+              data-testid="consumer-menu-image"
+              className="w-full max-h-[420px] object-contain"
+            />
+          </button>
         </section>
       ) : null}
 
@@ -255,6 +264,13 @@ export default function ConsumerHome() {
           Subject to your provider&apos;s {cutoffHours}h cutoff before delivery. You won&apos;t be charged for this meal if cancellation succeeds.
         </p>
       </AppSheet>
+
+      <MenuImageLightbox
+        open={menuViewing && !!menu?.image_url}
+        onClose={() => setMenuViewing(false)}
+        src={menu?.image_url}
+        label={menu?.label || "Current menu"}
+      />
 
       <ExtraMealsSheet
         open={extraOpen}

@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { House, Users, Truck, Receipt, DotsThree, SignOut, ChartLine, Sparkle, Warning, CreditCard } from "@phosphor-icons/react";
+import { House, Users, Truck, Receipt, DotsThree, SignOut, ChartLine, Sparkle, Warning, CreditCard, ForkKnife } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
 import { isAdmin, isDriver as roleIsDriver, canMutateAdmin, staffRole } from "@/lib/roles";
@@ -220,6 +220,17 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
           })}
           {!isDriver ? (
             <>
+              {canMutate ? (
+                <Link
+                  href="/provider/menu"
+                  data-testid="side-nav-menu"
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors duration-150 ${
+                    pathname.startsWith("/provider/menu") ? "bg-brand-surface text-primary" : "text-foreground hover:bg-brand-surface"
+                  }`}
+                >
+                  <ForkKnife size={20} /> Menu
+                </Link>
+              ) : null}
               <Link
                 href="/provider/analysis"
                 data-testid="side-nav-analysis"

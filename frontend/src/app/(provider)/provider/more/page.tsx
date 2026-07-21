@@ -3,27 +3,36 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Gear, ChartLine, SignOut, ArrowRight, CreditCard, ForkKnife } from "@phosphor-icons/react";
+import { Gear, ChartLine, SignOut, ArrowRight, CreditCard, ForkKnife, WhatsappLogo } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
 import { canMutateAdmin, isDriver } from "@/lib/roles";
+import { fetchWhatsappFeaturesEnabled } from "@/lib/whatsapp-features";
 
 export default function More() {
   const { logout, session } = useAuth();
   const router = useRouter();
   const [activity, setActivity] = useState<any[]>([]);
+  const [waEnabled, setWaEnabled] = useState(false);
   const admin = canMutateAdmin(session);
+
+  useEffect(() => {
+    void fetchWhatsappFeaturesEnabled().then(setWaEnabled);
+  }, []);
 
   const items = useMemo(() => {
     const all = [
-      { to: "/provider/menu", label: "Weekly menu", icon: ForkKnife, testid: "more-menu", adminOnly: true },
+      { to: "/provider/menu", label: "Menu", icon: ForkKnife, testid: "more-menu", adminOnly: true },
+      ...(waEnabled
+        ? [{ to: "/provider/whatsapp-credit", label: "WhatsApp credit", icon: WhatsappLogo, testid: "more-wa-credit", adminOnly: true }]
+        : []),
       { to: "/provider/analysis", label: "Analysis", icon: ChartLine, testid: "more-analysis" },
       { to: "/provider/reports", label: "Reports", icon: ChartLine, testid: "more-reports" },
       { to: "/provider/subscription", label: "Subscription", icon: CreditCard, testid: "more-subscription", adminOnly: true },
       { to: "/provider/settings", label: "Settings", icon: Gear, testid: "more-settings", adminOnly: true },
     ];
     return all.filter((it) => !it.adminOnly || admin);
-  }, [admin]);
+  }, [admin, waEnabled]);
 
   useEffect(() => {
     if (isDriver(session)) {

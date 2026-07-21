@@ -5,11 +5,13 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { usePlatformAuth } from "@/lib/auth";
+import { fetchWhatsappFeaturesEnabled } from "@/lib/whatsapp-features";
 
 const NAV = [
   { href: "/", label: "Dashboard", testid: "nav-dashboard" },
   { href: "/tenants", label: "Tenants", testid: "nav-tenants" },
   { href: "/saas-payments", label: "SaaS payments", testid: "nav-saas" },
+  { href: "/whatsapp-credits", label: "WhatsApp credits", testid: "nav-wa-credits", waOnly: true },
   { href: "/inbox", label: "Inbox", testid: "nav-inbox" },
   { href: "/reports", label: "Reports", testid: "nav-reports" },
 ];
@@ -26,6 +28,7 @@ export default function AdminShell({
   const pathname = usePathname();
   const [pending, setPending] = useState<number | null>(null);
   const [inboxNew, setInboxNew] = useState<number | null>(null);
+  const [waEnabled, setWaEnabled] = useState(false);
 
   useEffect(() => {
     if (!ready) return;
@@ -33,6 +36,7 @@ export default function AdminShell({
       router.replace("/login");
       return;
     }
+    void fetchWhatsappFeaturesEnabled().then(setWaEnabled);
     api
       .get("/platform/dashboard")
       .then(({ data }) => {
@@ -51,6 +55,8 @@ export default function AdminShell({
       </div>
     );
   }
+
+  const navItems = NAV.filter((item) => !item.waOnly || waEnabled);
 
   return (
     <div className="min-h-screen">
@@ -81,7 +87,7 @@ export default function AdminShell({
             </div>
           </div>
           <nav className="flex gap-1 flex-wrap" data-testid="admin-nav">
-            {NAV.map((item) => {
+            {navItems.map((item) => {
               const active =
                 item.href === "/"
                   ? pathname === "/"

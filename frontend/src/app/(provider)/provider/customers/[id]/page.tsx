@@ -21,6 +21,7 @@ import { CollectionsChart } from "@/components/analytics/CollectionsChart";
 import { AgingChart } from "@/components/analytics/AgingChart";
 import { KpiSkeleton, PageLoader, SectionSkeleton } from "@/components/loaders";
 import { scheduleSummaryLabel } from "@/components/MealScheduleFields";
+import { fetchWhatsappFeaturesEnabled } from "@/lib/whatsapp-features";
 
 type Tab = "overview" | "analysis" | "deliveries" | "payments" | "pauses" | "notes";
 
@@ -99,12 +100,17 @@ export default function CustomerDetail() {
   const [recordOpen, setRecordOpen] = useState(false);
   const [extraOpen, setExtraOpen] = useState(false);
   const [extraBusy, setExtraBusy] = useState(false);
+  const [waEnabled, setWaEnabled] = useState(false);
 
   async function load() {
     try {
-      const { data } = await api.get(`/customers/${id}`);
+      const [{ data }, enabled] = await Promise.all([
+        api.get(`/customers/${id}`),
+        fetchWhatsappFeaturesEnabled(),
+      ]);
       setC(data);
       setNotesDraft(data.notes || "");
+      setWaEnabled(enabled);
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || "Customer not found");
       router.push("/provider/customers");
@@ -257,7 +263,7 @@ export default function CustomerDetail() {
             <div className="label-overline">Assigned driver</div>
             <div className="text-sm">{c.driver_name || "Unassigned"}</div>
           </div>
-          {canMutate ? (
+          {canMutate && waEnabled ? (
             <label className="sm:col-span-2 flex items-center gap-3 min-h-[44px]" data-testid="whatsapp-opt-in-toggle">
               <input
                 type="checkbox"
@@ -276,7 +282,7 @@ export default function CustomerDetail() {
               />
               <span>
                 <span className="font-medium text-sm">WhatsApp menu updates</span>
-                <span className="block text-xs text-muted-foreground">Receive weekly menu via MealHQ WhatsApp</span>
+                <span className="block text-xs text-muted-foreground">Receive menu updates via MealHQ WhatsApp</span>
               </span>
             </label>
           ) : null}

@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { toast } from "sonner";
 import AdminShell from "@/components/AdminShell";
 import { api } from "@/lib/api";
+import { fetchWhatsappFeaturesEnabled } from "@/lib/whatsapp-features";
 
 type Period = "7d" | "30d" | "90d" | "mtd";
 
@@ -28,6 +29,7 @@ export default function TenantDetailPage() {
   const [period, setPeriod] = useState<Period>("30d");
   const [insights, setInsights] = useState<any>(null);
   const [insightsLoading, setInsightsLoading] = useState(true);
+  const [waEnabled, setWaEnabled] = useState(false);
 
   const loadNotes = useCallback(async () => {
     try {
@@ -51,6 +53,7 @@ export default function TenantDetailPage() {
   }, [id, period]);
 
   useEffect(() => {
+    void fetchWhatsappFeaturesEnabled().then(setWaEnabled);
     api
       .get(`/platform/tenants/${id}`)
       .then(({ data: d }) => setData(d))
@@ -135,6 +138,24 @@ export default function TenantDetailPage() {
                 </div>
               </div>
             </div>
+
+            {waEnabled ? (
+              <div className="bg-white border border-neutral-200 rounded-2xl p-5">
+                <div className="font-semibold mb-3">WhatsApp credit</div>
+                <div className="text-sm" data-testid="tenant-wa-billing">
+                  <div className="text-xs uppercase tracking-widest text-neutral-500">Balance</div>
+                  <div className="text-xl font-bold mt-1">
+                    CAD {Number(data.whatsapp_billing?.balance_cad || 0).toFixed(2)}
+                  </div>
+                  <Link
+                    href="/whatsapp-credits"
+                    className="text-sm text-teal-700 hover:underline mt-2 inline-block"
+                  >
+                    Review top-ups
+                  </Link>
+                </div>
+              </div>
+            ) : null}
 
             <div className="grid grid-cols-2 gap-3" data-testid="tenant-counts">
               {[
@@ -270,6 +291,34 @@ export default function TenantDetailPage() {
                 </ul>
               )}
             </div>
+
+            {waEnabled ? (
+              <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden">
+                <div className="px-5 py-4 border-b border-neutral-200 font-semibold">
+                  WhatsApp credit purchases
+                </div>
+                {(data.whatsapp_credit_purchases || []).length === 0 ? (
+                  <div className="p-5 text-sm text-neutral-500">No WhatsApp top-ups yet.</div>
+                ) : (
+                  <ul className="divide-y divide-neutral-200" data-testid="tenant-wa-purchases">
+                    {data.whatsapp_credit_purchases.map((r: any) => (
+                      <li key={r.id}>
+                        <Link
+                          href={`/whatsapp-credits/${r.id}`}
+                          className="flex justify-between gap-3 p-4 hover:bg-neutral-50"
+                        >
+                          <div>
+                            <div className="font-medium">CAD {r.amount}</div>
+                            <div className="text-xs font-mono text-neutral-500">{r.reference}</div>
+                          </div>
+                          <div className="text-xs capitalize text-neutral-500">{r.status}</div>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ) : null}
           </>
         )}
       </div>

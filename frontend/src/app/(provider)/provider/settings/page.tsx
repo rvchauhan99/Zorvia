@@ -10,6 +10,7 @@ import { useAuth } from "@/lib/auth";
 import { canMutateAdmin } from "@/lib/roles";
 import ImageSourceField from "@/components/ImageSourceField";
 import { PageLoader } from "@/components/loaders";
+import { fetchWhatsappFeaturesEnabled } from "@/lib/whatsapp-features";
 
 export default function Settings() {
   const { session, ready } = useAuth();
@@ -24,17 +25,20 @@ export default function Settings() {
   const [pwForm, setPwForm] = useState({ current_password: "", new_password: "", confirm_password: "" });
   const [pwBusy, setPwBusy] = useState(false);
   const [hasPassword, setHasPassword] = useState(true);
+  const [waEnabled, setWaEnabled] = useState(false);
   const input = "h-11 px-4 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all";
 
   async function load() {
-    const [{ data: p }, { data: s }, { data: me }] = await Promise.all([
+    const [{ data: p }, { data: s }, { data: me }, enabled] = await Promise.all([
       api.get("/providers/me"),
       api.get("/providers/me/staff"),
       api.get("/auth/me"),
+      fetchWhatsappFeaturesEnabled(),
     ]);
     setProv(p);
     setStaff(s);
     setHasPassword(!!me?.has_password);
+    setWaEnabled(enabled);
   }
 
   useEffect(() => {
@@ -289,20 +293,22 @@ export default function Settings() {
             <span className="block text-xs text-muted-foreground">Confirm consumer cancellations by SMS when Twilio is configured</span>
           </span>
         </label>
-        <label className="flex items-center gap-3 sm:col-span-2 min-h-[44px]" data-testid="whatsapp-menu-share-toggle">
-          <input
-            type="checkbox"
-            checked={prov.settings?.whatsapp_menu_share !== false}
-            onChange={(e) => updSettings("whatsapp_menu_share", e.target.checked)}
-            className="h-5 w-5 rounded border-brand-border"
-          />
-          <span>
-            <span className="font-medium text-sm">WhatsApp menu share</span>
-            <span className="block text-xs text-muted-foreground">
-              Allow sharing weekly menus to opted-in customers via MealHQ WhatsApp
+        {waEnabled ? (
+          <label className="flex items-center gap-3 sm:col-span-2 min-h-[44px]" data-testid="whatsapp-menu-share-toggle">
+            <input
+              type="checkbox"
+              checked={prov.settings?.whatsapp_menu_share !== false}
+              onChange={(e) => updSettings("whatsapp_menu_share", e.target.checked)}
+              className="h-5 w-5 rounded border-brand-border"
+            />
+            <span>
+              <span className="font-medium text-sm">WhatsApp menu share</span>
+              <span className="block text-xs text-muted-foreground">
+                Allow sharing menu updates to opted-in customers via MealHQ WhatsApp
+              </span>
             </span>
-          </span>
-        </label>
+          </label>
+        ) : null}
       </div>
 
       <div className="card-tinted p-4 sm:p-6 flex flex-col gap-4" data-testid="closed-dates-section">
