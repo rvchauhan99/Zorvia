@@ -88,7 +88,7 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
       router.replace("/provider/deliveries");
       return;
     }
-    if (!isAdmin(session) && (pathname.startsWith("/provider/settings") || pathname.startsWith("/provider/subscription"))) {
+    if (!isAdmin(session) && (pathname.startsWith("/provider/settings") || pathname.startsWith("/provider/subscription") || pathname.startsWith("/provider/menu"))) {
       router.replace(isDriver ? "/provider/deliveries" : "/provider");
     }
   }, [ready, session, router, isDriver, pathname]);
@@ -143,14 +143,39 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
   const status = sub?.status;
   const daysLeft = sub?.days_left;
   const onSubscriptionPage = pathname.startsWith("/provider/subscription");
-  const banner =
-    !canMutate || status === "active" || onSubscriptionPage
-      ? null
+  const hasPaidPlan = Boolean(sub?.subscription?.plan || sub?.tier);
+  const renewDue =
+    status === "active" &&
+    (typeof sub?.renewal_due === "boolean"
+      ? sub.renewal_due
+      : typeof daysLeft === "number" && daysLeft <= 5);
+  const banner = !canMutate || onSubscriptionPage
+    ? null
+    : renewDue
+      ? {
+          tone: "renew" as const,
+          text:
+            daysLeft === 0
+              ? "Plan expires today"
+              : `Plan expires in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`,
+          sub: "Renew now so your kitchen stays unlocked without interruption.",
+          cta: "Renew plan",
+        }
       : status === "trialing"
-      ? { tone: "trial", text: `Free trial · ${daysLeft} day${daysLeft === 1 ? "" : "s"} left`, sub: "Pick a plan any time to avoid interruption.", cta: "Choose plan" }
-      : status === "expired"
-      ? { tone: "expired", text: "Trial ended", sub: "Choose a plan to continue using MealHQ.", cta: "Choose plan" }
-      : null;
+        ? {
+            tone: "trial" as const,
+            text: `Free trial · ${daysLeft} day${daysLeft === 1 ? "" : "s"} left`,
+            sub: "Pick a plan any time to avoid interruption.",
+            cta: "Choose plan",
+          }
+        : status === "expired"
+          ? {
+              tone: "expired" as const,
+              text: hasPaidPlan ? "Plan expired" : "Trial ended",
+              sub: "Choose a plan to continue using MealHQ.",
+              cta: "Choose plan",
+            }
+          : null;
 
   return (
     <div className="min-h-screen bg-brand-cream text-foreground overflow-x-hidden">
@@ -268,10 +293,20 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
               className={`mb-5 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 ${
                 banner.tone === "expired"
                   ? "bg-primary/10 border border-primary/30 text-foreground"
-                  : "bg-secondary/10 border border-secondary/30 text-foreground"
+                  : banner.tone === "renew"
+                    ? "bg-amber-50/80 border border-amber-200 text-foreground"
+                    : "bg-secondary/10 border border-secondary/30 text-foreground"
               }`}
             >
-              {banner.tone === "expired" ? <Warning size={22} weight="fill" className="text-primary shrink-0" /> : <Sparkle size={22} weight="fill" className="text-secondary shrink-0" />}
+              {banner.tone === "expired" || banner.tone === "renew" ? (
+                <Warning
+                  size={22}
+                  weight="fill"
+                  className={`shrink-0 ${banner.tone === "renew" ? "text-amber-700" : "text-primary"}`}
+                />
+              ) : (
+                <Sparkle size={22} weight="fill" className="text-secondary shrink-0" />
+              )}
               <div className="flex-1 min-w-0">
                 <div className="font-semibold">{banner.text}</div>
                 <div className="text-xs text-muted-foreground">{banner.sub}</div>
@@ -279,7 +314,9 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
               <button
                 data-testid="banner-cta"
                 onClick={() => router.push("/provider/subscription")}
-                className={`pill-btn h-11 min-h-[44px] w-full sm:w-auto ${banner.tone === "expired" ? "btn-primary" : "btn-outline"} shrink-0 cursor-pointer`}
+                className={`pill-btn h-11 min-h-[44px] w-full sm:w-auto ${
+                  banner.tone === "expired" || banner.tone === "renew" ? "btn-primary" : "btn-outline"
+                } shrink-0 cursor-pointer`}
               >
                 {banner.cta}
               </button>

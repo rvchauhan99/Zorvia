@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Gear, ChartLine, SignOut, ArrowRight, CreditCard } from "@phosphor-icons/react";
+import { Gear, ChartLine, SignOut, ArrowRight, CreditCard, ForkKnife } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
 import { canMutateAdmin, isDriver } from "@/lib/roles";
@@ -16,6 +16,7 @@ export default function More() {
 
   const items = useMemo(() => {
     const all = [
+      { to: "/provider/menu", label: "Weekly menu", icon: ForkKnife, testid: "more-menu", adminOnly: true },
       { to: "/provider/analysis", label: "Analysis", icon: ChartLine, testid: "more-analysis" },
       { to: "/provider/reports", label: "Reports", icon: ChartLine, testid: "more-reports" },
       { to: "/provider/subscription", label: "Subscription", icon: CreditCard, testid: "more-subscription", adminOnly: true },

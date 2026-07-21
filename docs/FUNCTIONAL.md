@@ -147,8 +147,9 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 
 | Feature | Behavior |
 |---------|----------|
-| Trial | New providers: `trialing` for `TRIAL_DAYS` (default 15) |
-| Plans | `monthly` / `quarterly` / `yearly` CAD prices from env |
+| Trial | New providers: `trialing` for `TRIAL_DAYS` (default 15); trial has Professional features (unlimited customers) |
+| Plans | Tiers: **Starter** (≤50 customers), **Growth** (≤150), **Professional** (unlimited). Periods: monthly / quarterly (−5%) / half-yearly (−10%) / yearly (−15%). Composite plan ids e.g. `starter_monthly`, `growth_yearly`. |
+| Renew banner | Active paid plans: provider admin shell shows renew banner when `days_left ≤ 5` (`renewal_due`); CTA → `/provider/subscription`. Renew activate extends from remaining `current_period_end`. |
 | Activate (`BILLING_PROVIDER=none`) | Self-activate immediately; stores plan + `current_period_end` |
 | Activate (`BILLING_PROVIDER=stripe`) | Returns Stripe Checkout URL; webhook marks active |
 | Activate (`BILLING_PROVIDER=manual`) | Provider pays `PLATFORM_INTERAC_EMAIL`, submits Interac ref (+ optional screenshot). Plan **activates immediately**; creates `saas_payment_records` pending; emails `CONTACT_TO_EMAILS`. Platform admin approves/rejects in `admin-frontend`. **Reject** expires subscription (402) until a new payment is submitted. |
@@ -310,6 +311,7 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 | CSV import + invites | Sample CSV download on Customers; `POST /customers/import` (supports driver_email + delivery_sequence); invite HTML → `/consumer-signup?code=` |
 | Customer route master | Optional `driver_id` + `delivery_sequence`; unique per driver pool; insert/move at N auto-shifts later stops; new deliveries inherit `route_order` + driver |
 | SMS stub | `send_sms` + `sms_notifications` setting; cancel confirmation |
+| Weekly menu | Upload image; consumer in-app current menu; email notify (Resend); WhatsApp share (Meta Cloud API Utility template) — see `docs/WHATSAPP_SETUP.md` |
 
 ### Wave D (shipped)
 
@@ -328,7 +330,7 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 | Notification inbox UI | API exists; UI deferred |
 | Stripe Customer Portal / recurring polish | Checkout + webhook shipped; portal optional |
 | Multi-currency | CAD assumptions |
-| WhatsApp | Not implemented (SMS stub only) |
+| WhatsApp two-way inbox | Outbound menu share shipped; chat inbox not built |
 
 ---
 

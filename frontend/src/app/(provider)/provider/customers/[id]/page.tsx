@@ -257,6 +257,29 @@ export default function CustomerDetail() {
             <div className="label-overline">Assigned driver</div>
             <div className="text-sm">{c.driver_name || "Unassigned"}</div>
           </div>
+          {canMutate ? (
+            <label className="sm:col-span-2 flex items-center gap-3 min-h-[44px]" data-testid="whatsapp-opt-in-toggle">
+              <input
+                type="checkbox"
+                checked={c.whatsapp_opt_in !== false}
+                onChange={async (e) => {
+                  const checked = e.target.checked;
+                  try {
+                    const { data } = await api.patch(`/customers/${id}`, { whatsapp_opt_in: checked });
+                    setC((prev: any) => ({ ...prev, ...data, whatsapp_opt_in: checked }));
+                    toast.success(checked ? "WhatsApp menu updates on" : "WhatsApp menu updates off");
+                  } catch (err: any) {
+                    toast.error(err?.response?.data?.detail || "Failed to update");
+                  }
+                }}
+                className="h-5 w-5 rounded border-brand-border"
+              />
+              <span>
+                <span className="font-medium text-sm">WhatsApp menu updates</span>
+                <span className="block text-xs text-muted-foreground">Receive weekly menu via MealHQ WhatsApp</span>
+              </span>
+            </label>
+          ) : null}
           <div>
             <div className="label-overline">Meal schedule</div>
             <div className="flex gap-0.5 mt-1 flex-wrap">

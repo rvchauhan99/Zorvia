@@ -1,0 +1,11 @@
+---
+description: Never deploy to prod or create git commits unless the user explicitly asks in that message
+alwaysApply: true
+---
+
+# No prod deploy / no commit without explicit ask
+
+- Do **not** run production deploys (Cloud Run, Vercel, or any live environment) unless the user explicitly asks in that message.
+- Do **not** create git commits, amend commits, or open PRs unless the user explicitly asks in that message.
+- Local runs, tests, and code changes are fine when implementing a requested feature.
+- If unsure whether deploy/commit was requested, ask first — do not proceed.

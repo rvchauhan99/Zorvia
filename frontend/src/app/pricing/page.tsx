@@ -2,47 +2,49 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import MarketingShell from "@/components/MarketingShell";
 import { fmtCAD } from "@/lib/format";
+import PricingPlans, { type PublicPlan } from "@/components/PricingPlans";
 
 export const metadata: Metadata = {
   title: "Pricing",
   description:
-    "MealHQ pricing for Canadian tiffin kitchens — free trial, then monthly, quarterly, or yearly plans in CAD. GST/HST configurable per kitchen.",
+    "MealHQ pricing for Canadian tiffin kitchens — Starter, Growth, and Professional plans with monthly to yearly billing in CAD.",
   alternates: { canonical: "/pricing" },
-};
-
-type Plan = {
-  id: string;
-  label: string;
-  price_cad: number;
-  duration_days: number;
-  save_hint?: string;
 };
 
 type PlansResponse = {
   trial_days: number;
-  plans: Plan[];
+  plans: PublicPlan[];
+  tiers: { id: string; label: string; max_customers: number | null; monthly_list_cad: number }[];
+  periods: { id: string; label: string; discount_pct: number; duration_days: number }[];
 };
 
-/** Fallback matches product defaults when API is unreachable (never show stale $29). */
 const FALLBACK: PlansResponse = {
   trial_days: 15,
-  plans: [
-    { id: "monthly", label: "Monthly", price_cad: 149, duration_days: 30 },
-    { id: "quarterly", label: "Quarterly", price_cad: 399, duration_days: 92, save_hint: "Save ~10%" },
-    { id: "yearly", label: "Yearly", price_cad: 1599, duration_days: 366, save_hint: "Save ~15%" },
+  tiers: [
+    { id: "starter", label: "Starter", max_customers: 50, monthly_list_cad: 49 },
+    { id: "growth", label: "Growth", max_customers: 150, monthly_list_cad: 99 },
+    { id: "professional", label: "Professional", max_customers: null, monthly_list_cad: 149 },
   ],
-};
-
-const PERIOD: Record<string, string> = {
-  monthly: "/ month CAD",
-  quarterly: "/ quarter CAD",
-  yearly: "/ year CAD",
-};
-
-const BLURB: Record<string, string> = {
-  monthly: "Flexible for seasonal kitchens.",
-  quarterly: "Best value for growing routes.",
-  yearly: "Lock in a full year of MealHQ.",
+  periods: [
+    { id: "monthly", label: "Monthly", discount_pct: 0, duration_days: 30 },
+    { id: "quarterly", label: "Quarterly", discount_pct: 5, duration_days: 92 },
+    { id: "half_yearly", label: "Half-yearly", discount_pct: 10, duration_days: 183 },
+    { id: "yearly", label: "Yearly", discount_pct: 15, duration_days: 366 },
+  ],
+  plans: [
+    { id: "starter_monthly", tier: "starter", period: "monthly", label: "Starter · Monthly", tier_label: "Starter", period_label: "Monthly", price_cad: 49, duration_days: 30, max_customers: 50 },
+    { id: "starter_quarterly", tier: "starter", period: "quarterly", label: "Starter · Quarterly", tier_label: "Starter", period_label: "Quarterly", price_cad: 140, duration_days: 92, max_customers: 50, save_hint: "Save 5%" },
+    { id: "starter_half_yearly", tier: "starter", period: "half_yearly", label: "Starter · Half-yearly", tier_label: "Starter", period_label: "Half-yearly", price_cad: 265, duration_days: 183, max_customers: 50, save_hint: "Save 10%" },
+    { id: "starter_yearly", tier: "starter", period: "yearly", label: "Starter · Yearly", tier_label: "Starter", period_label: "Yearly", price_cad: 500, duration_days: 366, max_customers: 50, save_hint: "Save 15%" },
+    { id: "growth_monthly", tier: "growth", period: "monthly", label: "Growth · Monthly", tier_label: "Growth", period_label: "Monthly", price_cad: 99, duration_days: 30, max_customers: 150 },
+    { id: "growth_quarterly", tier: "growth", period: "quarterly", label: "Growth · Quarterly", tier_label: "Growth", period_label: "Quarterly", price_cad: 282, duration_days: 92, max_customers: 150, save_hint: "Save 5%" },
+    { id: "growth_half_yearly", tier: "growth", period: "half_yearly", label: "Growth · Half-yearly", tier_label: "Growth", period_label: "Half-yearly", price_cad: 535, duration_days: 183, max_customers: 150, save_hint: "Save 10%" },
+    { id: "growth_yearly", tier: "growth", period: "yearly", label: "Growth · Yearly", tier_label: "Growth", period_label: "Yearly", price_cad: 1010, duration_days: 366, max_customers: 150, save_hint: "Save 15%" },
+    { id: "professional_monthly", tier: "professional", period: "monthly", label: "Professional · Monthly", tier_label: "Professional", period_label: "Monthly", price_cad: 149, duration_days: 30, max_customers: null },
+    { id: "professional_quarterly", tier: "professional", period: "quarterly", label: "Professional · Quarterly", tier_label: "Professional", period_label: "Quarterly", price_cad: 425, duration_days: 92, max_customers: null, save_hint: "Save 5%" },
+    { id: "professional_half_yearly", tier: "professional", period: "half_yearly", label: "Professional · Half-yearly", tier_label: "Professional", period_label: "Half-yearly", price_cad: 805, duration_days: 183, max_customers: null, save_hint: "Save 10%" },
+    { id: "professional_yearly", tier: "professional", period: "yearly", label: "Professional · Yearly", tier_label: "Professional", period_label: "Yearly", price_cad: 1520, duration_days: 366, max_customers: null, save_hint: "Save 15%" },
+  ],
 };
 
 function backendBase(): string {
@@ -64,6 +66,8 @@ async function loadPlans(): Promise<PlansResponse> {
     return {
       trial_days: Number(data.trial_days) || FALLBACK.trial_days,
       plans: data.plans,
+      tiers: data.tiers?.length ? data.tiers : FALLBACK.tiers,
+      periods: data.periods?.length ? data.periods : FALLBACK.periods,
     };
   } catch {
     return FALLBACK;
@@ -71,7 +75,7 @@ async function loadPlans(): Promise<PlansResponse> {
 }
 
 export default async function PricingPage() {
-  const { trial_days, plans } = await loadPlans();
+  const data = await loadPlans();
 
   return (
     <MarketingShell testid="pricing-page">
@@ -81,42 +85,29 @@ export default async function PricingPage() {
           Simple pricing for Canadian kitchens
         </h1>
         <p className="mt-4 text-lg text-muted-foreground max-w-2xl">
-          Open a workspace free with a trial, then pick a plan when you&apos;re ready. MealHQ is billed in CAD.
-          Configure GST/HST on customer outstanding balances in settings — we are not your tax advisor.
+          Open a workspace free with a trial, then pick Starter, Growth, or Professional.
+          Longer billing periods unlock bigger discounts. MealHQ is billed in CAD.
         </p>
 
-        <div className="mt-10 grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {plans.map((p) => {
-            const highlight = p.id === "quarterly";
-            return (
-              <div
-                key={p.id}
-                className={`card-tinted p-6 flex flex-col gap-2 ${highlight ? "ring-2 ring-primary" : ""}`}
-                data-testid={`plan-${p.id}`}
-              >
-                <div className="label-overline">{p.label}</div>
-                <div className="font-display font-black text-3xl">
-                  {fmtCAD(p.price_cad)}
-                  <span className="text-base font-medium text-muted-foreground">
-                    {PERIOD[p.id] || " CAD"}
-                  </span>
-                </div>
-                <p className="text-sm text-muted-foreground">{BLURB[p.id] || ""}</p>
-                {p.save_hint ? (
-                  <p className="text-xs font-medium text-primary">{p.save_hint}</p>
-                ) : null}
-              </div>
-            );
-          })}
+        <div className="mt-10">
+          <PricingPlans plans={data.plans} periods={data.periods} />
         </div>
 
         <ul className="mt-10 space-y-3 text-muted-foreground">
-          <li>{trial_days}-day trial on new kitchens (default; confirm in-app).</li>
+          <li>{data.trial_days}-day trial with Professional features (unlimited customers).</li>
+          <li>Starter up to 50 · Growth up to 150 · Professional unlimited.</li>
+          <li>Quarterly save 5% · Half-yearly 10% · Yearly 15%.</li>
           <li>Interac e-Transfer reconciliation for consumer payments included.</li>
-          <li>Optional GST/HST tax rate on delivered meal outstanding.</li>
           <li>
-            Questions? See the <Link href="/faq" className="text-primary font-medium hover:underline">FAQ</Link> or{" "}
-            <Link href="/#contact" className="text-primary font-medium hover:underline">contact us</Link>.
+            Questions? See the{" "}
+            <Link href="/faq" className="text-primary font-medium hover:underline">
+              FAQ
+            </Link>{" "}
+            or{" "}
+            <Link href="/#contact" className="text-primary font-medium hover:underline">
+              contact us
+            </Link>
+            .
           </li>
         </ul>
 
@@ -128,6 +119,9 @@ export default async function PricingPage() {
             See provider features
           </Link>
         </div>
+        <p className="sr-only">
+          Example monthly list: Starter {fmtCAD(49)}, Growth {fmtCAD(99)}, Professional {fmtCAD(149)}.
+        </p>
       </div>
     </MarketingShell>
   );

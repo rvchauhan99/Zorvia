@@ -77,6 +77,12 @@ export const metadata: Metadata = {
     capable: true,
     title: "MealHQ",
   },
+  // Meta Business Suite → Domains (facebook-domain-verification)
+  verification: {
+    other: {
+      "facebook-domain-verification": "kcn14zlmqys0wihict4e1ojr7lbxix",
+    },
+  },
 };
 
 export const viewport: Viewport = {

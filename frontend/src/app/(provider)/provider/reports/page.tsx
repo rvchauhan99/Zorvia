@@ -8,6 +8,7 @@ import { fmtCAD, todayISO } from "@/lib/format";
 import { toast } from "sonner";
 import { DownloadSimple } from "@phosphor-icons/react";
 import { InlineLoader } from "@/components/loaders";
+import { AreaChart } from "@/components/analytics/AreaChart";
 
 function tabButton(active: boolean, label: string, onClick: () => void, testid: string) {
   return (
@@ -48,6 +49,12 @@ export default function Reports() {
 
   const moneyTab = tab === "outstanding" || tab === "collections" || tab === "statement";
   const canExport = showMoney || !moneyTab;
+  const rows = data?.rows ?? [];
+
+  function selectTab(next: string) {
+    setTab(next);
+    setData(null);
+  }
 
   async function load() {
     if (!showMoney && moneyTab) {
@@ -62,10 +69,11 @@ export default function Reports() {
       else if (tab === "active") url = "/reports/active-customers";
       else if (tab === "statement") url = `/reports/statement?month=${statementMonth}`;
       else url = "/reports/area-summary";
-      const { data } = await api.get(url);
-      setData(data);
-    } catch (e) {
+      const { data: payload } = await api.get(url);
+      setData(payload);
+    } catch {
       toast.error("Failed to load report");
+      setData(null);
     }
   }
   useEffect(() => { load(); }, [tab, range.start, range.end, statementMonth, showMoney]);
@@ -73,8 +81,13 @@ export default function Reports() {
   function exportCSV() {
     if (!data || !canExport) return;
     if (moneyTab && !showMoney) return;
-    const rows = data.rows || (tab === "active" ? [data] : tab === "statement" ? (data.rows || []) : []);
-    downloadCSV(`tiffin-${tab}-${todayISO()}`, rows.length ? rows : [data.totals || data]);
+    const exportRows =
+      tab === "active"
+        ? [data]
+        : tab === "area" && !showMoney
+          ? rows.map((r: any) => ({ area: r.area, customers: r.customers }))
+          : rows;
+    downloadCSV(`tiffin-${tab}-${todayISO()}`, exportRows.length ? exportRows : [data.totals || data]);
     toast.success("CSV downloaded");
   }
 
@@ -93,12 +106,12 @@ export default function Reports() {
       </div>
 
       <div className="flex gap-1.5 overflow-x-auto pb-0.5 snap-x snap-mandatory sm:flex-wrap sm:overflow-visible [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {tabButton(tab === "daily", "Daily deliveries", () => setTab("daily"), "rtab-daily")}
-        {tabButton(tab === "outstanding", "Outstanding", () => setTab("outstanding"), "rtab-outstanding")}
-        {tabButton(tab === "collections", "Collections", () => setTab("collections"), "rtab-collections")}
-        {tabButton(tab === "active", "Active customers", () => setTab("active"), "rtab-active")}
-        {tabButton(tab === "area", "Area summary", () => setTab("area"), "rtab-area")}
-        {tabButton(tab === "statement", "Statement", () => setTab("statement"), "rtab-statement")}
+        {tabButton(tab === "daily", "Daily deliveries", () => selectTab("daily"), "rtab-daily")}
+        {tabButton(tab === "outstanding", "Outstanding", () => selectTab("outstanding"), "rtab-outstanding")}
+        {tabButton(tab === "collections", "Collections", () => selectTab("collections"), "rtab-collections")}
+        {tabButton(tab === "active", "Active customers", () => selectTab("active"), "rtab-active")}
+        {tabButton(tab === "area", "Area summary", () => selectTab("area"), "rtab-area")}
+        {tabButton(tab === "statement", "Statement", () => selectTab("statement"), "rtab-statement")}
       </div>
 
       {(tab === "daily" || tab === "collections") ? (
@@ -136,13 +149,13 @@ export default function Reports() {
             Balance and payment amounts are visible to admins only. Use the Daily deliveries tab for stop counts, or ask an admin for financial reports.
           </div>
          ) : tab === "daily" ? (
-          data.rows.length === 0 ? (
+          rows.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground">No data in range.</div>
           ) : (
             <>
               <ul className="md:hidden divide-y divide-brand-border -mx-4 sm:-mx-5">
-                {data.rows.map((r: any) => (
-                  <li key={r.date} className="px-4 sm:px-5 py-4 flex flex-col gap-2">
+                {rows.map((r: any, i: number) => (
+                  <li key={r.date ? `deliv-${r.date}-${i}` : `deliv-${i}`} className="px-4 sm:px-5 py-4 flex flex-col gap-2">
                     <div className="font-medium">{r.date}</div>
                     <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
                       <span className="text-muted-foreground">Delivered</span>
@@ -172,8 +185,8 @@ export default function Reports() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-brand-border">
-                  {data.rows.map((r: any) => (
-                    <tr key={r.date} className="hover:bg-brand-surface/60 transition-colors">
+                  {rows.map((r: any, i: number) => (
+                    <tr key={r.date ? `deliv-${r.date}-${i}` : `deliv-${i}`} className="hover:bg-brand-surface/60 transition-colors">
                       <td className="px-3 py-2 font-medium">{r.date}</td>
                       <td className="px-3 py-2 text-secondary font-semibold">{r.delivered}</td>
                       <td className="px-3 py-2">{r.pending}</td>
@@ -190,12 +203,12 @@ export default function Reports() {
         ) : tab === "outstanding" ? (
           <>
             <div className="mb-3 text-sm">Total outstanding: <span className="font-display font-bold text-2xl text-primary">{fmtCAD(data.total)}</span></div>
-            {data.rows.length === 0 ? (
+            {rows.length === 0 ? (
               <div className="p-8 text-center text-muted-foreground">No outstanding balances</div>
             ) : (
               <>
                 <ul className="md:hidden divide-y divide-brand-border -mx-4 sm:-mx-5">
-                  {data.rows.map((r: any, i: number) => (
+                  {rows.map((r: any, i: number) => (
                     <li key={r.customer_id || `outstanding-${r.email || r.name || i}`} className="px-4 sm:px-5 py-4 flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="font-medium truncate">{r.name}</div>
@@ -216,7 +229,7 @@ export default function Reports() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-brand-border">
-                    {data.rows.map((r: any, i: number) => (
+                    {rows.map((r: any, i: number) => (
                       <tr key={r.customer_id || `outstanding-${r.email || r.name || i}`} className="hover:bg-brand-surface/60 transition-colors">
                         <td className="px-3 py-2 font-medium">{r.name}</td>
                         <td className="px-3 py-2 text-muted-foreground">{r.phone}</td>
@@ -233,13 +246,13 @@ export default function Reports() {
         ) : tab === "collections" ? (
           <>
             <div className="mb-3 text-sm">Total collected: <span className="font-display font-bold text-2xl text-secondary">{fmtCAD(data.total_amount)}</span> across {data.total_count} payments</div>
-            {data.rows.length === 0 ? (
+            {rows.length === 0 ? (
               <div className="p-8 text-center text-muted-foreground">No collections in range.</div>
             ) : (
               <>
                 <ul className="md:hidden divide-y divide-brand-border -mx-4 sm:-mx-5">
-                  {data.rows.map((r: any) => (
-                    <li key={r.date} className="px-4 sm:px-5 py-4 flex items-center justify-between gap-3">
+                  {rows.map((r: any, i: number) => (
+                    <li key={r.date ? `coll-${r.date}-${i}` : `coll-${i}`} className="px-4 sm:px-5 py-4 flex items-center justify-between gap-3">
                       <div>
                         <div className="font-medium">{r.date}</div>
                         <div className="text-xs text-muted-foreground mt-0.5">{r.count} payment{r.count === 1 ? "" : "s"}</div>
@@ -258,8 +271,8 @@ export default function Reports() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-brand-border">
-                    {data.rows.map((r: any) => (
-                      <tr key={r.date} className="hover:bg-brand-surface/60 transition-colors">
+                    {rows.map((r: any, i: number) => (
+                      <tr key={r.date ? `coll-${r.date}-${i}` : `coll-${i}`} className="hover:bg-brand-surface/60 transition-colors">
                         <td className="px-3 py-2 font-medium">{r.date}</td>
                         <td className="px-3 py-2">{r.count}</td>
                         <td className="px-3 py-2 text-right font-semibold text-secondary">{fmtCAD(r.amount)}</td>
@@ -302,12 +315,12 @@ export default function Reports() {
                 <div className="font-mono font-semibold">{data.month}</div>
               </div>
             </div>
-            {(data.rows || []).length === 0 ? (
+            {rows.length === 0 ? (
               <div className="p-8 text-center text-muted-foreground">No statement rows for this month.</div>
             ) : (
               <>
                 <ul className="md:hidden divide-y divide-brand-border -mx-4 sm:-mx-5">
-                  {data.rows.map((r: any, i: number) => (
+                  {rows.map((r: any, i: number) => (
                     <li key={r.customer_id || `statement-${r.email || r.name || i}`} className="px-4 sm:px-5 py-4 flex flex-col gap-2">
                       <div className="font-medium">{r.name}</div>
                       <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
@@ -335,7 +348,7 @@ export default function Reports() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-brand-border">
-                    {data.rows.map((r: any, i: number) => (
+                    {rows.map((r: any, i: number) => (
                       <tr key={r.customer_id || `statement-${r.email || r.name || i}`} className="hover:bg-brand-surface/60 transition-colors">
                         <td className="px-3 py-2 font-medium">{r.name}</td>
                         <td className="px-3 py-2">{r.delivered_count}</td>
@@ -351,37 +364,53 @@ export default function Reports() {
             )}
           </>
         ) : (
-          data.rows.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">No area data yet.</div>
+          rows.length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground" data-testid="area-empty">No area data yet.</div>
           ) : (
-            <>
+            <div className="flex flex-col gap-5" data-testid="area-summary-report">
+              <AreaChart data={rows} showMoney={showMoney} />
               <ul className="md:hidden divide-y divide-brand-border -mx-4 sm:-mx-5">
-                {data.rows.map((r: any, i: number) => (
+                {rows.map((r: any, i: number) => (
                   <li key={r.area || `area-${i}`} className="px-4 sm:px-5 py-4 flex items-center justify-between gap-3">
-                    <span className="font-mono uppercase">{r.area}</span>
-                    <span className="font-semibold">{r.customers}</span>
+                    <div>
+                      <div className="font-mono uppercase font-medium">{r.area}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {r.customers} customer{r.customers === 1 ? "" : "s"}
+                      </div>
+                    </div>
+                    {showMoney ? (
+                      <div className="font-semibold text-primary">{fmtCAD(r.outstanding)}</div>
+                    ) : (
+                      <div className="font-semibold">{r.customers}</div>
+                    )}
                   </li>
                 ))}
               </ul>
               <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-sm min-w-[560px]">
-                <thead className="text-left bg-brand-surface">
-                  <tr>
-                    <th className="px-3 py-2 label-overline">Area (postal prefix)</th>
-                    <th className="px-3 py-2 label-overline text-right">Customers</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-brand-border">
-                  {data.rows.map((r: any, i: number) => (
-                    <tr key={r.area || `area-${i}`} className="hover:bg-brand-surface/60 transition-colors">
-                      <td className="px-3 py-2 font-mono uppercase">{r.area}</td>
-                      <td className="px-3 py-2 text-right font-semibold">{r.customers}</td>
+                <table className="w-full text-sm min-w-[560px]">
+                  <thead className="text-left bg-brand-surface">
+                    <tr>
+                      <th className="px-3 py-2 label-overline">Area (postal prefix)</th>
+                      <th className="px-3 py-2 label-overline text-right">Customers</th>
+                      {showMoney ? (
+                        <th className="px-3 py-2 label-overline text-right">Outstanding</th>
+                      ) : null}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-brand-border">
+                    {rows.map((r: any, i: number) => (
+                      <tr key={r.area || `area-${i}`} className="hover:bg-brand-surface/60 transition-colors">
+                        <td className="px-3 py-2 font-mono uppercase">{r.area}</td>
+                        <td className="px-3 py-2 text-right font-semibold">{r.customers}</td>
+                        {showMoney ? (
+                          <td className="px-3 py-2 text-right font-semibold text-primary">{fmtCAD(r.outstanding)}</td>
+                        ) : null}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            </>
+            </div>
           )
         )}
       </div>

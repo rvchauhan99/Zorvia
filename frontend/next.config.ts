@@ -7,11 +7,33 @@ const backend =
   // Prefer IPv4: macOS resolves `localhost` to ::1 first; uvicorn --host 0.0.0.0 is IPv4-only.
   "http://127.0.0.1:8000";
 
+const frontendRoot = path.resolve(__dirname);
+
 const nextConfig: NextConfig = {
+  // Keep file tracing / watches inside frontend/ (monorepo parent package.json otherwise
+  // pulls the watcher toward Documents/ and surfaces noisy Watchpack EINTR errors).
+  outputFileTracingRoot: frontendRoot,
   // Turbopack walks up looking for a workspace root; the monorepo root has
   // package.json but no `next` install → "Next.js package not found" (v0.0.0).
   turbopack: {
-    root: path.resolve(__dirname),
+    root: frontendRoot,
+  },
+  webpack: (config, { dev }) => {
+    if (dev) {
+      config.watchOptions = {
+        ...(config.watchOptions || {}),
+        // Only watch this app; ignore monorepo siblings and heavy dirs
+        ignored: [
+          "**/node_modules/**",
+          "**/.git/**",
+          "**/.next/**",
+          path.join(frontendRoot, "../backend/**"),
+          path.join(frontendRoot, "../admin-frontend/**"),
+          path.join(frontendRoot, "../**/.cursor/**"),
+        ],
+      };
+    }
+    return config;
   },
   images: {
     remotePatterns: [

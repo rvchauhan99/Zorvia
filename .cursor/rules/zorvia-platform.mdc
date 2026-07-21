@@ -24,13 +24,15 @@ Before broad codebase exploration, prefer project docs:
 - Waves A–D shipped (staff/roles, Stripe-optional billing, audit, GST/HST, brand rename).
 - SaaS activate: `BILLING_PROVIDER=none` | `stripe` | `manual` (Interac + optimistic activate + admin review).
 - Notifications inbox **API** exists; inbox **UI** still deferred.
+- Weekly menu: in-app + email + Meta WhatsApp Cloud API share (platform number); see `docs/WHATSAPP_SETUP.md`. Chat inbox still deferred.
 - Activity logs have writers + More-page UI (Wave D).
 - Firebase: `FIREBASE_SERVICE_ACCOUNT_PATH` or `_JSON` + frontend `NEXT_PUBLIC_FIREBASE_*` (`mealhq-ca`).
 
 ## Engineering constraints
 
 - Never commit `.env` or `backend/secrets/`.
+- Do **not** deploy to production (Cloud Run / Vercel) or create git commits unless the user explicitly asks.
 - Preserve `data-testid`.
-- Keep Resend / R2 / Firebase / Stripe graceful when unset.
+- Keep Resend / R2 / Firebase / Stripe / WhatsApp graceful when unset.
 - Update docs when behavior changes.
 - UI: follow `design_guidelines.json` when editing frontend visuals.

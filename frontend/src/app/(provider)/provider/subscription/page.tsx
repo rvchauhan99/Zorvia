@@ -3,7 +3,7 @@
 import React, { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
-import { fmtCAD } from "@/lib/format";
+import { fmtCAD, fmtDate } from "@/lib/format";
 import { toast } from "sonner";
 import { Check, Sparkle, Warning, X, Copy } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth";
@@ -23,6 +23,7 @@ function SubscriptionInner() {
   const [manualPlan, setManualPlan] = useState<any>(null);
   const [reference, setReference] = useState("");
   const [screenshot, setScreenshot] = useState<File | null>(null);
+  const [period, setPeriod] = useState<string>("yearly");
   const router = useRouter();
   const searchParams = useSearchParams();
   const { session, ready } = useAuth();
@@ -177,12 +178,40 @@ function SubscriptionInner() {
   const dl = data.days_left;
   const isManual = data.billing_provider === "manual";
   const pending = data.pending_payment;
+  const periods: { id: string; label: string; discount_pct?: number }[] = data.periods?.length
+    ? data.periods
+    : [
+        { id: "monthly", label: "Monthly", discount_pct: 0 },
+        { id: "quarterly", label: "Quarterly", discount_pct: 5 },
+        { id: "half_yearly", label: "Half-yearly", discount_pct: 10 },
+        { id: "yearly", label: "Yearly", discount_pct: 15 },
+      ];
+  const selectedPeriod = periods.some((p) => p.id === period) ? period : "yearly";
+  const selectedPeriodMeta = periods.find((p) => p.id === selectedPeriod);
+  const selectedDiscount = Number(selectedPeriodMeta?.discount_pct) || 0;
+  const tierOrder = ["starter", "growth", "professional"];
+  const periodPlans = (data.plans || [])
+    .filter((p: any) => p.period === selectedPeriod)
+    .sort(
+      (a: any, b: any) =>
+        tierOrder.indexOf(a.tier) - tierOrder.indexOf(b.tier),
+    );
+  const customerCount = Number(data.customer_count) || 0;
+  const maxCustomers = data.max_customers;
+  const usageLabel =
+    maxCustomers == null
+      ? `${customerCount} customers · unlimited`
+      : `${customerCount} / ${maxCustomers} customers`;
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6 animate-fade-in-up max-w-4xl">
       <div>
         <span className="label-overline">Billing</span>
         <h1 className="font-display font-black text-2xl sm:text-4xl mt-0.5 sm:mt-1">Your subscription</h1>
+        <p className="text-sm text-muted-foreground mt-1" data-testid="customer-usage">
+          {usageLabel}
+          {data.tier_label ? ` · ${data.tier_label}` : status === "trialing" ? " · Trial (Professional features)" : null}
+        </p>
       </div>
 
       {pending ? (
@@ -272,9 +301,30 @@ function SubscriptionInner() {
         ) : status === "active" ? (
           <>
             <Check size={28} className="text-secondary" weight="bold" />
-            <div className="flex-1">
-              <div className="font-display font-bold text-lg">Active — {data.subscription?.plan}</div>
-              <div className="text-sm text-muted-foreground">{dl} day{dl === 1 ? "" : "s"} left in your current period.</div>
+            <div className="flex-1" data-testid="active-period-summary">
+              <div className="font-display font-bold text-lg">
+                Active
+                {data.tier_label || data.period_label
+                  ? ` — ${[data.tier_label, data.period_label].filter(Boolean).join(" · ")}`
+                  : data.subscription?.plan
+                    ? ` — ${data.subscription.plan}`
+                    : ""}
+              </div>
+              <div className="text-sm text-muted-foreground">
+                {dl != null ? (
+                  <>
+                    {dl === 0 ? "Expires today" : `${dl} day${dl === 1 ? "" : "s"} left`}
+                    {data.subscription?.current_period_end
+                      ? ` · ends ${fmtDate(data.subscription.current_period_end)}`
+                      : ""}
+                    {(data.renewal_due || (typeof dl === "number" && dl <= 5))
+                      ? " · Renew soon to avoid interruption."
+                      : ""}
+                  </>
+                ) : (
+                  "Current period active."
+                )}
+              </div>
             </div>
           </>
         ) : (
@@ -309,37 +359,105 @@ function SubscriptionInner() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
-        {data.plans.map((p: any) => {
-          const isCurrent = data.subscription?.plan === p.id && status === "active" && !pending;
-          const isRecommended = p.id === "quarterly";
-          return (
-            <div key={p.id} className={`card-tinted p-4 sm:p-6 flex flex-col gap-3 relative ${isRecommended ? "border-primary ring-2 ring-primary/20" : ""}`}>
-              {isRecommended ? <div className="absolute -top-2 left-6 bg-primary text-primary-foreground text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full">Recommended</div> : null}
-              <div className="label-overline">{p.label}</div>
-              <div className="flex items-baseline gap-1">
-                <div className="font-display font-black text-4xl">{fmtCAD(p.price_cad)}</div>
-                <div className="text-sm text-muted-foreground">/ {p.duration_days}d</div>
-              </div>
-              {p.save_hint ? <div className="text-xs text-secondary font-medium">{p.save_hint}</div> : <div className="text-xs text-transparent select-none">.</div>}
-              <ul className="text-sm text-muted-foreground space-y-1.5 mt-2">
-                <li className="flex items-center gap-2"><Check size={14} className="text-secondary" /> Unlimited customers</li>
-                <li className="flex items-center gap-2"><Check size={14} className="text-secondary" /> Daily delivery lists</li>
-                <li className="flex items-center gap-2"><Check size={14} className="text-secondary" /> Interac reconciliation</li>
-                <li className="flex items-center gap-2"><Check size={14} className="text-secondary" /> Consumer portal</li>
-                <li className="flex items-center gap-2"><Check size={14} className="text-secondary" /> All reports + CSV export</li>
-              </ul>
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap gap-2" data-testid="period-toggle">
+          {periods.map((p) => {
+            const disc = Number(p.discount_pct) || 0;
+            const isBestPeriod = p.id === "yearly";
+            return (
               <button
-                data-testid={`activate-${p.id}`}
-                onClick={() => activate(p.id)}
-                disabled={busy === p.id || isCurrent || !!pending}
-                className={`mt-3 pill-btn h-11 disabled:opacity-60 cursor-pointer ${isRecommended ? "btn-primary" : "btn-outline"}`}
+                key={p.id}
+                type="button"
+                data-testid={`period-${p.id}`}
+                onClick={() => setPeriod(p.id)}
+                className={`pill-btn h-10 px-4 text-sm cursor-pointer ${
+                  selectedPeriod === p.id ? "btn-primary" : "btn-outline"
+                }`}
               >
-                {isCurrent ? "Current plan" : busy === p.id ? (isManual ? "Submitting…" : "Activating…") : isManual ? "Pay & activate" : "Choose plan"}
+                {p.label}
+                {disc > 0 ? ` · −${disc}%` : ""}
+                {isBestPeriod ? " · Best value" : ""}
               </button>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
+        <p className="text-sm text-muted-foreground" data-testid="best-combo-hint">
+          Best combo: <span className="font-medium text-foreground">Growth · Yearly · Save 15%</span>
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
+          {periodPlans.map((p: any) => {
+            const isCurrent = data.subscription?.plan === p.id && status === "active" && !pending;
+            const isRecommended = p.tier === "growth";
+            const isBestCombo = isRecommended && selectedPeriod === "yearly";
+            const capLabel =
+              p.max_customers == null
+                ? "Unlimited customers"
+                : `Up to ${p.max_customers} customers`;
+            return (
+              <div
+                key={p.id}
+                className={`card-tinted p-4 sm:p-6 flex flex-col gap-3 relative ${
+                  isRecommended ? "border-primary ring-2 ring-primary/20" : ""
+                }`}
+                data-testid={`plan-card-${p.tier}`}
+              >
+                {isRecommended ? (
+                  <div className="absolute -top-2 left-6 bg-primary text-primary-foreground text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full">
+                    {isBestCombo ? "Best combo · −15%" : "Recommended"}
+                  </div>
+                ) : null}
+                <div className="label-overline">{p.tier_label || p.label}</div>
+                <div className="flex items-baseline gap-1">
+                  <div className="font-display font-black text-4xl">{fmtCAD(p.price_cad)}</div>
+                  <div className="text-sm text-muted-foreground">CAD</div>
+                </div>
+                {p.save_hint || selectedDiscount > 0 ? (
+                  <div className="text-xs text-secondary font-medium">
+                    {p.save_hint || (selectedDiscount > 0 ? `Save ${selectedDiscount}%` : null)}
+                  </div>
+                ) : (
+                  <div className="text-xs text-transparent select-none">.</div>
+                )}
+                <ul className="text-sm text-muted-foreground space-y-1.5 mt-2">
+                  <li className="flex items-center gap-2">
+                    <Check size={14} className="text-secondary" /> {capLabel}
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check size={14} className="text-secondary" /> Daily delivery lists
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check size={14} className="text-secondary" /> Interac reconciliation
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check size={14} className="text-secondary" /> Consumer portal
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check size={14} className="text-secondary" /> All reports + CSV export
+                  </li>
+                </ul>
+                <button
+                  data-testid={`activate-${p.id}`}
+                  onClick={() => activate(p.id)}
+                  disabled={busy === p.id || isCurrent || !!pending}
+                  className={`mt-3 pill-btn h-11 disabled:opacity-60 cursor-pointer ${
+                    isRecommended ? "btn-primary" : "btn-outline"
+                  }`}
+                >
+                  {isCurrent
+                    ? "Current plan"
+                    : busy === p.id
+                      ? isManual
+                        ? "Submitting…"
+                        : "Activating…"
+                      : isManual
+                        ? "Pay & activate"
+                        : "Choose plan"}
+                </button>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       <div className="text-xs text-muted-foreground max-w-2xl">

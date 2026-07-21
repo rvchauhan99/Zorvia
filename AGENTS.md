@@ -14,8 +14,9 @@ Do **not** re-derive platform architecture from scratch each session if these do
 
 ## Non-negotiables
 
+- Do **not** deploy to production (Cloud Run / Vercel) or create git commits / PRs unless the user explicitly asks in that message.
 - Tenancy: `tenant_id = provider_id`; always scope queries.
-- Do not invent Phase 2 features (notification inbox UI, WhatsApp) unless the user asks.
+- Do not invent Phase 2 features (notification inbox UI, WhatsApp **chat inbox**) unless the user asks. Weekly menu WhatsApp **outbound share** is shipped.
 - Waves A–D are **shipped** (staff/roles, Stripe-optional billing, audit log, GST/HST, brand rename).
 - Subscription activate: `BILLING_PROVIDER=none` self-activates; `stripe` uses Checkout + webhook; `manual` uses Interac + optimistic activate + `admin-frontend` review.
 - Integrations must degrade gracefully (Resend stub, R2 → base64, Firebase → 501 / disabled buttons, Stripe → 501 when mode=stripe without keys).

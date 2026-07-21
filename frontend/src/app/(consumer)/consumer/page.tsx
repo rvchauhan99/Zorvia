@@ -13,6 +13,7 @@ import Link from "next/link";
 export default function ConsumerHome() {
   const [me, setMe] = useState<any>(null);
   const [deliveries, setDeliveries] = useState<any[]>([]);
+  const [menu, setMenu] = useState<any | null>(null);
   const [cancelTarget, setCancelTarget] = useState<any>(null);
   const [extraTarget, setExtraTarget] = useState<any | "new" | null>(null);
   const [extraBusy, setExtraBusy] = useState(false);
@@ -21,11 +22,14 @@ export default function ConsumerHome() {
   async function load() {
     setLoading(true);
     try {
-      const [{ data: m }, { data: d }] = await Promise.all([
+      const [{ data: m }, { data: d }, menuRes] = await Promise.all([
         api.get("/consumer/me"),
         api.get("/consumer/deliveries"),
+        api.get("/consumer/menus/current").catch(() => ({ data: null })),
       ]);
-      setMe(m); setDeliveries(d);
+      setMe(m);
+      setDeliveries(d);
+      setMenu(menuRes?.data || null);
     } catch (e) {
       toast.error("Failed to load");
     } finally {
@@ -137,6 +141,24 @@ export default function ConsumerHome() {
           <div className="text-xs text-muted-foreground truncate">{me?.provider?.name || ""}</div>
         </div>
       </div>
+
+      {menu?.image_url ? (
+        <section className="card-tinted p-4 sm:p-5 flex flex-col gap-3" data-testid="consumer-menu-section">
+          <div>
+            <h2 className="font-display font-bold text-xl">This week&apos;s menu</h2>
+            <p className="text-sm text-muted-foreground mt-0.5" data-testid="consumer-menu-label">
+              {menu.label || "Latest menu"}
+            </p>
+          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={menu.image_url}
+            alt={menu.label || "Menu"}
+            data-testid="consumer-menu-image"
+            className="w-full max-h-[420px] object-contain rounded-xl border border-brand-border bg-white"
+          />
+        </section>
+      ) : null}
 
       <section>
         <div className="flex items-center justify-between gap-3 mb-3">

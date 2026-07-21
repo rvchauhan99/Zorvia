@@ -289,6 +289,20 @@ export default function Settings() {
             <span className="block text-xs text-muted-foreground">Confirm consumer cancellations by SMS when Twilio is configured</span>
           </span>
         </label>
+        <label className="flex items-center gap-3 sm:col-span-2 min-h-[44px]" data-testid="whatsapp-menu-share-toggle">
+          <input
+            type="checkbox"
+            checked={prov.settings?.whatsapp_menu_share !== false}
+            onChange={(e) => updSettings("whatsapp_menu_share", e.target.checked)}
+            className="h-5 w-5 rounded border-brand-border"
+          />
+          <span>
+            <span className="font-medium text-sm">WhatsApp menu share</span>
+            <span className="block text-xs text-muted-foreground">
+              Allow sharing weekly menus to opted-in customers via MealHQ WhatsApp
+            </span>
+          </span>
+        </label>
       </div>
 
       <div className="card-tinted p-4 sm:p-6 flex flex-col gap-4" data-testid="closed-dates-section">
