@@ -20,7 +20,7 @@ import { DeliveryTrendChart } from "@/components/analytics/DeliveryTrendChart";
 import { CollectionsChart } from "@/components/analytics/CollectionsChart";
 import { AgingChart } from "@/components/analytics/AgingChart";
 import { KpiSkeleton, PageLoader, SectionSkeleton } from "@/components/loaders";
-import { scheduleSummaryLabel } from "@/components/MealScheduleFields";
+import { customerSlotSummary } from "@/lib/mealSlots";
 import { fetchWhatsappFeaturesEnabled } from "@/lib/whatsapp-features";
 
 type Tab = "overview" | "analysis" | "deliveries" | "payments" | "pauses" | "notes";
@@ -221,7 +221,7 @@ export default function CustomerDetail() {
         ) : (
           <div className="text-right shrink-0">
             <div className="label-overline">Meal schedule</div>
-            <div className="font-display font-black text-2xl">{scheduleSummaryLabel(c.meal_schedule)}</div>
+            <div className="font-display font-black text-2xl">{customerSlotSummary(c)}</div>
           </div>
         )}
       </div>
@@ -252,7 +252,7 @@ export default function CustomerDetail() {
           {showMoney ? (
             <div>
               <div className="label-overline">Price per meal</div>
-              <div className="font-medium">{fmtCAD(c.meal_price)} <span className="text-sm text-muted-foreground font-normal">{scheduleSummaryLabel(c.meal_schedule)}</span></div>
+              <div className="font-medium">{fmtCAD(c.meal_price)} <span className="text-sm text-muted-foreground font-normal">{customerSlotSummary(c)}</span></div>
             </div>
           ) : null}
           <div>
@@ -286,6 +286,10 @@ export default function CustomerDetail() {
               </span>
             </label>
           ) : null}
+          <div>
+            <div className="label-overline">Meal category</div>
+            <div className="text-sm font-medium" data-testid="customer-meal-slots">{customerSlotSummary(c)}</div>
+          </div>
           <div>
             <div className="label-overline">Meal schedule</div>
             <div className="flex gap-0.5 mt-1 flex-wrap">

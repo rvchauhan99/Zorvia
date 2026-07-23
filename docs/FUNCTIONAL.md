@@ -114,7 +114,7 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 | Provider reject | Requires reason; notifies consumer |
 | Status filter UI | Compact horizontal chips (Pending / Verified / Rejected / All); **default = Pending**; label-only (no page-local counts) |
 | Outstanding | Σ `meal_price × quantity` for `delivered` − Σ `amount` for `verified` payments (quantity defaults to 1) |
-| Meal schedule | Customer `meal_schedule` maps weekday → tiffin count; UI supports same-every-day or custom-per-day; one delivery stop per day still |
+| Meal schedule | Customer `meal_slots` (uncategorized default, or lunch and/or dinner) + `slot_schedules` qty per slot; Same every day / Custom per day; dual slots = two stops/day with allocated qty (not duplicated); optional per-slot drivers |
 | List pagination | Provider payments + customers CRM use cursor pages (Load more, page size 25); statement report uses batched aggregations |
 
 ### 4.6 Reports (provider)

@@ -19,23 +19,38 @@ import MealScheduleFields, {
   type ScheduleMode,
   scheduleFromDays,
   daysFromSchedule,
-  detectScheduleMode,
+  detectSlotScheduleMode,
   uniformQty,
-  scheduleSummaryLabel,
 } from "@/components/MealScheduleFields";
+import {
+  type MealSlot,
+  customerSlotSummary,
+  isCategorized,
+  isDualSlots,
+  normalizeMealSlots,
+  unionDaysFromSlotSchedules,
+} from "@/lib/mealSlots";
 
 const empty = {
   name: "", email: "", phone: "", address: "", apartment: "", postal_code: "",
   notes: "", delivery_days: [0, 1, 2, 3, 4], meal_price: "",
   meal_schedule: scheduleFromDays([0, 1, 2, 3, 4], 1),
   meal_quantity: 1,
+  meal_slots: ["uncategorized"] as MealSlot[],
+  lunch_quantity: 1,
+  dinner_quantity: 1,
+  slot_schedules: {} as Record<string, Record<string, number>>,
+  slot_assignments: {
+    lunch: { driver_id: "", delivery_sequence: "" },
+    dinner: { driver_id: "", delivery_sequence: "" },
+  },
   driver_id: "", delivery_sequence: "",
 };
 
-const SAMPLE_CSV = `name,phone,email,address,apartment,postal_code,delivery_days,meal_price,meal_quantity,driver_email,delivery_sequence
-Aarav Sharma,4165551212,aarav@example.com,45 Bloor St W,Unit 302,M5S1M2,"0,1,2,3,4",12,2,,1
-Priya Patel,6475559898,priya@example.com,100 King St E,,M5C1G6,"0,2,4",14,1,,2
-Neha Gupta,9055553344,neha@example.com,12 Queen St W,Suite 5,M5H2N2,"1,3,5",12,1,driver@yourkitchen.ca,3
+const SAMPLE_CSV = `name,phone,email,address,apartment,postal_code,delivery_days,meal_price,meal_quantity,meal_slots,lunch_meal_quantity,dinner_meal_quantity,driver_email,delivery_sequence,lunch_driver_email,lunch_delivery_sequence,dinner_driver_email,dinner_delivery_sequence
+Aarav Sharma,4165551212,aarav@example.com,45 Bloor St W,Unit 302,M5S1M2,"0,1,2,3,4",12,2,uncategorized,,,,1,,,,
+Priya Patel,6475559898,priya@example.com,100 King St E,,M5C1G6,"0,2,4",14,,"lunch,dinner",1,1,,,,,,
+Neha Gupta,9055553344,neha@example.com,12 Queen St W,Suite 5,M5H2N2,"1,3,5",12,1,uncategorized,,,driver@yourkitchen.ca,3,,,,
 `;
 
 function downloadSampleCsv() {
@@ -171,24 +186,62 @@ export default function Customers() {
   }
   function openEdit(c: any) {
     setEditing(c);
+    const slots = normalizeMealSlots(c.meal_slots);
+    const ss: Record<string, Record<string, number>> = {};
+    const rawSs = c.slot_schedules || {};
+    for (const s of slots) {
+      const sched = rawSs[s];
+      if (sched && Object.keys(sched).length) {
+        ss[s] = Object.fromEntries(
+          Object.entries(sched).map(([k, v]) => [String(k), Number(v) || 0]).filter(([, v]) => (v as number) >= 1)
+        );
+      }
+    }
     const schedule =
       c.meal_schedule && Object.keys(c.meal_schedule).length
         ? Object.fromEntries(
             Object.entries(c.meal_schedule).map(([k, v]) => [String(k), Number(v) || 1])
           )
         : scheduleFromDays(c.delivery_days || [], 1);
-    const days = daysFromSchedule(schedule);
+    if (slots.length === 1 && !ss[slots[0]]) {
+      ss[slots[0]] = { ...schedule };
+    }
+    const days = isDualSlots(slots)
+      ? unionDaysFromSlotSchedules(ss)
+      : daysFromSchedule(schedule);
+    const lunchSched = ss.lunch || {};
+    const dinnerSched = ss.dinner || {};
+    const sa = c.slot_assignments || {};
     setForm({
       name: c.name, email: c.email || "", phone: c.phone || "", address: c.address || "",
       apartment: c.apartment || "", postal_code: c.postal_code || "", notes: c.notes || "",
       delivery_days: days.length ? days : (c.delivery_days || []),
       meal_price: c.meal_price ?? "",
       meal_schedule: schedule,
-      meal_quantity: uniformQty(schedule),
-      driver_id: c.driver_id || "",
-      delivery_sequence: c.delivery_sequence != null ? String(c.delivery_sequence) : "",
+      meal_quantity: uniformQty(slots.length === 1 ? (ss[slots[0]] || schedule) : schedule),
+      meal_slots: slots,
+      lunch_quantity: uniformQty(lunchSched) || 1,
+      dinner_quantity: uniformQty(dinnerSched) || 1,
+      slot_schedules: ss,
+      slot_assignments: {
+        lunch: {
+          driver_id: sa.lunch?.driver_id || "",
+          delivery_sequence: sa.lunch?.delivery_sequence != null ? String(sa.lunch.delivery_sequence) : "",
+        },
+        dinner: {
+          driver_id: sa.dinner?.driver_id || "",
+          delivery_sequence: sa.dinner?.delivery_sequence != null ? String(sa.dinner.delivery_sequence) : "",
+        },
+      },
+      driver_id: c.driver_id || (slots.length === 1 && slots[0] !== "uncategorized" ? (sa[slots[0]]?.driver_id || "") : ""),
+      delivery_sequence:
+        c.delivery_sequence != null
+          ? String(c.delivery_sequence)
+          : (slots.length === 1 && slots[0] !== "uncategorized" && sa[slots[0]]?.delivery_sequence != null
+            ? String(sa[slots[0]].delivery_sequence)
+            : ""),
     });
-    setScheduleMode(detectScheduleMode(schedule));
+    setScheduleMode(detectSlotScheduleMode(ss, slots));
     setShowForm(true);
   }
 
@@ -196,6 +249,18 @@ export default function Customers() {
     setForm((f: any) => {
       const on = f.delivery_days.includes(i);
       const days = on ? f.delivery_days.filter((d: number) => d !== i) : [...f.delivery_days, i];
+      const dual = isDualSlots(f.meal_slots);
+      if (dual && scheduleMode === "same") {
+        return {
+          ...f,
+          delivery_days: days,
+          slot_schedules: {
+            lunch: scheduleFromDays(days, f.lunch_quantity),
+            dinner: scheduleFromDays(days, f.dinner_quantity),
+          },
+          meal_schedule: scheduleFromDays(days, f.lunch_quantity + f.dinner_quantity),
+        };
+      }
       let schedule = { ...f.meal_schedule };
       if (on) {
         delete schedule[String(i)];
@@ -205,48 +270,143 @@ export default function Customers() {
       if (scheduleMode === "same") {
         schedule = scheduleFromDays(days, f.meal_quantity);
       }
-      return { ...f, delivery_days: days, meal_schedule: schedule };
+      const slots = normalizeMealSlots(f.meal_slots);
+      const slot_schedules = slots.length === 1 ? { [slots[0]]: schedule } : f.slot_schedules;
+      return { ...f, delivery_days: days, meal_schedule: schedule, slot_schedules };
     });
   }
 
   function changeMode(mode: ScheduleMode) {
     setScheduleMode(mode);
     setForm((f: any) => {
+      const dual = isDualSlots(f.meal_slots);
       if (mode === "same") {
+        if (dual) {
+          const lq = f.lunch_quantity || 1;
+          const dq = f.dinner_quantity || 1;
+          return {
+            ...f,
+            lunch_quantity: lq,
+            dinner_quantity: dq,
+            slot_schedules: {
+              lunch: scheduleFromDays(f.delivery_days, lq),
+              dinner: scheduleFromDays(f.delivery_days, dq),
+            },
+            meal_schedule: scheduleFromDays(f.delivery_days, lq + dq),
+          };
+        }
         const qty = uniformQty(f.meal_schedule) || f.meal_quantity || 1;
+        const schedule = scheduleFromDays(f.delivery_days, qty);
+        const slots = normalizeMealSlots(f.meal_slots);
         return {
           ...f,
           meal_quantity: qty,
-          meal_schedule: scheduleFromDays(f.delivery_days, qty),
+          meal_schedule: schedule,
+          slot_schedules: slots.length === 1 ? { [slots[0]]: schedule } : f.slot_schedules,
         };
       }
       return f;
     });
   }
 
+  function changeMealSlots(slots: MealSlot[]) {
+    setForm((f: any) => {
+      const next = normalizeMealSlots(slots);
+      if (isDualSlots(next)) {
+        const days = f.delivery_days.length ? f.delivery_days : [0, 1, 2, 3, 4];
+        const lq = f.lunch_quantity || 1;
+        const dq = f.dinner_quantity || 1;
+        return {
+          ...f,
+          meal_slots: next,
+          delivery_days: days,
+          lunch_quantity: lq,
+          dinner_quantity: dq,
+          slot_schedules: {
+            lunch: scheduleFromDays(days, lq),
+            dinner: scheduleFromDays(days, dq),
+          },
+          meal_schedule: scheduleFromDays(days, lq + dq),
+        };
+      }
+      const schedule = scheduleFromDays(f.delivery_days, f.meal_quantity || 1);
+      return {
+        ...f,
+        meal_slots: next,
+        meal_schedule: schedule,
+        slot_schedules: { [next[0]]: schedule },
+      };
+    });
+  }
+
   function changeQuantity(qty: number) {
+    setForm((f: any) => {
+      const schedule = scheduleFromDays(f.delivery_days, qty);
+      const slots = normalizeMealSlots(f.meal_slots);
+      return {
+        ...f,
+        meal_quantity: qty,
+        meal_schedule: schedule,
+        slot_schedules: slots.length === 1 ? { [slots[0]]: schedule } : f.slot_schedules,
+      };
+    });
+  }
+
+  function changeLunchQuantity(qty: number) {
     setForm((f: any) => ({
       ...f,
-      meal_quantity: qty,
-      meal_schedule: scheduleFromDays(f.delivery_days, qty),
+      lunch_quantity: qty,
+      slot_schedules: {
+        ...f.slot_schedules,
+        lunch: scheduleFromDays(f.delivery_days, qty),
+        dinner: scheduleFromDays(f.delivery_days, f.dinner_quantity || 1),
+      },
+      meal_schedule: scheduleFromDays(f.delivery_days, qty + (f.dinner_quantity || 1)),
+    }));
+  }
+
+  function changeDinnerQuantity(qty: number) {
+    setForm((f: any) => ({
+      ...f,
+      dinner_quantity: qty,
+      slot_schedules: {
+        ...f.slot_schedules,
+        lunch: scheduleFromDays(f.delivery_days, f.lunch_quantity || 1),
+        dinner: scheduleFromDays(f.delivery_days, qty),
+      },
+      meal_schedule: scheduleFromDays(f.delivery_days, (f.lunch_quantity || 1) + qty),
     }));
   }
 
   function changeDayQuantity(day: number, qty: number) {
-    setForm((f: any) => ({
-      ...f,
-      meal_schedule: { ...f.meal_schedule, [String(day)]: qty },
-    }));
+    setForm((f: any) => {
+      const schedule = { ...f.meal_schedule, [String(day)]: qty };
+      const slots = normalizeMealSlots(f.meal_slots);
+      return {
+        ...f,
+        meal_schedule: schedule,
+        slot_schedules: slots.length === 1 ? { [slots[0]]: schedule } : f.slot_schedules,
+      };
+    });
+  }
+
+  function changeSlotDayQuantity(slot: "lunch" | "dinner", day: number, qty: number) {
+    setForm((f: any) => {
+      const prev = { ...(f.slot_schedules?.[slot] || {}) };
+      if (qty < 1) delete prev[String(day)];
+      else prev[String(day)] = qty;
+      const slot_schedules = { ...f.slot_schedules, [slot]: prev };
+      const days = unionDaysFromSlotSchedules(slot_schedules);
+      return { ...f, slot_schedules, delivery_days: days };
+    });
   }
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     try {
-      const schedule =
-        scheduleMode === "same"
-          ? scheduleFromDays(form.delivery_days, form.meal_quantity)
-          : form.meal_schedule;
+      const slots = normalizeMealSlots(form.meal_slots);
+      const dual = isDualSlots(slots);
       const payload: any = {
         name: form.name,
         phone: form.phone,
@@ -254,16 +414,63 @@ export default function Customers() {
         apartment: form.apartment,
         postal_code: form.postal_code,
         notes: form.notes,
-        delivery_days: daysFromSchedule(schedule),
-        meal_schedule: schedule,
-        driver_id: form.driver_id || null,
-        delivery_sequence:
-          form.delivery_sequence === "" || form.delivery_sequence == null
-            ? null
-            : Number(form.delivery_sequence),
+        meal_slots: slots,
       };
       if (form.email) payload.email = form.email;
       if (form.meal_price !== "" && form.meal_price != null) payload.meal_price = Number(form.meal_price);
+
+      if (dual) {
+        if (scheduleMode === "same") {
+          payload.delivery_days = form.delivery_days;
+          payload.lunch_meal_quantity = form.lunch_quantity;
+          payload.dinner_meal_quantity = form.dinner_quantity;
+        } else {
+          payload.slot_schedules = form.slot_schedules;
+        }
+        payload.slot_assignments = {
+          lunch: {
+            driver_id: form.slot_assignments?.lunch?.driver_id || null,
+            delivery_sequence:
+              form.slot_assignments?.lunch?.delivery_sequence === "" ||
+              form.slot_assignments?.lunch?.delivery_sequence == null
+                ? null
+                : Number(form.slot_assignments.lunch.delivery_sequence),
+          },
+          dinner: {
+            driver_id: form.slot_assignments?.dinner?.driver_id || null,
+            delivery_sequence:
+              form.slot_assignments?.dinner?.delivery_sequence === "" ||
+              form.slot_assignments?.dinner?.delivery_sequence == null
+                ? null
+                : Number(form.slot_assignments.dinner.delivery_sequence),
+          },
+        };
+      } else {
+        const schedule =
+          scheduleMode === "same"
+            ? scheduleFromDays(form.delivery_days, form.meal_quantity)
+            : form.meal_schedule;
+        payload.delivery_days = daysFromSchedule(schedule);
+        payload.meal_schedule = schedule;
+        if (slots[0] === "uncategorized") {
+          payload.driver_id = form.driver_id || null;
+          payload.delivery_sequence =
+            form.delivery_sequence === "" || form.delivery_sequence == null
+              ? null
+              : Number(form.delivery_sequence);
+          payload.slot_assignments = {};
+        } else {
+          payload.slot_assignments = {
+            [slots[0]]: {
+              driver_id: form.driver_id || null,
+              delivery_sequence:
+                form.delivery_sequence === "" || form.delivery_sequence == null
+                  ? null
+                  : Number(form.delivery_sequence),
+            },
+          };
+        }
+      }
 
       if (editing) {
         await api.patch(`/customers/${editing.id}`, payload);
@@ -485,7 +692,7 @@ export default function Customers() {
                     </div>
                     <div className="text-right shrink-0">
                       <div className="text-sm font-semibold px-2 py-0.5 rounded-full bg-brand-surface inline-block">
-                        {scheduleSummaryLabel(c.meal_schedule)}
+                        {customerSlotSummary(c)}
                       </div>
                       {showMoney ? (
                         <>
@@ -571,7 +778,7 @@ export default function Customers() {
                       <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground text-xs">
                         {c.driver_name || "—"}
                       </td>
-                      <td className="px-4 py-3 font-semibold">{scheduleSummaryLabel(c.meal_schedule)}</td>
+                      <td className="px-4 py-3 font-semibold">{customerSlotSummary(c)}</td>
                       {showMoney ? (
                         <td className="px-4 py-3">{fmtCAD(c.meal_price)}</td>
                       ) : null}
@@ -628,52 +835,153 @@ export default function Customers() {
           <label className="flex flex-col gap-1.5 sm:col-span-2"><span className="label-overline">Address</span><input data-testid="cf-address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className={input} /></label>
           <label className="flex flex-col gap-1.5"><span className="label-overline">Apartment</span><input data-testid="cf-apt" value={form.apartment} onChange={(e) => setForm({ ...form, apartment: e.target.value })} className={input} /></label>
           <label className="flex flex-col gap-1.5"><span className="label-overline">Postal code</span><input data-testid="cf-postal" value={form.postal_code} onChange={(e) => setForm({ ...form, postal_code: e.target.value.toUpperCase() })} className={`${input} uppercase`} /></label>
-          <label className="flex flex-col gap-1.5">
-            <span className="label-overline">Assigned driver</span>
-            <select
-              data-testid="cf-driver"
-              value={form.driver_id}
-              onChange={(e) => setForm({ ...form, driver_id: e.target.value })}
-              className={input}
-            >
-              <option value="">Unassigned</option>
-              {drivers.map((d) => (
-                <option key={d.id} value={d.id}>{d.name || d.email}</option>
-              ))}
-            </select>
-            {drivers.length === 0 ? (
-              <span className="text-xs text-muted-foreground">Add staff with role Driver in Settings to assign routes.</span>
-            ) : null}
-          </label>
-          <label className="flex flex-col gap-1.5">
-            <span className="label-overline">Delivery sequence</span>
-            <input
-              type="number"
-              min={1}
-              step={1}
-              data-testid="cf-sequence"
-              value={form.delivery_sequence}
-              onChange={(e) => setForm({ ...form, delivery_sequence: e.target.value })}
-              className={input}
-              placeholder="e.g. 1 (earlier stop)"
-            />
-            <span className="text-xs text-muted-foreground">
-              Stop number for the assigned driver (or unassigned pool). Inserting at an existing number shifts later stops down.
-            </span>
-          </label>
+          {isCategorized(form.meal_slots) && isDualSlots(form.meal_slots) ? (
+            <>
+              <label className="flex flex-col gap-1.5">
+                <span className="label-overline">Lunch driver</span>
+                <select
+                  data-testid="cf-lunch-driver"
+                  value={form.slot_assignments?.lunch?.driver_id || ""}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      slot_assignments: {
+                        ...form.slot_assignments,
+                        lunch: { ...form.slot_assignments.lunch, driver_id: e.target.value },
+                      },
+                    })
+                  }
+                  className={input}
+                >
+                  <option value="">Unassigned</option>
+                  {drivers.map((d) => (
+                    <option key={d.id} value={d.id}>{d.name || d.email}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="label-overline">Lunch sequence</span>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  data-testid="cf-lunch-sequence"
+                  value={form.slot_assignments?.lunch?.delivery_sequence || ""}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      slot_assignments: {
+                        ...form.slot_assignments,
+                        lunch: { ...form.slot_assignments.lunch, delivery_sequence: e.target.value },
+                      },
+                    })
+                  }
+                  className={input}
+                  placeholder="e.g. 1"
+                />
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="label-overline">Dinner driver</span>
+                <select
+                  data-testid="cf-dinner-driver"
+                  value={form.slot_assignments?.dinner?.driver_id || ""}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      slot_assignments: {
+                        ...form.slot_assignments,
+                        dinner: { ...form.slot_assignments.dinner, driver_id: e.target.value },
+                      },
+                    })
+                  }
+                  className={input}
+                >
+                  <option value="">Unassigned</option>
+                  {drivers.map((d) => (
+                    <option key={d.id} value={d.id}>{d.name || d.email}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="label-overline">Dinner sequence</span>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  data-testid="cf-dinner-sequence"
+                  value={form.slot_assignments?.dinner?.delivery_sequence || ""}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      slot_assignments: {
+                        ...form.slot_assignments,
+                        dinner: { ...form.slot_assignments.dinner, delivery_sequence: e.target.value },
+                      },
+                    })
+                  }
+                  className={input}
+                  placeholder="e.g. 1"
+                />
+              </label>
+            </>
+          ) : (
+            <>
+              <label className="flex flex-col gap-1.5">
+                <span className="label-overline">Assigned driver</span>
+                <select
+                  data-testid="cf-driver"
+                  value={form.driver_id}
+                  onChange={(e) => setForm({ ...form, driver_id: e.target.value })}
+                  className={input}
+                >
+                  <option value="">Unassigned</option>
+                  {drivers.map((d) => (
+                    <option key={d.id} value={d.id}>{d.name || d.email}</option>
+                  ))}
+                </select>
+                {drivers.length === 0 ? (
+                  <span className="text-xs text-muted-foreground">Add staff with role Driver in Settings to assign routes.</span>
+                ) : null}
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="label-overline">Delivery sequence</span>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  data-testid="cf-sequence"
+                  value={form.delivery_sequence}
+                  onChange={(e) => setForm({ ...form, delivery_sequence: e.target.value })}
+                  className={input}
+                  placeholder="e.g. 1 (earlier stop)"
+                />
+                <span className="text-xs text-muted-foreground">
+                  Stop number for the assigned driver (or unassigned pool). Inserting at an existing number shifts later stops down.
+                </span>
+              </label>
+            </>
+          )}
           <label className="flex flex-col gap-1.5 sm:col-span-2"><span className="label-overline">Notes</span><textarea data-testid="cf-notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="min-h-[80px] w-full px-4 py-3 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all" /></label>
           <div className="flex flex-col gap-2 sm:col-span-2">
             <span className="label-overline">Meal schedule</span>
             <MealScheduleFields
               mode={scheduleMode}
               onModeChange={changeMode}
+              mealSlots={form.meal_slots}
+              onMealSlotsChange={changeMealSlots}
               deliveryDays={form.delivery_days}
               mealSchedule={form.meal_schedule}
               mealQuantity={form.meal_quantity}
+              lunchQuantity={form.lunch_quantity}
+              dinnerQuantity={form.dinner_quantity}
+              slotSchedules={form.slot_schedules}
               mealPrice={form.meal_price}
               onToggleDay={toggleDay}
               onQuantityChange={changeQuantity}
+              onLunchQuantityChange={changeLunchQuantity}
+              onDinnerQuantityChange={changeDinnerQuantity}
               onDayQuantityChange={changeDayQuantity}
+              onSlotDayQuantityChange={changeSlotDayQuantity}
               inputClassName={input}
             />
           </div>

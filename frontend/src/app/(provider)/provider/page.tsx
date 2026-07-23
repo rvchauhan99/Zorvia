@@ -245,6 +245,12 @@ export default function ProviderDashboard() {
               summary
                 ? `${summary.deliveries.delivered} delivered · ${summary.deliveries.pending} pending${
                     summary.deliveries.meals != null ? ` · ${summary.deliveries.meals} meal${summary.deliveries.meals === 1 ? "" : "s"}` : ""
+                  }${
+                    summary.deliveries.meals_by_slot &&
+                    ((summary.deliveries.meals_by_slot.lunch || 0) > 0 ||
+                      (summary.deliveries.meals_by_slot.dinner || 0) > 0)
+                      ? ` · L ${summary.deliveries.meals_by_slot.lunch || 0} / D ${summary.deliveries.meals_by_slot.dinner || 0}`
+                      : ""
                   }`
                 : ""
             }

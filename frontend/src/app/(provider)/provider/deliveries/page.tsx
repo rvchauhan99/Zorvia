@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canMutateDeliveries, canMutateAdmin } from "@/lib/roles";
 import { fmtDate, todayISO, fmtMealCount, deliveryQty, fmtExtraBadge } from "@/lib/format";
+import { mealSlotBadgeLabel } from "@/lib/mealSlots";
 import StatusPill from "@/components/StatusPill";
 import AppSheet from "@/components/AppSheet";
 import ExtraMealsSheet from "@/components/ExtraMealsSheet";
@@ -236,6 +237,19 @@ export default function Deliveries() {
     [items],
   );
 
+  const mealsBySlot = useMemo(() => {
+    const out = { lunch: 0, dinner: 0, uncategorized: 0 };
+    for (const d of items) {
+      const slot = (d.meal_slot || "uncategorized") as keyof typeof out;
+      const key = slot in out ? slot : "uncategorized";
+      out[key] += deliveryQty(d);
+    }
+    return out;
+  }, [items]);
+
+  const showSlotBreakdown =
+    mealsBySlot.lunch > 0 || mealsBySlot.dinner > 0;
+
   const statusFilters = [
     { k: "all", label: "All", count: items.length },
     { k: "pending", label: "Pending", count: counts.pending || 0 },
@@ -254,6 +268,11 @@ export default function Deliveries() {
           {!loading && items.length > 0 ? (
             <p className="text-xs text-muted-foreground mt-1" data-testid="deliveries-meals-total">
               {items.length} stop{items.length === 1 ? "" : "s"} · {mealsToday} meal{mealsToday === 1 ? "" : "s"}
+              {showSlotBreakdown
+                ? ` · Lunch ${mealsBySlot.lunch} · Dinner ${mealsBySlot.dinner}${
+                    mealsBySlot.uncategorized > 0 ? ` · Uncategorized ${mealsBySlot.uncategorized}` : ""
+                  }`
+                : ""}
             </p>
           ) : null}
           {queueLen > 0 ? (
@@ -380,6 +399,14 @@ export default function Deliveries() {
                       {d.route_order != null ? `#${d.route_order + 1}` : "—"} · {fsa(d.postal_code)}
                     </span>
                     <span className="font-medium truncate">{d.customer_name}</span>
+                    {d.meal_slot && d.meal_slot !== "uncategorized" ? (
+                      <span
+                        className="text-[10px] uppercase tracking-wide font-semibold shrink-0 px-1.5 py-0.5 rounded bg-brand-surface text-muted-foreground"
+                        data-testid={`del-slot-${d.id}`}
+                      >
+                        {mealSlotBadgeLabel(d.meal_slot)}
+                      </span>
+                    ) : null}
                     <span
                       className="text-xs font-semibold sm:hidden ml-auto shrink-0 px-2 py-0.5 rounded-full bg-brand-surface text-foreground"
                       data-testid={`del-meals-${d.id}`}
