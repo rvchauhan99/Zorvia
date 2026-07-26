@@ -33,7 +33,7 @@ import {
 
 const empty = {
   name: "", email: "", phone: "", address: "", apartment: "", postal_code: "",
-  notes: "", delivery_days: [0, 1, 2, 3, 4], meal_price: "",
+  notes: "", delivery_days: [0, 1, 2, 3, 4], meal_type_id: "regular", meal_price: "",
   meal_schedule: scheduleFromDays([0, 1, 2, 3, 4], 1),
   meal_quantity: 1,
   meal_slots: ["uncategorized"] as MealSlot[],
@@ -103,6 +103,11 @@ export default function Customers() {
   const [importing, setImporting] = useState(false);
   const [scheduleMode, setScheduleMode] = useState<ScheduleMode>("same");
   const [staff, setStaff] = useState<any[]>([]);
+  const [mealTypes, setMealTypes] = useState<{ id: string; name: string; price: number }[]>([
+    { id: "regular", name: "Regular", price: 12 },
+    { id: "jain", name: "Jain", price: 12 },
+    { id: "fasting", name: "Fasting", price: 12 },
+  ]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [debouncedQ, setDebouncedQ] = useState("");
@@ -161,8 +166,27 @@ export default function Customers() {
   async function loadStaff() {
     if (!canMutate) return;
     try {
-      const { data } = await api.get("/providers/me/staff");
+      const [{ data }, { data: prov }] = await Promise.all([
+        api.get("/providers/me/staff"),
+        api.get("/providers/me"),
+      ]);
       setStaff(data || []);
+      if (Array.isArray(prov?.meal_types) && prov.meal_types.length) {
+        setMealTypes(
+          prov.meal_types.map((t: any) => ({
+            id: t.id,
+            name: t.name,
+            price: Number(t.price) || 12,
+          }))
+        );
+      } else if (prov?.meal_price_default != null) {
+        const p = Number(prov.meal_price_default) || 12;
+        setMealTypes([
+          { id: "regular", name: "Regular", price: p },
+          { id: "jain", name: "Jain", price: p },
+          { id: "fasting", name: "Fasting", price: p },
+        ]);
+      }
     } catch {
       // staff list optional for viewers
     }
@@ -171,6 +195,11 @@ export default function Customers() {
   useEffect(() => { load(); }, [debouncedQ, filter]);
   useEffect(() => { loadCounts(); }, []);
   useEffect(() => { loadStaff(); }, [canMutate]);
+
+  function priceForMealType(typeId: string) {
+    const row = mealTypes.find((t) => t.id === typeId);
+    return row ? Number(row.price) : Number(mealTypes.find((t) => t.id === "regular")?.price) || 12;
+  }
 
   function reloadAll() {
     load();
@@ -183,7 +212,8 @@ export default function Customers() {
 
   function openCreate() {
     setEditing(null);
-    setForm({ ...empty, joining_date: todayISO() });
+    const price = priceForMealType("regular");
+    setForm({ ...empty, joining_date: todayISO(), meal_type_id: "regular", meal_price: String(price) });
     setScheduleMode("same");
     setShowForm(true);
   }
@@ -223,6 +253,7 @@ export default function Customers() {
       name: c.name, email: c.email || "", phone: c.phone || "", address: c.address || "",
       apartment: c.apartment || "", postal_code: c.postal_code || "", notes: c.notes || "",
       delivery_days: days.length ? days : (c.delivery_days || []),
+      meal_type_id: c.meal_type_id || "regular",
       meal_price: c.meal_price ?? "",
       meal_schedule: schedule,
       meal_quantity: uniformQty(slots.length === 1 ? (ss[slots[0]] || schedule) : schedule),
@@ -427,6 +458,7 @@ export default function Customers() {
         meal_slots: slots,
       };
       if (form.email) payload.email = form.email;
+      if (form.meal_type_id) payload.meal_type_id = form.meal_type_id;
       if (form.meal_price !== "" && form.meal_price != null) payload.meal_price = Number(form.meal_price);
       if (canMutate) {
         if (form.opening_balance !== "" && form.opening_balance != null) {
@@ -719,7 +751,14 @@ export default function Customers() {
                       </div>
                       {showMoney ? (
                         <>
-                          <div className="text-sm font-medium mt-1">{fmtCAD(c.meal_price)}</div>
+                          <div className="text-sm font-medium mt-1">
+                            {fmtCAD(c.meal_price)}
+                            {c.meal_type_id ? (
+                              <span className="text-xs text-muted-foreground font-normal ml-1">
+                                · {mealTypes.find((t) => t.id === c.meal_type_id)?.name || c.meal_type_id}
+                              </span>
+                            ) : null}
+                          </div>
                           <div className={`text-sm font-semibold ${c.outstanding > 0 ? "text-primary" : "text-muted-foreground"}`}>
                             {fmtCAD(c.outstanding || 0)}
                           </div>
@@ -853,7 +892,40 @@ export default function Customers() {
           <label className="flex flex-col gap-1.5"><span className="label-overline">Phone</span><input data-testid="cf-phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className={input} /></label>
           <label className="flex flex-col gap-1.5"><span className="label-overline">Email</span><input type="email" data-testid="cf-email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={input} /></label>
           {canMutate ? (
-            <label className="flex flex-col gap-1.5"><span className="label-overline">Price per meal (CAD)</span><input type="number" step="0.5" data-testid="cf-price" value={form.meal_price} onChange={(e) => setForm({ ...form, meal_price: e.target.value })} className={input} placeholder="Uses default if empty" /></label>
+            <>
+              <label className="flex flex-col gap-1.5">
+                <span className="label-overline">Meal type</span>
+                <select
+                  data-testid="cf-meal-type"
+                  className={input}
+                  value={form.meal_type_id || "regular"}
+                  onChange={(e) => {
+                    const tid = e.target.value;
+                    setForm({
+                      ...form,
+                      meal_type_id: tid,
+                      meal_price: String(priceForMealType(tid)),
+                    });
+                  }}
+                >
+                  {mealTypes.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="label-overline">Price per meal (CAD)</span>
+                <input
+                  type="number"
+                  step="0.5"
+                  data-testid="cf-price"
+                  value={form.meal_price}
+                  onChange={(e) => setForm({ ...form, meal_price: e.target.value })}
+                  className={input}
+                  placeholder="From meal type if empty"
+                />
+              </label>
+            </>
           ) : null}
           {canMutate ? (
             <label className="flex flex-col gap-1.5 sm:col-span-2">

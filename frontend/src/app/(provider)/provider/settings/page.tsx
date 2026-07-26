@@ -59,6 +59,42 @@ export default function Settings() {
     setProv((p: any) => ({ ...p, settings: { ...p.settings, [k]: v } }));
   }
 
+  const mealTypes: { id: string; name: string; price: number | string; is_system?: boolean }[] =
+    Array.isArray(prov.meal_types) && prov.meal_types.length
+      ? prov.meal_types
+      : [
+          { id: "regular", name: "Regular", price: prov.meal_price_default ?? 12, is_system: true },
+          { id: "jain", name: "Jain", price: prov.meal_price_default ?? 12, is_system: true },
+          { id: "fasting", name: "Fasting", price: prov.meal_price_default ?? 12, is_system: true },
+        ];
+
+  function setMealTypes(next: typeof mealTypes) {
+    setProv((p: any) => ({ ...p, meal_types: next }));
+  }
+
+  function updMealTypePrice(id: string, price: string) {
+    setMealTypes(mealTypes.map((t) => (t.id === id ? { ...t, price } : t)));
+  }
+
+  function updMealTypeName(id: string, name: string) {
+    setMealTypes(mealTypes.map((t) => (t.id === id && !t.is_system ? { ...t, name } : t)));
+  }
+
+  function addCustomMealType() {
+    const id = `custom_${Math.random().toString(36).slice(2, 10)}`;
+    const seed = Number(mealTypes.find((t) => t.id === "regular")?.price ?? prov.meal_price_default ?? 12) || 12;
+    setMealTypes([...mealTypes, { id, name: "Custom", price: seed, is_system: false }]);
+  }
+
+  function removeMealType(id: string) {
+    const row = mealTypes.find((t) => t.id === id);
+    if (!row || row.is_system || id === "regular" || id === "jain" || id === "fasting") {
+      toast.error("System meal types cannot be removed");
+      return;
+    }
+    setMealTypes(mealTypes.filter((t) => t.id !== id));
+  }
+
   const closedDates: string[] = [...(prov.settings?.closed_dates || [])].sort();
 
   function addClosedDate() {
@@ -78,11 +114,24 @@ export default function Settings() {
   async function save() {
     setSaving(true);
     try {
+      const typesPayload = mealTypes.map((t) => ({
+        id: t.id,
+        name: t.name,
+        price: Number(t.price),
+        is_system: !!t.is_system || ["regular", "jain", "fasting"].includes(t.id),
+      }));
+      for (const t of typesPayload) {
+        if (!t.name?.trim() || !(t.price > 0)) {
+          toast.error("Each meal type needs a name and price greater than 0");
+          setSaving(false);
+          return;
+        }
+      }
       const payload = {
         name: prov.name,
         address: prov.address,
         interac_email: prov.interac_email,
-        meal_price_default: Number(prov.meal_price_default),
+        meal_types: typesPayload,
         cutoff_hours: Number(prov.settings?.cutoff_hours),
         timezone: prov.settings?.timezone,
         closed_dates: prov.settings?.closed_dates || [],
@@ -248,10 +297,65 @@ export default function Settings() {
           <span className="label-overline">Address</span>
           <input data-testid="s-address" className={input} value={prov.address || ""} onChange={(e) => upd("address", e.target.value)} />
         </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="label-overline">Default meal price (CAD)</span>
-          <input data-testid="s-price" type="number" step="0.5" className={input} value={prov.meal_price_default} onChange={(e) => upd("meal_price_default", e.target.value)} />
-        </label>
+        <div className="sm:col-span-2 flex flex-col gap-3" data-testid="s-meal-types">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <span className="label-overline">Meal types</span>
+              <p className="text-xs text-muted-foreground mt-0.5">Per-type CAD prices. Regular / Jain / Fasting are always available; add custom types if needed.</p>
+            </div>
+            <button
+              type="button"
+              data-testid="s-meal-type-add"
+              onClick={addCustomMealType}
+              className="inline-flex items-center gap-1.5 h-10 px-3 rounded-full border border-brand-border bg-white text-sm font-medium hover:bg-brand-surface cursor-pointer"
+            >
+              <Plus size={14} weight="bold" /> Add type
+            </button>
+          </div>
+          <ul className="flex flex-col gap-2">
+            {mealTypes.map((t) => {
+              const locked = !!t.is_system || ["regular", "jain", "fasting"].includes(t.id);
+              return (
+                <li key={t.id} className="flex flex-col sm:flex-row gap-2 sm:items-center" data-testid={`s-meal-type-${t.id}`}>
+                  <input
+                    data-testid={`s-meal-type-name-${t.id}`}
+                    className={`${input} flex-1`}
+                    value={t.name}
+                    disabled={locked}
+                    onChange={(e) => updMealTypeName(t.id, e.target.value)}
+                    aria-label="Meal type name"
+                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      data-testid={t.id === "regular" ? "s-price" : `s-meal-type-price-${t.id}`}
+                      type="number"
+                      step="0.5"
+                      min={0.01}
+                      className={`${input} w-28`}
+                      value={t.price}
+                      onChange={(e) => updMealTypePrice(t.id, e.target.value)}
+                      aria-label={`${t.name} price CAD`}
+                    />
+                    <span className="text-xs text-muted-foreground shrink-0">CAD</span>
+                    {!locked ? (
+                      <button
+                        type="button"
+                        data-testid={`s-meal-type-remove-${t.id}`}
+                        onClick={() => removeMealType(t.id)}
+                        className="h-11 w-11 inline-flex items-center justify-center rounded-xl border border-destructive/30 text-destructive hover:bg-destructive/10 cursor-pointer"
+                        aria-label="Remove meal type"
+                      >
+                        <Trash size={16} />
+                      </button>
+                    ) : (
+                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground w-11 text-center">Core</span>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
         <label className="flex flex-col gap-1.5">
           <span className="label-overline">Cancellation cutoff (h)</span>
           <input data-testid="s-cutoff" type="number" className={input} value={prov.settings?.cutoff_hours ?? 4} onChange={(e) => updSettings("cutoff_hours", e.target.value)} />

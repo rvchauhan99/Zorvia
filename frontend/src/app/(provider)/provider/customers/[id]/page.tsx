@@ -276,8 +276,13 @@ export default function CustomerDetail() {
           </div>
           {showMoney ? (
             <div>
-              <div className="label-overline">Price per meal</div>
-              <div className="font-medium">{fmtCAD(c.meal_price)} <span className="text-sm text-muted-foreground font-normal">{customerSlotSummary(c)}</span></div>
+              <div className="label-overline">Meal type / price</div>
+              <div className="font-medium" data-testid="customer-meal-type-price">
+                {(c.meal_type_id || "regular").replace(/^\w/, (ch: string) => ch.toUpperCase())}
+                {" · "}
+                {fmtCAD(c.meal_price)}{" "}
+                <span className="text-sm text-muted-foreground font-normal">{customerSlotSummary(c)}</span>
+              </div>
             </div>
           ) : null}
           <div>

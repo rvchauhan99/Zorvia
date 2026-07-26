@@ -17,7 +17,7 @@ Zorvia is a multi-tenant SaaS for **Canadian tiffin providers**. Provider admins
 | Persona | Who | Primary goals |
 |---------|-----|---------------|
 | **Provider Admin** | Owner-operator of a tiffin kitchen | Onboard customers, run daily delivery list, verify Interac payments, export reports, manage org settings and SaaS subscription |
-| **Provider Driver** | Delivery staff under a provider | Mark deliveries delivered/missed, reorder route, bulk mark — Deliveries module only |
+| **Provider Driver** | Delivery staff under a provider | Mark deliveries + view Kitchen cook plan — Deliveries + Kitchen |
 | **Provider Viewer** | Read-only staff | View dashboard, customers, deliveries, payments, reports — no mutate, no settings/subscription |
 | **Consumer** | Meal subscriber under one provider | See balance and deliveries, cancel before cutoff, submit payments |
 
@@ -43,6 +43,7 @@ There are **staff roles** on `platform_users`: `admin` (default), `driver` (deli
 | Dashboard | Full + quick mark + money KPIs | Ops KPIs only (no CAD); meal counts on route | Redirect → Deliveries |
 | Customers | Full (price + outstanding; High balance filter) | Read; meal schedule qty only — no CAD; High balance filter hidden | Blocked (API + redirect) |
 | Deliveries | Full; **meal count on every stop** (never price) | Read; meal count only | Full mark/reorder/bulk; meal count only |
+| Kitchen | Cook plan (type × slot counts + pack list); no CAD | Same (read) | Same (read) |
 | Payments | Full (amounts) | Read; status/ref without CAD amounts | Blocked |
 | Analysis / Reports | Full money KPIs + CSV | Meal/stop metrics; CAD hidden (area chart = customer counts; money tabs + Export CSV gated) | Blocked (API 403 + redirect) |
 | Settings / Subscription | Full | No access | No access |
@@ -71,7 +72,7 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 | Feature | Behavior |
 |---------|----------|
 | Profile | Org name, contact, Interac email, address fields |
-| Settings | `cutoff_hours`, default meal price, timezone, signup code (shareable), kitchen logo (512×512), `closed_dates` (holidays), change password |
+| Settings | `cutoff_hours`, **meal types** (Regular / Jain / Fasting + custom) with per-type CAD price, timezone, signup code (shareable), kitchen logo (512×512), `closed_dates` (holidays), change password |
 | Signup code | Chosen by provider at signup; **letters/numbers only** (3–32); stored uppercase; unique case-insensitively across tenants; consumers join with case-insensitive match |
 | Kitchen logo | Optional; Camera or Upload on settings → Pillow square resize 512 → R2 (`logos/`) or data-URL fallback |
 | Consumer avatar | Optional on signup (deferred upload after verify) and profile; Camera or Upload; 256×256 → R2 (`avatars/`) |
@@ -86,7 +87,8 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 | Filters (UI) | Compact horizontal chips: all \| pending \| paused \| inactive \| high_balance (with counts) |
 | Mobile list | Whole customer card opens Analysis (`/provider/customers/{id}?tab=analysis`); action buttons stop propagation |
 | Delivery days | Weekday indices `0=Mon … 6=Sun` |
-| Meal price | Per-customer CAD amount used on generated deliveries |
+| Meal type | Provider Settings define Regular / Jain / Fasting (+ custom); CRM defaults to **Regular**; changing type auto-fills price from settings (editable) |
+| Meal price | Per-customer CAD unit price on generated deliveries; defaults from selected meal type’s price when omitted |
 | Opening balance | Signed CAD on create/edit/import: positive = outstanding owed at onboard; negative = advance credit; included in displayed outstanding |
 | Joining date | Optional `joining_date` (defaults to today on create/import); distinct from system `created_at` |
 | Payment collection day | Optional day of month `1–31` when provider typically collects |
@@ -104,6 +106,7 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 | Provider mark | One-tap delivered / missed / cancelled (**today or past only**; not future) |
 | Consumer cancel | Upcoming `pending` only; blocked for past dates; within `cutoff_hours` before assumed **local noon** (provider timezone) |
 | Extra meals | Consumer or provider admin adds tiffins for a date (bumps `quantity`, tracks `extra_quantity`); one stop/day; consumer uses same cutoff as cancel (auto-apply, no approval); priced at unit `meal_price`; outstanding when delivered; provider quick access on Dashboard / Deliveries / Customers headers (admin) |
+| Kitchen cook plan | `/provider/kitchen` for admin/driver/viewer; `GET /reports/kitchen-summary`; counts by meal type × slot for pending+delivered; pack list with CRM notes; delivery snapshots `meal_type_id`/`meal_type_name` at generate |
 
 ### 4.5 Payments (Interac)
 
@@ -124,6 +127,7 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 
 - Dashboard remains the day-of-operations cockpit: today’s required meals, pending / delivered / missed / cancelled deliveries, today’s collections, outstanding balance, pending payment approvals, pending customer approvals, and route quick actions.
 - Dashboard loads sections independently (summary KPIs, kitchen profile, today’s route) so KPI cards paint as soon as their request finishes—without waiting for the slowest call.
+- Quick mark (Deliver / Miss) on Today’s route refetches summary; backend invalidates the outstanding TTL cache so Outstanding and related KPIs update on that refetch (not stuck up to ~45s).
 - Analysis (`/provider/analysis`) is the period business-health report: 7d / 30d / 90d / MTD KPIs, charts, receivables aging, **overdue by payment collection day**, top outstanding / top overdue customers, top collectors, area concentration, and rule-based highlights. Top customer rows deep-link to `/provider/customers/{id}?tab=analysis`.
 - Analysis and customer Analysis use shared KPI/section skeletons on first load; period changes keep previous KPIs visible (stale-while-revalidate) with a small spinner on the period toggle, then staggered reveal of charts/lists.
 - Per-customer Analysis (customer detail tab) reuses the same analytics kit scoped via `GET /customers/{id}/insights` plus the activity timeline; shows overdue badge when past collection day.
@@ -320,7 +324,7 @@ WhatsApp menu shares are **not** included in the SaaS subscription.
 
 | Item | Notes |
 |------|-------|
-| Staff / driver / viewer | Access matrix in §3; FE `lib/roles.ts`; layout redirects; More link filter; dashboard marks admin-only; drivers land on `/provider/deliveries` (never call dashboard APIs) |
+| Staff / driver / viewer | Access matrix in §3; FE `lib/roles.ts`; layout redirects; More link filter; dashboard marks admin-only; drivers land on `/provider/deliveries` and can open `/provider/kitchen` |
 | Route order | `PATCH /deliveries/route-order`; up/down + Open in Maps |
 | PWA | `manifest.webmanifest`, `sw.js`, offline delivery status queue |
 | Live board | Deliveries poll 10s when focused; nav badges every 45s |

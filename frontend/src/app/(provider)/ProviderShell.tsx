@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { House, Users, Truck, Receipt, DotsThree, SignOut, ChartLine, Sparkle, Warning, CreditCard, ForkKnife } from "@phosphor-icons/react";
+import { House, Users, Truck, Receipt, DotsThree, SignOut, ChartLine, Sparkle, Warning, CreditCard, ForkKnife, CookingPot } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
 import { isAdmin, isDriver as roleIsDriver, canMutateAdmin, staffRole } from "@/lib/roles";
@@ -15,6 +15,7 @@ const allItems = [
   { to: "/provider", label: "Dashboard", icon: House, testid: "nav-dashboard", end: true },
   { to: "/provider/customers", label: "Customers", icon: Users, testid: "nav-customers" },
   { to: "/provider/deliveries", label: "Deliveries", icon: Truck, testid: "nav-deliveries" },
+  { to: "/provider/kitchen", label: "Kitchen", icon: CookingPot, testid: "nav-kitchen" },
   { to: "/provider/payments", label: "Payments", icon: Receipt, testid: "nav-payments" },
   { to: "/provider/more", label: "More", icon: DotsThree, testid: "nav-more" },
 ];
@@ -73,10 +74,17 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
 
   const items = useMemo(() => {
     if (isDriver) {
-      return allItems.filter((it) => it.to === "/provider/deliveries");
+      return allItems.filter(
+        (it) => it.to === "/provider/deliveries" || it.to === "/provider/kitchen"
+      );
     }
     return allItems;
   }, [isDriver]);
+
+  const sideItems = useMemo(
+    () => items.filter((it) => it.to !== "/provider/more"),
+    [items]
+  );
 
   useEffect(() => {
     if (!ready) return;
@@ -84,7 +92,11 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
       router.replace("/login");
       return;
     }
-    if (isDriver && !pathname.startsWith("/provider/deliveries")) {
+    if (
+      isDriver &&
+      !pathname.startsWith("/provider/deliveries") &&
+      !pathname.startsWith("/provider/kitchen")
+    ) {
       router.replace("/provider/deliveries");
       return;
     }
@@ -197,7 +209,7 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
           </div>
         </div>
         <nav className="flex flex-col gap-1">
-          {(isDriver ? items : items.slice(0, 4)).map((it) => {
+          {sideItems.map((it) => {
             const isActive = it.end ? pathname === it.to : pathname.startsWith(it.to);
             const badge =
               it.to === "/provider/payments" ? badges.pendingPayments
