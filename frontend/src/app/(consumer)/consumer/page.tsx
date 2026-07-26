@@ -52,15 +52,26 @@ export default function ConsumerHome() {
     }
   }
 
-  async function confirmExtra({ date, quantity }: { date: string; quantity: number }) {
+  async function confirmAdjust(args: {
+    date: string;
+    quantity: number;
+    meal_slot?: string | null;
+    meal_type_id?: string | null;
+    meal_price?: number | null;
+  }) {
     setExtraBusy(true);
     try {
-      await api.post("/consumer/deliveries/extra", { date, quantity });
-      toast.success(quantity === 1 ? "Extra meal added" : `${quantity} extra meals added`);
-      setExtraTarget(null);
+      const { data } = await api.post("/consumer/deliveries/adjust", {
+        date: args.date,
+        quantity: args.quantity,
+        meal_slot: args.meal_slot || undefined,
+        meal_type_id: args.meal_type_id || undefined,
+      });
+      toast.success("Meal adjusted");
       load();
+      return data;
     } catch (e: any) {
-      toast.error(e?.response?.data?.detail || "Failed to add extra meal");
+      toast.error(e?.response?.data?.detail || "Failed to adjust meal");
     } finally {
       setExtraBusy(false);
     }
@@ -174,11 +185,11 @@ export default function ConsumerHome() {
           <h2 className="font-display font-bold text-xl">Upcoming</h2>
           <button
             type="button"
-            data-testid="c-extra-new"
+            data-testid="c-adjust-new"
             onClick={() => setExtraTarget("new")}
             className="h-10 px-3 rounded-full border border-brand-border bg-white text-sm inline-flex items-center gap-1.5 hover:bg-brand-surface cursor-pointer"
           >
-            <Plus size={16} /> Extra meal
+            <Plus size={16} /> Adjust meal
           </button>
         </div>
         <ul className="card-tinted divide-y divide-brand-border overflow-hidden">
@@ -205,12 +216,12 @@ export default function ConsumerHome() {
                 {d.status === "pending" ? (
                   <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                     <button
-                      data-testid={`c-extra-${d.id}`}
+                      data-testid={`c-adjust-${d.id}`}
                       type="button"
                       onClick={() => setExtraTarget(d)}
                       className="w-full sm:w-auto h-11 min-h-[44px] px-4 rounded-full border border-brand-border bg-white text-sm inline-flex items-center justify-center gap-1 hover:bg-brand-surface cursor-pointer transition-colors"
                     >
-                      <Plus size={16} /> Extra
+                      <Plus size={16} /> Adjust
                     </button>
                     <button
                       data-testid={`c-cancel-${d.id}`}
@@ -275,15 +286,46 @@ export default function ConsumerHome() {
       <ExtraMealsSheet
         open={extraOpen}
         onClose={() => setExtraTarget(null)}
-        onConfirm={confirmExtra}
-        title={extraTarget === "new" ? "Request extra meal" : `Extra for ${fmtDate(extraDefaultDate)}`}
+        onConfirm={confirmAdjust}
+        title={extraTarget === "new" ? "Adjust meal" : `Adjust for ${fmtDate(extraDefaultDate)}`}
         defaultDate={extraDefaultDate}
         showDate={extraTarget === "new"}
         mealPrice={mealPrice}
         currentQty={extraCurrentQty}
         cutoffHours={cutoffHours}
         busy={extraBusy}
-        confirmTestId="c-extra-confirm"
+        confirmTestId="c-adjust-confirm"
+        mealTypes={
+          Array.isArray(me?.provider?.meal_types)
+            ? me.provider.meal_types.map((t: any) => ({
+                id: String(t.id),
+                name: String(t.name || t.id),
+                price: Number(t.price) || 0,
+              }))
+            : []
+        }
+        defaultMealTypeId={
+          (extraTarget && extraTarget !== "new" && extraTarget.meal_type_id) ||
+          me?.customer?.meal_type_id ||
+          "regular"
+        }
+        mealSlots={
+          Array.isArray(me?.customer?.meal_slots) && me.customer.meal_slots.length
+            ? me.customer.meal_slots
+            : extraTarget && extraTarget !== "new" && extraTarget.meal_slot
+              ? [extraTarget.meal_slot]
+              : ["uncategorized"]
+        }
+        defaultMealSlot={
+          extraTarget && extraTarget !== "new"
+            ? extraTarget.meal_slot || null
+            : Array.isArray(me?.customer?.meal_slots) && me.customer.meal_slots.length === 1
+              ? me.customer.meal_slots[0]
+              : null
+        }
+        customerId={me?.customer?.id}
+        customerName={me?.customer?.name}
+        summaryMode="consumer"
       />
     </div>
   );

@@ -1,4 +1,6 @@
-export type PeriodKey = "7d" | "30d" | "90d" | "mtd";
+export type PeriodKey = "7d" | "30d" | "90d" | "mtd" | "last_month" | "ytd" | "custom";
+
+export type MealSlotFilter = "all" | "lunch" | "dinner" | "uncategorized";
 
 export type KpiValue = {
   value: number;
@@ -18,7 +20,7 @@ export type AgingBuckets = Record<"0_7" | "8_14" | "15_30" | "30_plus", number>;
 export type OverdueAgingBuckets = Record<"1_7" | "8_14" | "15_30" | "30_plus", number>;
 
 export type BusinessInsights = {
-  period: { key: PeriodKey; start: string; end: string };
+  period: { key: PeriodKey | string; start: string; end: string };
   prior_period: { start: string; end: string };
   kpis: Record<string, KpiValue>;
   series: Array<{
@@ -48,7 +50,7 @@ export type BusinessInsights = {
 export type CustomerInsights = {
   customer_id: string;
   customer_name: string;
-  period: { key: PeriodKey; start: string; end: string };
+  period: { key: PeriodKey | string; start: string; end: string };
   prior_period: { start: string; end: string };
   kpis: Record<string, KpiValue>;
   series: BusinessInsights["series"];
@@ -68,11 +70,21 @@ export type CustomerTimelineEvent = {
   data?: Record<string, any>;
 };
 
-export const PERIODS: Array<{ key: PeriodKey; label: string }> = [
+/** Preset chips (Custom is activated by editing From/To). */
+export const PERIODS: Array<{ key: Exclude<PeriodKey, "custom">; label: string }> = [
   { key: "7d", label: "7 days" },
   { key: "30d", label: "30 days" },
   { key: "90d", label: "90 days" },
   { key: "mtd", label: "MTD" },
+  { key: "last_month", label: "Last month" },
+  { key: "ytd", label: "YTD" },
+];
+
+export const MEAL_SLOT_FILTERS: Array<{ key: MealSlotFilter; label: string }> = [
+  { key: "all", label: "All slots" },
+  { key: "lunch", label: "Lunch" },
+  { key: "dinner", label: "Dinner" },
+  { key: "uncategorized", label: "Uncategorized" },
 ];
 
 export function fmtDelta(kpi?: KpiValue, suffix = "") {
@@ -106,4 +118,25 @@ export function overdueAgingRows(ar?: OverdueAgingBuckets) {
     { label: "15-30 days", value: d["15_30"] || 0 },
     { label: "30+ days", value: d["30_plus"] || 0 },
   ];
+}
+
+export type InsightsQuery = {
+  period: PeriodKey;
+  start?: string;
+  end?: string;
+  meal_slot?: MealSlotFilter;
+};
+
+export function insightsParams(q: InsightsQuery): Record<string, string> {
+  const params: Record<string, string> = {};
+  if (q.period === "custom" && q.start && q.end) {
+    params.start = q.start;
+    params.end = q.end;
+  } else if (q.period !== "custom") {
+    params.period = q.period;
+  }
+  if (q.meal_slot && q.meal_slot !== "all") {
+    params.meal_slot = q.meal_slot;
+  }
+  return params;
 }

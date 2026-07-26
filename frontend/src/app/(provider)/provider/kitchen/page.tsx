@@ -4,6 +4,8 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Printer } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import { isDriver as sessionIsDriver } from "@/lib/roles";
 import { fmtDate, todayISO } from "@/lib/format";
 import { mealSlotBadgeLabel } from "@/lib/mealSlots";
 import { StatusFilterCards } from "@/components/StatusFilterCards";
@@ -12,15 +14,30 @@ import { InlineLoader } from "@/components/loaders";
 type SlotFilter = "all" | "lunch" | "dinner" | "uncategorized";
 
 export default function KitchenPage() {
+  const { session } = useAuth();
+  const isDriver = sessionIsDriver(session);
   const [date, setDate] = useState(todayISO());
   const [slotFilter, setSlotFilter] = useState<SlotFilter>("all");
+  const [q, setQ] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
+  const [driverId, setDriverId] = useState("");
+  const [drivers, setDrivers] = useState<{ id: string; name: string }[]>([]);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(q.trim()), 300);
+    return () => clearTimeout(t);
+  }, [q]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const { data: summary } = await api.get(`/reports/kitchen-summary?date=${date}`);
+      const params: Record<string, string> = { date };
+      if (debouncedQ) params.q = debouncedQ;
+      if (!isDriver && driverId) params.driver_id = driverId;
+      if (slotFilter !== "all") params.meal_slot = slotFilter;
+      const { data: summary } = await api.get(`/reports/kitchen-summary`, { params });
       setData(summary);
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || "Failed to load kitchen plan");
@@ -28,23 +45,33 @@ export default function KitchenPage() {
     } finally {
       setLoading(false);
     }
-  }, [date]);
+  }, [date, debouncedQ, driverId, slotFilter, isDriver]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const matrix = useMemo(() => {
-    const rows = data?.matrix || [];
-    if (slotFilter === "all") return rows;
-    return rows.filter((r: any) => r.slot === slotFilter);
-  }, [data, slotFilter]);
+  useEffect(() => {
+    if (isDriver) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: staff } = await api.get("/providers/me/staff");
+        if (cancelled) return;
+        setDrivers(
+          (Array.isArray(staff) ? staff : [])
+            .filter((s: any) => (s.role || "admin") === "driver")
+            .map((s: any) => ({ id: s.id, name: s.name || s.email || s.id }))
+        );
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isDriver]);
 
-  const packList = useMemo(() => {
-    const rows = data?.pack_list || [];
-    if (slotFilter === "all") return rows;
-    return rows.filter((r: any) => r.meal_slot === slotFilter);
-  }, [data, slotFilter]);
+  const matrix = useMemo(() => data?.matrix || [], [data]);
+  const packList = useMemo(() => data?.pack_list || [], [data]);
 
   const typeNames = useMemo(() => {
     const names = new Set<string>();
@@ -108,7 +135,27 @@ export default function KitchenPage() {
         </div>
       </div>
 
-      <div className="print:hidden">
+      <div className="flex flex-col gap-2 print:hidden">
+        <input
+          data-testid="kitchen-search"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search pack list (name, notes…)"
+          className="h-10 w-full px-3 rounded-xl bg-white border border-brand-border text-sm"
+        />
+        {!isDriver ? (
+          <select
+            data-testid="kitchen-driver-filter"
+            value={driverId}
+            onChange={(e) => setDriverId(e.target.value)}
+            className="h-10 px-3 rounded-xl bg-white border border-brand-border text-sm w-full sm:w-auto"
+          >
+            <option value="">All drivers</option>
+            {drivers.map((d) => (
+              <option key={d.id} value={d.id}>{d.name}</option>
+            ))}
+          </select>
+        ) : null}
         <StatusFilterCards
           options={filterCards}
           value={slotFilter}

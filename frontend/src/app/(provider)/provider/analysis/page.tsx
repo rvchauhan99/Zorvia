@@ -8,7 +8,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canSeePricing } from "@/lib/roles";
 import { fmtCAD } from "@/lib/format";
-import { type BusinessInsights, type PeriodKey } from "@/lib/analytics";
+import { insightsParams, type BusinessInsights, type MealSlotFilter, type PeriodKey } from "@/lib/analytics";
 import { KpiCard } from "@/components/analytics/KpiCard";
 import { PeriodToggle } from "@/components/analytics/PeriodToggle";
 import { HighlightsPanel } from "@/components/analytics/HighlightsPanel";
@@ -17,6 +17,7 @@ import { CollectionsChart } from "@/components/analytics/CollectionsChart";
 import { AgingChart } from "@/components/analytics/AgingChart";
 import { AreaChart } from "@/components/analytics/AreaChart";
 import { KpiSkeleton, SectionSkeleton } from "@/components/loaders";
+import { todayISO } from "@/lib/format";
 
 function percent(value?: number) {
   return `${Number(value || 0).toFixed(1)}%`;
@@ -71,11 +72,7 @@ function TopList({
                 )}
                 {row.count ? <div className="text-xs text-muted-foreground">{row.count} payment{row.count === 1 ? "" : "s"}</div> : null}
                 {subtitleKey && row[subtitleKey] != null ? (
-                  <div className="text-xs text-muted-foreground">
-                    {subtitleKey === "days_overdue"
-                      ? `${row.days_overdue} day${row.days_overdue === 1 ? "" : "s"} overdue`
-                      : String(row[subtitleKey])}
-                  </div>
+                  <div className="text-xs text-muted-foreground">{String(row[subtitleKey])}</div>
                 ) : null}
               </div>
               {showMoney ? (
@@ -95,14 +92,32 @@ export default function AnalysisPage() {
   const { session } = useAuth();
   const showMoney = canSeePricing(session);
   const [period, setPeriod] = useState<PeriodKey>("30d");
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState(todayISO());
+  const [mealSlot, setMealSlot] = useState<MealSlotFilter>("all");
   const [data, setData] = useState<BusinessInsights | null>(null);
   const [loading, setLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
 
-  async function load(nextPeriod = period) {
+  async function load(opts?: {
+    period?: PeriodKey;
+    start?: string;
+    end?: string;
+    meal_slot?: MealSlotFilter;
+  }) {
+    const nextPeriod = opts?.period ?? period;
+    const start = opts?.start ?? customStart;
+    const end = opts?.end ?? customEnd;
+    const slot = opts?.meal_slot ?? mealSlot;
+    if (nextPeriod === "custom" && (!start || !end)) {
+      toast.error("Choose From and To dates for a custom range");
+      return;
+    }
     setLoading(true);
     try {
-      const { data } = await api.get<BusinessInsights>("/reports/business-insights", { params: { period: nextPeriod } });
+      const { data } = await api.get<BusinessInsights>("/reports/business-insights", {
+        params: insightsParams({ period: nextPeriod, start, end, meal_slot: slot }),
+      });
       setData(data);
     } catch (e) {
       toast.error("Failed to load analysis");
@@ -112,12 +127,32 @@ export default function AnalysisPage() {
   }
 
   useEffect(() => {
-    load(period);
+    load({ period: "30d" });
   }, []);
 
   function changePeriod(next: PeriodKey) {
     startTransition(() => setPeriod(next));
-    load(next);
+    if (next === "custom") {
+      const end = customEnd || todayISO();
+      const start = customStart || end;
+      setCustomEnd(end);
+      if (!customStart) setCustomStart(start);
+      load({ period: "custom", start: customStart || start, end });
+      return;
+    }
+    load({ period: next });
+  }
+
+  function changeCustomRange(start: string, end: string) {
+    setCustomStart(start);
+    setCustomEnd(end);
+    startTransition(() => setPeriod("custom"));
+    if (start && end) load({ period: "custom", start, end });
+  }
+
+  function changeMealSlot(slot: MealSlotFilter) {
+    startTransition(() => setMealSlot(slot));
+    load({ meal_slot: slot });
   }
 
   const k = data?.kpis || {};
@@ -135,7 +170,16 @@ export default function AnalysisPage() {
           </p>
         </div>
         <div className="flex flex-col sm:items-end gap-2">
-          <PeriodToggle value={period} onChange={changePeriod} busy={busy} />
+          <PeriodToggle
+            value={period}
+            onChange={changePeriod}
+            busy={busy}
+            customStart={customStart}
+            customEnd={customEnd}
+            onCustomRangeChange={changeCustomRange}
+            mealSlot={mealSlot}
+            onMealSlotChange={changeMealSlot}
+          />
           {data ? (
             <span className="text-xs text-muted-foreground" data-testid="analysis-period-range">
               {data.period.start} to {data.period.end}
@@ -167,14 +211,13 @@ export default function AnalysisPage() {
                 <>
                   <KpiCard testid="kpi-collections" label="Collections" value={fmtCAD(k.collections_amount?.value || 0)} kpi={k.collections_amount} hint={`${k.collections_count?.value || 0} verified payments`} />
                   <KpiCard testid="kpi-delivered-revenue" label="Delivered revenue" value={fmtCAD(k.delivered_revenue?.value || 0)} kpi={k.delivered_revenue} hint={`${k.delivered_count?.value || 0} delivered meals`} />
-                  <KpiCard testid="kpi-outstanding" label="Outstanding" value={fmtCAD(k.outstanding_total?.value || 0)} kpi={k.outstanding_total} hint="Current receivables" inverseDelta />
+                  <KpiCard testid="kpi-outstanding" label="Outstanding" value={fmtCAD(k.outstanding_total?.value || 0)} kpi={k.outstanding_total} hint="Receivables owed (excludes advances)" inverseDelta />
                   <KpiCard
-                    testid="kpi-overdue"
-                    label="Overdue"
-                    value={fmtCAD(k.overdue_total?.value || 0)}
-                    kpi={k.overdue_total}
-                    hint={`${k.overdue_customers_count?.value || 0} past collection day`}
-                    inverseDelta
+                    testid="kpi-customer-credit"
+                    label="Customer credit"
+                    value={fmtCAD(k.customer_credit_total?.value || 0)}
+                    kpi={k.customer_credit_total}
+                    hint="Advances on account"
                   />
                 </>
               ) : (
@@ -196,9 +239,6 @@ export default function AnalysisPage() {
               <>
                 <div className="animate-fade-in-up" style={stagger(3)}><CollectionsChart data={data.series} /></div>
                 <div className="animate-fade-in-up" style={stagger(4)}><AgingChart data={data.ar_aging} /></div>
-                <div className="animate-fade-in-up" style={stagger(4)}>
-                  <AgingChart data={data.overdue_aging || { "1_7": 0, "8_14": 0, "15_30": 0, "30_plus": 0 }} variant="overdue" />
-                </div>
               </>
             ) : null}
             <div className="animate-fade-in-up" style={stagger(5)}><AreaChart data={data.areas} showMoney={showMoney} /></div>
@@ -210,21 +250,10 @@ export default function AnalysisPage() {
                 <div className="animate-fade-in-up" style={stagger(6)}>
                   <TopList
                     title="Top outstanding"
-                    description="Customers with the highest current receivables."
+                    description="Customers with the highest receivables owed (advances excluded)."
                     rows={data.top_outstanding}
                     amountKey="outstanding"
                     testid="analysis-top-outstanding"
-                    showMoney={showMoney}
-                  />
-                </div>
-                <div className="animate-fade-in-up" style={stagger(6)}>
-                  <TopList
-                    title="Top overdue"
-                    description="Past payment collection day with the largest balances."
-                    rows={data.top_overdue || []}
-                    amountKey="overdue_amount"
-                    subtitleKey="days_overdue"
-                    testid="analysis-top-overdue"
                     showMoney={showMoney}
                   />
                 </div>

@@ -91,7 +91,6 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 | Meal price | Per-customer CAD unit price on generated deliveries; defaults from selected meal type’s price when omitted |
 | Opening balance | Signed CAD on create/edit/import: positive = outstanding owed at onboard; negative = advance credit; included in displayed outstanding |
 | Joining date | Optional `joining_date` (defaults to today on create/import); distinct from system `created_at` |
-| Payment collection day | Optional day of month `1–31` when provider typically collects |
 | Pause / resume | Date window; deliveries in window generated as `paused`; resume restores future `paused` → `pending` |
 | Approve | Self-signup consumers start `pending_approval=true`; provider must approve before deliveries generate |
 | Reject | `POST /customers/{id}/reject` with optional reason; sets inactive + `rejected`; notifies consumer account if present |
@@ -105,8 +104,8 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 | Status filter UI | Compact horizontal chips with counts (mobile scroll); **default filter = Pending** |
 | Provider mark | One-tap delivered / missed / cancelled (**today or past only**; not future) |
 | Consumer cancel | Upcoming `pending` only; blocked for past dates; within `cutoff_hours` before assumed **local noon** (provider timezone) |
-| Extra meals | Consumer or provider admin adds tiffins for a date (bumps `quantity`, tracks `extra_quantity`); one stop/day; consumer uses same cutoff as cancel (auto-apply, no approval); priced at unit `meal_price`; outstanding when delivered; provider quick access on Dashboard / Deliveries / Customers headers (admin) |
-| Kitchen cook plan | `/provider/kitchen` for admin/driver/viewer; `GET /reports/kitchen-summary`; counts by meal type × slot for pending+delivered; pack list with CRM notes; delivery snapshots `meal_type_id`/`meal_type_name` at generate |
+| Adjust meal | Consumer or provider admin sets **absolute** tiffin count (1–20) and/or **meal type** on a pending stop for a date; `extra_quantity = max(0, quantity − schedule base)`; one stop per customer×date×slot; consumer uses same cutoff as cancel; type change refreshes `meal_price` from provider meal types (provider may override price); UI is **preview-then-save** (Show summary projects kitchen/own-day plan without writing; Save calls adjust); adjust response still includes day summary. Legacy `POST …/extra` remains as additive wrapper. |
+| Kitchen cook plan | `/provider/kitchen` for admin/driver/viewer; `GET /reports/kitchen-summary` (shared helper also returned from adjust); counts by meal type × slot for pending+delivered; pack list with CRM notes; delivery snapshots `meal_type_id`/`meal_type_name` at generate/adjust |
 
 ### 4.5 Payments (Interac)
 
@@ -125,23 +124,24 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 
 ### 4.6 Reports (provider)
 
-- Dashboard remains the day-of-operations cockpit: today’s required meals, pending / delivered / missed / cancelled deliveries, today’s collections, outstanding balance, pending payment approvals, pending customer approvals, and route quick actions.
+- Dashboard remains the day-of-operations cockpit: today’s required meals, pending / delivered / missed / cancelled deliveries, today’s collections, **outstanding receivables** (sum of customers who owe only — advances excluded), optional customer-credit total, pending payment approvals, pending customer approvals, and route quick actions.
 - Dashboard loads sections independently (summary KPIs, kitchen profile, today’s route) so KPI cards paint as soon as their request finishes—without waiting for the slowest call.
 - Quick mark (Deliver / Miss) on Today’s route refetches summary; backend invalidates the outstanding TTL cache so Outstanding and related KPIs update on that refetch (not stuck up to ~45s).
-- Analysis (`/provider/analysis`) is the period business-health report: 7d / 30d / 90d / MTD KPIs, charts, receivables aging, **overdue by payment collection day**, top outstanding / top overdue customers, top collectors, area concentration, and rule-based highlights. Top customer rows deep-link to `/provider/customers/{id}?tab=analysis`.
+- Analysis (`/provider/analysis`) is the period business-health report: presets **7d / 30d / 90d / MTD / Last month / YTD** plus **custom From–To** (max 366 days); optional **meal slot** filter scopes period delivery KPIs/series only. Outstanding receivables and Customer credit stay as-of today. Charts, receivables aging, top outstanding, top collectors, area concentration, rule-based highlights. Top customer rows deep-link to `/provider/customers/{id}?tab=analysis`.
 - Analysis and customer Analysis use shared KPI/section skeletons on first load; period changes keep previous KPIs visible (stale-while-revalidate) with a small spinner on the period toggle, then staggered reveal of charts/lists.
-- Per-customer Analysis (customer detail tab) reuses the same analytics kit scoped via `GET /customers/{id}/insights` plus the activity timeline; shows overdue badge when past collection day.
+- Per-customer Analysis (customer detail tab) reuses the same analytics kit (including custom dates + meal slot) via `GET /customers/{id}/insights` plus the activity timeline.
+- Outstanding balances (**owed only**, `outstanding > 0`; highest amount first; search / min amount / Load more). Default Reports tab.  
+- Customer credit (advance balances, `outstanding < 0`; largest credit first; same search / min / pagination)  
 - Daily deliveries  
-- Outstanding balances (collection day, days overdue; All / Overdue-only filter)  
 - Collections  
 - Active customers  
-- Area summary  
+- Area summary (optional FSA prefix)  
 - Dashboard summary  
-- Business insights (`GET /reports/business-insights?period=30d`) for Analysis  
-- Monthly statement (`GET /reports/statement?month=YYYY-MM`) — tenant or consumer-scoped  
+- Business insights (`GET /reports/business-insights`) for Analysis — `period` presets or `start`+`end`, optional `meal_slot`  
+- Monthly statement (`GET /reports/statement?month=YYYY-MM`) — optional `q`, `activity_only`  
 - CSV export supported in UI for report tabs  
 
-**Overdue rule:** customer is overdue when `outstanding > 0`, `payment_collection_day` is set, and provider-local today is after the most recent collection due date that month (due day itself is still current). Customers without a collection day are excluded from overdue totals.
+**Large-tenant list filters:** Deliveries support server `q` / `driver_id` / `meal_slot` (drivers auto-scoped); Customers CRM adds `driver_id` / `meal_type_id`; Payments add From/To + customer picker; Kitchen pack list supports search + driver.
 
 ### 4.6b Consumer profile
 
@@ -174,7 +174,7 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 
 ### 4.7c Activity audit
 
-- Writers on login, customer soft-delete/reject, payment verify/reject/record, settings patch, plan activate, extra meals.  
+- Writers on login, customer soft-delete/reject, payment verify/reject/record, settings patch, plan activate, extra meals / adjust meal.  
 - List via `GET /providers/me/activity` or `GET /reports/activity`.  
 - Simple list on provider More page.
 
@@ -273,7 +273,7 @@ WhatsApp menu shares are **not** included in the SaaS subscription.
 9. **Payments:** Submit amount must be `> 0`; verify/reject only from `pending`.  
 10. **Pause:** `end` must be on or after `start`.
 11. **Meal schedule:** Provider sets weekday→quantity; consumers may change days only (new days get qty 1).  
-12. **Extra meals:** Add-only bump to delivery `quantity` (cap 20); consumer before cancel cutoff; provider admin anytime for future/today pending; off-schedule days create a new pending stop.
+12. **Adjust meal:** Absolute `quantity` (1–20) and optional meal type on pending stops; consumer before cancel cutoff; provider admin anytime for future/today; dual-slot days require `meal_slot`; off-schedule days create a pending stop; UI shows a projected day summary before Save (write happens only on confirm); adjust response includes day cook summary. Legacy extras endpoint adds to current quantity via the same helper.
 
 ---
 
@@ -332,7 +332,7 @@ WhatsApp menu shares are **not** included in the SaaS subscription.
 | Delivery filters | Compact status chips + search; route reorder on `sm+` only |
 | Bulk confirms | Mark all delivered + Verify selected require AppSheet confirmation before applying |
 | Action button colors | `btn-danger` for delete/reject/cancel-delivery; `btn-secondary` for deliver/verify; `btn-outline` for dismiss Cancel |
-| CSV import + invites | Sample CSV download on Customers; `POST /customers/import` (driver_email + delivery_sequence; `opening_balance` / `current_outstanding`, `joining_date`, `payment_collection_day`); invite HTML → `/consumer-signup?code=` |
+| CSV import + invites | Sample CSV download on Customers; `POST /customers/import` (driver_email + delivery_sequence; `opening_balance` / `current_outstanding`, `joining_date`); invite HTML → `/consumer-signup?code=` |
 | Customer route master | Optional `driver_id` + `delivery_sequence`; unique per driver pool; insert/move at N auto-shifts later stops; new deliveries inherit `route_order` + driver |
 | SMS stub | `send_sms` + `sms_notifications` setting; cancel confirmation |
 | Menu | Upload image anytime; history kept; consumer sees current (latest); email notify (Resend); WhatsApp share (Meta Cloud API) — see `docs/WHATSAPP_SETUP.md` |

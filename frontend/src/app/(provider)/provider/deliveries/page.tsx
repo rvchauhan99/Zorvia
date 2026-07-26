@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { canMutateDeliveries, canMutateAdmin } from "@/lib/roles";
+import { canMutateDeliveries, canMutateAdmin, isDriver as sessionIsDriver } from "@/lib/roles";
 import { fmtDate, todayISO, fmtMealCount, deliveryQty, fmtExtraBadge } from "@/lib/format";
 import { mealSlotBadgeLabel } from "@/lib/mealSlots";
 import StatusPill from "@/components/StatusPill";
@@ -56,31 +56,77 @@ export default function Deliveries() {
   const { session } = useAuth();
   const canMutate = canMutateDeliveries(session);
   const canAddExtra = canMutateAdmin(session);
+  const isDriver = sessionIsDriver(session);
   const [date, setDate] = useState(todayISO());
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("pending");
   const [q, setQ] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
+  const [driverId, setDriverId] = useState("");
+  const [mealSlot, setMealSlot] = useState("all");
+  const [drivers, setDrivers] = useState<{ id: string; name: string; email?: string }[]>([]);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [confirmBulkDeliver, setConfirmBulkDeliver] = useState(false);
   const [queueLen, setQueueLen] = useState(0);
   const [extraTarget, setExtraTarget] = useState<any | null>(null);
   const [extraBusy, setExtraBusy] = useState(false);
   const [quickExtraOpen, setQuickExtraOpen] = useState(false);
+  const [mealTypes, setMealTypes] = useState<{ id: string; name: string; price: number }[]>([]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(q.trim()), 300);
+    return () => clearTimeout(t);
+  }, [q]);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const { data } = await api.get(`/deliveries?date=${date}`);
-      setItems(sortDeliveries(data));
+      const params: Record<string, string> = { date };
+      if (debouncedQ) params.q = debouncedQ;
+      if (!isDriver && driverId) params.driver_id = driverId;
+      if (mealSlot && mealSlot !== "all") params.meal_slot = mealSlot;
+      // Status stays client-side so chip counts stay accurate for the filtered day slice.
+      const { data } = await api.get(`/deliveries`, { params });
+      setItems(sortDeliveries(Array.isArray(data) ? data : []));
     } catch {
       if (!silent) toast.error("Failed to load deliveries");
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [date]);
+  }, [date, debouncedQ, driverId, mealSlot, isDriver]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [{ data: prov }, staffRes] = await Promise.all([
+          api.get("/providers/me"),
+          isDriver ? Promise.resolve({ data: [] }) : api.get("/providers/me/staff").catch(() => ({ data: [] })),
+        ]);
+        if (cancelled) return;
+        const types = Array.isArray(prov?.meal_types)
+          ? prov.meal_types.map((t: any) => ({
+              id: String(t.id),
+              name: String(t.name || t.id),
+              price: Number(t.price) || 0,
+            }))
+          : [];
+        setMealTypes(types);
+        const staff = Array.isArray(staffRes?.data) ? staffRes.data : [];
+        setDrivers(
+          staff
+            .filter((s: any) => (s.role || "admin") === "driver")
+            .map((s: any) => ({ id: s.id, name: s.name || s.email || s.id, email: s.email }))
+        );
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isDriver]);
 
   // Live board: poll every 30s while tab is visible
   useEffect(() => {
@@ -185,20 +231,29 @@ export default function Deliveries() {
     }
   }
 
-  async function confirmExtra({ date: extraDate, quantity }: { date: string; quantity: number }) {
+  async function confirmAdjust(args: {
+    date: string;
+    quantity: number;
+    meal_slot?: string | null;
+    meal_type_id?: string | null;
+    meal_price?: number | null;
+  }) {
     if (!extraTarget || !canAddExtra) return;
     setExtraBusy(true);
     try {
-      await api.post("/deliveries/extra", {
+      const { data } = await api.post("/deliveries/adjust", {
         customer_id: extraTarget.customer_id,
-        date: extraDate || date,
-        quantity,
+        date: args.date || date,
+        quantity: args.quantity,
+        meal_slot: args.meal_slot || extraTarget.meal_slot || undefined,
+        meal_type_id: args.meal_type_id || undefined,
+        meal_price: args.meal_price ?? undefined,
       });
-      toast.success(quantity === 1 ? "Extra meal added" : `${quantity} extra meals added`);
-      setExtraTarget(null);
+      toast.success("Meal adjusted");
       load();
+      return data;
     } catch (e: any) {
-      toast.error(e?.response?.data?.detail || "Failed to add extra meal");
+      toast.error(e?.response?.data?.detail || "Failed to adjust meal");
     } finally {
       setExtraBusy(false);
     }
@@ -212,19 +267,9 @@ export default function Deliveries() {
 
   const counts = items.reduce((a: any, d: any) => { a[d.status] = (a[d.status] || 0) + 1; return a; }, {});
   const filtered = useMemo(() => {
-    const ql = q.trim().toLowerCase();
-    let base = filter === "all" ? items : items.filter((d) => d.status === filter);
-    if (ql) {
-      base = base.filter((d) => {
-        const hay = [d.customer_name, d.address, d.apartment, d.postal_code]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-        return hay.includes(ql);
-      });
-    }
+    const base = filter === "all" ? items : items.filter((d) => d.status === filter);
     return sortDeliveries(base);
-  }, [items, filter, q]);
+  }, [items, filter]);
 
   const today = todayISO();
   const isFutureDate = date > today;
@@ -286,11 +331,11 @@ export default function Deliveries() {
           {canAddExtra ? (
             <button
               type="button"
-              data-testid="deliveries-add-extra"
+              data-testid="deliveries-add-adjust"
               onClick={() => setQuickExtraOpen(true)}
               className="h-11 px-4 rounded-full border border-brand-border bg-white text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer hover:bg-brand-surface"
             >
-              <Plus size={16} weight="bold" /> Extra meal
+              <Plus size={16} weight="bold" /> Adjust meal
             </button>
           ) : null}
           {canMutate ? (
@@ -348,6 +393,32 @@ export default function Deliveries() {
           placeholder="Search name, address, postal…"
           className="h-10 w-full px-3 rounded-xl bg-white border border-brand-border text-sm outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
         />
+        <div className="flex flex-wrap gap-2" data-testid="delivery-extra-filters">
+          {!isDriver ? (
+            <select
+              data-testid="delivery-driver-filter"
+              value={driverId}
+              onChange={(e) => setDriverId(e.target.value)}
+              className="h-10 px-3 rounded-xl bg-white border border-brand-border text-sm"
+            >
+              <option value="">All drivers</option>
+              {drivers.map((d) => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
+          ) : null}
+          <select
+            data-testid="delivery-slot-filter"
+            value={mealSlot}
+            onChange={(e) => setMealSlot(e.target.value)}
+            className="h-10 px-3 rounded-xl bg-white border border-brand-border text-sm"
+          >
+            <option value="all">All slots</option>
+            <option value="lunch">Lunch</option>
+            <option value="dinner">Dinner</option>
+            <option value="uncategorized">Uncategorized</option>
+          </select>
+        </div>
         <StatusFilterCards
           testid="delivery-filters"
           value={filter}
@@ -450,13 +521,13 @@ export default function Deliveries() {
                     {canAddExtra ? (
                       <button
                         type="button"
-                        data-testid={`del-extra-${d.id}`}
+                        data-testid={`del-adjust-${d.id}`}
                         onClick={() => setExtraTarget(d)}
                         className="h-11 min-h-[44px] px-3 rounded-full border border-brand-border bg-white text-sm inline-flex items-center justify-center gap-1 cursor-pointer hover:bg-brand-surface"
-                        aria-label="Add extra meal"
+                        aria-label="Adjust meal"
                       >
                         <Plus size={16} />
-                        <span className="hidden sm:inline">Extra</span>
+                        <span className="hidden sm:inline">Adjust</span>
                       </button>
                     ) : null}
                     <button data-testid={`mark-delivered-${d.id}`} onClick={() => mark(d.id, "delivered")} className="flex-1 sm:flex-none h-11 min-h-[44px] px-4 rounded-full bg-secondary text-secondary-foreground text-sm font-semibold active:scale-95 transition-transform inline-flex items-center justify-center gap-1 cursor-pointer hover:bg-brand-sageDark">
@@ -520,14 +591,25 @@ export default function Deliveries() {
       <ExtraMealsSheet
         open={!!extraTarget}
         onClose={() => setExtraTarget(null)}
-        onConfirm={confirmExtra}
-        title={extraTarget ? `Extra for ${extraTarget.customer_name}` : "Add extra meal"}
+        onConfirm={confirmAdjust}
+        title={extraTarget ? `Adjust for ${extraTarget.customer_name}` : "Adjust meal"}
         defaultDate={date}
         showDate={false}
         currentQty={extraTarget ? deliveryQty(extraTarget) : 1}
         mealPrice={extraTarget ? Number(extraTarget.meal_price) || 0 : undefined}
+        mealTypes={mealTypes}
+        defaultMealTypeId={extraTarget?.meal_type_id || null}
+        mealSlots={
+          extraTarget?.meal_slot
+            ? [extraTarget.meal_slot]
+            : ["uncategorized"]
+        }
+        defaultMealSlot={extraTarget?.meal_slot || null}
+        allowPriceOverride
+        customerId={extraTarget?.customer_id}
+        customerName={extraTarget?.customer_name}
         busy={extraBusy}
-        confirmTestId="del-extra-confirm"
+        confirmTestId="del-adjust-confirm"
       />
 
       <AddExtraMealSheet

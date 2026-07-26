@@ -9,6 +9,8 @@ import { toast } from "sonner";
 import { DownloadSimple } from "@phosphor-icons/react";
 import { InlineLoader } from "@/components/loaders";
 import { AreaChart } from "@/components/analytics/AreaChart";
+import LoadMoreButton from "@/components/LoadMoreButton";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 
 function tabButton(active: boolean, label: string, onClick: () => void, testid: string) {
   return (
@@ -42,22 +44,54 @@ function downloadCSV(name: string, rows: any[]) {
 export default function Reports() {
   const { session } = useAuth();
   const showMoney = canSeePricing(session);
-  const [tab, setTab] = useState("daily");
+  const [tab, setTab] = useState("outstanding");
   const [data, setData] = useState<any>(null);
   const [range, setRange] = useState({ start: "", end: todayISO() });
   const [statementMonth, setStatementMonth] = useState(todayISO().slice(0, 7));
-  const [outstandingFilter, setOutstandingFilter] = useState<"all" | "overdue">("all");
-
-  const moneyTab = tab === "outstanding" || tab === "collections" || tab === "statement";
+  const [listQ, setListQ] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
+  const [minAmount, setMinAmount] = useState("");
+  const [statementActivityOnly, setStatementActivityOnly] = useState(false);
+  const [areaPrefix, setAreaPrefix] = useState("");
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const moneyTab = tab === "outstanding" || tab === "customer-credit" || tab === "collections" || tab === "statement";
   const canExport = showMoney || !moneyTab;
   const rows = data?.rows ?? [];
+  const balanceListTab = tab === "outstanding" || tab === "customer-credit";
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(listQ.trim()), 300);
+    return () => clearTimeout(t);
+  }, [listQ]);
 
   function selectTab(next: string) {
     setTab(next);
     setData(null);
+    setListQ("");
+    setDebouncedQ("");
+    setMinAmount("");
+    setNextCursor(null);
+    setHasMore(false);
+    setAreaPrefix("");
+    setStatementActivityOnly(false);
   }
 
-  async function load() {
+  function outstandingParams(balance: "owed" | "credit", cursor?: string | null) {
+    const params = new URLSearchParams({
+      balance,
+      page_size: String(DEFAULT_PAGE_SIZE),
+    });
+    if (debouncedQ) params.set("q", debouncedQ);
+    if (minAmount.trim() !== "" && !Number.isNaN(Number(minAmount))) {
+      params.set("min_amount", String(Number(minAmount)));
+    }
+    if (cursor) params.set("cursor", cursor);
+    return params.toString();
+  }
+
+  async function load(append = false) {
     if (!showMoney && moneyTab) {
       setData({});
       return;
@@ -65,21 +99,65 @@ export default function Reports() {
     try {
       let url;
       if (tab === "daily") url = `/reports/daily-deliveries${range.start ? `?start=${range.start}&end=${range.end}` : ""}`;
-      else if (tab === "outstanding") {
-        url = outstandingFilter === "overdue" ? "/reports/outstanding?overdue_only=true" : "/reports/outstanding";
-      }
+      else if (tab === "outstanding") url = `/reports/outstanding?${outstandingParams("owed")}`;
+      else if (tab === "customer-credit") url = `/reports/outstanding?${outstandingParams("credit")}`;
       else if (tab === "collections") url = `/reports/collections${range.start ? `?start=${range.start}&end=${range.end}` : ""}`;
       else if (tab === "active") url = "/reports/active-customers";
-      else if (tab === "statement") url = `/reports/statement?month=${statementMonth}`;
-      else url = "/reports/area-summary";
+      else if (tab === "statement") {
+        const params = new URLSearchParams({ month: statementMonth });
+        if (debouncedQ) params.set("q", debouncedQ);
+        if (statementActivityOnly) params.set("activity_only", "true");
+        url = `/reports/statement?${params.toString()}`;
+      } else {
+        const params = new URLSearchParams();
+        if (areaPrefix.trim()) params.set("area", areaPrefix.trim());
+        url = `/reports/area-summary${params.toString() ? `?${params}` : ""}`;
+      }
       const { data: payload } = await api.get(url);
-      setData(payload);
+      if (append && balanceListTab && data?.rows) {
+        setData({
+          ...payload,
+          rows: [...(data.rows || []), ...(payload.rows || [])],
+        });
+      } else {
+        setData(payload);
+      }
+      if (balanceListTab) {
+        setNextCursor(payload.next_cursor ?? null);
+        setHasMore(Boolean(payload.has_more));
+      } else {
+        setNextCursor(null);
+        setHasMore(false);
+      }
     } catch {
       toast.error("Failed to load report");
-      setData(null);
+      if (!append) setData(null);
     }
   }
-  useEffect(() => { load(); }, [tab, range.start, range.end, statementMonth, showMoney, outstandingFilter]);
+
+  async function loadMore() {
+    if (!nextCursor || !balanceListTab) return;
+    setLoadingMore(true);
+    try {
+      const balance = tab === "customer-credit" ? "credit" : "owed";
+      const { data: payload } = await api.get(`/reports/outstanding?${outstandingParams(balance, nextCursor)}`);
+      setData((prev: any) => ({
+        ...payload,
+        rows: [...(prev?.rows || []), ...(payload.rows || [])],
+        total: prev?.total ?? payload.total,
+      }));
+      setNextCursor(payload.next_cursor ?? null);
+      setHasMore(Boolean(payload.has_more));
+    } catch {
+      toast.error("Failed to load more");
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  useEffect(() => {
+    load();
+  }, [tab, range.start, range.end, statementMonth, showMoney, debouncedQ, minAmount, statementActivityOnly, areaPrefix]);
 
   function exportCSV() {
     if (!data || !canExport) return;
@@ -89,7 +167,15 @@ export default function Reports() {
         ? [data]
         : tab === "area" && !showMoney
           ? rows.map((r: any) => ({ area: r.area, customers: r.customers }))
-          : rows;
+          : tab === "customer-credit"
+            ? rows.map((r: any) => ({
+                customer_id: r.customer_id,
+                name: r.name,
+                phone: r.phone,
+                email: r.email,
+                credit: r.credit ?? Math.abs(Number(r.outstanding) || 0),
+              }))
+            : rows;
     downloadCSV(`tiffin-${tab}-${todayISO()}`, exportRows.length ? exportRows : [data.totals || data]);
     toast.success("CSV downloaded");
   }
@@ -109,8 +195,9 @@ export default function Reports() {
       </div>
 
       <div className="flex gap-1.5 overflow-x-auto pb-0.5 snap-x snap-mandatory sm:flex-wrap sm:overflow-visible [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {tabButton(tab === "daily", "Daily deliveries", () => selectTab("daily"), "rtab-daily")}
         {tabButton(tab === "outstanding", "Outstanding", () => selectTab("outstanding"), "rtab-outstanding")}
+        {tabButton(tab === "customer-credit", "Customer credit", () => selectTab("customer-credit"), "rtab-customer-credit")}
+        {tabButton(tab === "daily", "Daily deliveries", () => selectTab("daily"), "rtab-daily")}
         {tabButton(tab === "collections", "Collections", () => selectTab("collections"), "rtab-collections")}
         {tabButton(tab === "active", "Active customers", () => selectTab("active"), "rtab-active")}
         {tabButton(tab === "area", "Area summary", () => selectTab("area"), "rtab-area")}
@@ -130,6 +217,34 @@ export default function Reports() {
         </div>
       ) : null}
 
+      {balanceListTab ? (
+        <div className="flex flex-wrap items-center gap-3 text-sm" data-testid="reports-balance-filters">
+          <label className="flex items-center gap-2 min-w-[180px] flex-1">
+            <span className="label-overline shrink-0">Search</span>
+            <input
+              data-testid="reports-search"
+              value={listQ}
+              onChange={(e) => setListQ(e.target.value)}
+              placeholder="Name, phone, email"
+              className="h-10 px-3 rounded-xl bg-white border border-brand-border transition-all w-full min-w-0"
+            />
+          </label>
+          <label className="flex items-center gap-2">
+            <span className="label-overline shrink-0">Min $</span>
+            <input
+              data-testid="reports-min-amount"
+              type="number"
+              min={0}
+              step="0.01"
+              value={minAmount}
+              onChange={(e) => setMinAmount(e.target.value)}
+              placeholder="0"
+              className="h-10 px-3 rounded-xl bg-white border border-brand-border transition-all w-28"
+            />
+          </label>
+        </div>
+      ) : null}
+
       {tab === "statement" ? (
         <div className="flex flex-wrap items-center gap-3 text-sm">
           <label className="flex items-center gap-2">
@@ -142,12 +257,47 @@ export default function Reports() {
               className="h-10 px-3 rounded-xl bg-white border border-brand-border transition-all"
             />
           </label>
+          <label className="flex items-center gap-2 min-w-[180px] flex-1">
+            <span className="label-overline shrink-0">Search</span>
+            <input
+              data-testid="statement-search"
+              value={listQ}
+              onChange={(e) => setListQ(e.target.value)}
+              placeholder="Customer name"
+              className="h-10 px-3 rounded-xl bg-white border border-brand-border transition-all w-full min-w-0"
+            />
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              data-testid="statement-activity-only"
+              checked={statementActivityOnly}
+              onChange={(e) => setStatementActivityOnly(e.target.checked)}
+              className="rounded border-brand-border"
+            />
+            <span className="text-sm">Activity only</span>
+          </label>
+        </div>
+      ) : null}
+
+      {tab === "area" ? (
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <label className="flex items-center gap-2">
+            <span className="label-overline">Area prefix</span>
+            <input
+              data-testid="area-prefix"
+              value={areaPrefix}
+              onChange={(e) => setAreaPrefix(e.target.value)}
+              placeholder="e.g. M5"
+              className="h-10 px-3 rounded-xl bg-white border border-brand-border transition-all w-28 uppercase"
+            />
+          </label>
         </div>
       ) : null}
 
       <div className="card-tinted p-4 sm:p-5 overflow-hidden">
         {!data ? <InlineLoader /> :
-         !showMoney && (tab === "outstanding" || tab === "collections" || tab === "statement") ? (
+         !showMoney && (tab === "outstanding" || tab === "customer-credit" || tab === "collections" || tab === "statement") ? (
           <div className="p-8 text-center text-sm text-muted-foreground" data-testid="reports-money-hidden">
             Balance and payment amounts are visible to admins only. Use the Daily deliveries tab for stop counts, or ask an admin for financial reports.
           </div>
@@ -205,51 +355,12 @@ export default function Reports() {
           )
         ) : tab === "outstanding" ? (
           <>
-            <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-              <div className="flex flex-wrap gap-4 text-sm">
-                <div>
-                  Total outstanding:{" "}
-                  <span className="font-display font-bold text-2xl text-primary">{fmtCAD(data.total)}</span>
-                </div>
-                <div>
-                  Overdue:{" "}
-                  <span className="font-display font-bold text-2xl text-rose-700" data-testid="outstanding-overdue-total">
-                    {fmtCAD(data.overdue_total || 0)}
-                  </span>
-                  <span className="text-muted-foreground ml-1">
-                    ({data.overdue_count || 0} customer{(data.overdue_count || 0) === 1 ? "" : "s"})
-                  </span>
-                </div>
-              </div>
-              <div className="flex gap-1.5" data-testid="outstanding-filter">
-                <button
-                  type="button"
-                  onClick={() => setOutstandingFilter("all")}
-                  className={`px-3 h-9 rounded-full text-sm font-medium border cursor-pointer ${
-                    outstandingFilter === "all"
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-white border-brand-border hover:bg-brand-surface"
-                  }`}
-                >
-                  All
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setOutstandingFilter("overdue")}
-                  className={`px-3 h-9 rounded-full text-sm font-medium border cursor-pointer ${
-                    outstandingFilter === "overdue"
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-white border-brand-border hover:bg-brand-surface"
-                  }`}
-                >
-                  Overdue only
-                </button>
-              </div>
+            <div className="mb-3 text-sm">
+              Total outstanding:{" "}
+              <span className="font-display font-bold text-2xl text-primary">{fmtCAD(data.total)}</span>
             </div>
             {rows.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground">
-                {outstandingFilter === "overdue" ? "No overdue balances" : "No outstanding balances"}
-              </div>
+              <div className="p-8 text-center text-muted-foreground">No outstanding balances</div>
             ) : (
               <>
                 <ul className="md:hidden divide-y divide-brand-border -mx-4 sm:-mx-5">
@@ -258,30 +369,18 @@ export default function Reports() {
                       <div className="min-w-0">
                         <div className="font-medium truncate">{r.name}</div>
                         <div className="text-xs text-muted-foreground mt-0.5 truncate">{[r.phone, r.email].filter(Boolean).join(" · ")}</div>
-                        <div className="text-xs mt-1 flex flex-wrap gap-2">
-                          {r.payment_collection_day != null ? (
-                            <span className="text-muted-foreground">Collect day {r.payment_collection_day}</span>
-                          ) : (
-                            <span className="text-muted-foreground">No collect day</span>
-                          )}
-                          {r.is_overdue ? (
-                            <span className="text-rose-700 font-medium">{r.days_overdue}d overdue</span>
-                          ) : null}
-                        </div>
                       </div>
                       <div className="shrink-0 font-semibold text-primary">{fmtCAD(r.outstanding)}</div>
                     </li>
                   ))}
                 </ul>
                 <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-sm min-w-[720px]">
+              <table className="w-full text-sm min-w-[560px]">
                   <thead className="text-left bg-brand-surface">
                     <tr>
                       <th className="px-3 py-2 label-overline">Customer</th>
                       <th className="px-3 py-2 label-overline">Phone</th>
                       <th className="px-3 py-2 label-overline">Email</th>
-                      <th className="px-3 py-2 label-overline">Collect day</th>
-                      <th className="px-3 py-2 label-overline">Overdue</th>
                       <th className="px-3 py-2 label-overline text-right">Outstanding</th>
                     </tr>
                   </thead>
@@ -291,16 +390,6 @@ export default function Reports() {
                         <td className="px-3 py-2 font-medium">{r.name}</td>
                         <td className="px-3 py-2 text-muted-foreground">{r.phone}</td>
                         <td className="px-3 py-2 text-muted-foreground">{r.email}</td>
-                        <td className="px-3 py-2 text-muted-foreground">
-                          {r.payment_collection_day != null ? r.payment_collection_day : "—"}
-                        </td>
-                        <td className="px-3 py-2">
-                          {r.is_overdue ? (
-                            <span className="text-rose-700 font-medium">{r.days_overdue}d</span>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </td>
                         <td className="px-3 py-2 text-right font-semibold text-primary">{fmtCAD(r.outstanding)}</td>
                       </tr>
                     ))}
@@ -309,6 +398,66 @@ export default function Reports() {
                 </div>
               </>
             )}
+            <LoadMoreButton hasMore={hasMore} loading={loadingMore} onClick={loadMore} testid="outstanding-load-more" />
+          </>
+        ) : tab === "customer-credit" ? (
+          <>
+            <div className="mb-3 text-sm">
+              Total credit:{" "}
+              <span className="font-display font-bold text-2xl text-secondary" data-testid="customer-credit-total">
+                {fmtCAD(data.total)}
+              </span>
+              <span className="text-muted-foreground ml-2">
+                (filtered list; total credit {fmtCAD(data.total)})
+              </span>
+            </div>
+            {rows.length === 0 ? (
+              <div className="p-8 text-center text-muted-foreground" data-testid="customer-credit-empty">
+                No customer credits
+              </div>
+            ) : (
+              <>
+                <ul className="md:hidden divide-y divide-brand-border -mx-4 sm:-mx-5" data-testid="customer-credit-list">
+                  {rows.map((r: any, i: number) => (
+                    <li key={r.customer_id || `credit-${r.email || r.name || i}`} className="px-4 sm:px-5 py-4 flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-medium truncate">{r.name}</div>
+                        <div className="text-xs text-muted-foreground mt-0.5 truncate">{[r.phone, r.email].filter(Boolean).join(" · ")}</div>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <div className="font-semibold text-secondary">{fmtCAD(r.credit ?? Math.abs(r.outstanding || 0))}</div>
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">credit</div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-sm min-w-[560px]">
+                    <thead className="text-left bg-brand-surface">
+                      <tr>
+                        <th className="px-3 py-2 label-overline">Customer</th>
+                        <th className="px-3 py-2 label-overline">Phone</th>
+                        <th className="px-3 py-2 label-overline">Email</th>
+                        <th className="px-3 py-2 label-overline text-right">Credit</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-brand-border">
+                      {rows.map((r: any, i: number) => (
+                        <tr key={r.customer_id || `credit-${r.email || r.name || i}`} className="hover:bg-brand-surface/60 transition-colors">
+                          <td className="px-3 py-2 font-medium">{r.name}</td>
+                          <td className="px-3 py-2 text-muted-foreground">{r.phone}</td>
+                          <td className="px-3 py-2 text-muted-foreground">{r.email}</td>
+                          <td className="px-3 py-2 text-right font-semibold text-secondary">
+                            {fmtCAD(r.credit ?? Math.abs(r.outstanding || 0))}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+            <LoadMoreButton hasMore={hasMore} loading={loadingMore} onClick={loadMore} testid="credit-load-more" />
           </>
         ) : tab === "collections" ? (
           <>

@@ -12,7 +12,7 @@ import { fmtCAD, fmtDate, WEEKDAYS, todayISO, fmtMealCount, fmtExtraBadge } from
 import StatusPill from "@/components/StatusPill";
 import RecordPaymentSheet from "@/components/RecordPaymentSheet";
 import ExtraMealsSheet from "@/components/ExtraMealsSheet";
-import { type CustomerInsights, type CustomerTimelineEvent, type PeriodKey } from "@/lib/analytics";
+import { insightsParams, type CustomerInsights, type CustomerTimelineEvent, type MealSlotFilter, type PeriodKey } from "@/lib/analytics";
 import { KpiCard } from "@/components/analytics/KpiCard";
 import { PeriodToggle } from "@/components/analytics/PeriodToggle";
 import { HighlightsPanel } from "@/components/analytics/HighlightsPanel";
@@ -93,6 +93,9 @@ export default function CustomerDetail() {
   const [notesDraft, setNotesDraft] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
   const [period, setPeriod] = useState<PeriodKey>("30d");
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState(todayISO());
+  const [mealSlot, setMealSlot] = useState<MealSlotFilter>("all");
   const [insights, setInsights] = useState<CustomerInsights | null>(null);
   const [timeline, setTimeline] = useState<CustomerTimelineEvent[]>([]);
   const [analysisLoading, setAnalysisLoading] = useState(false);
@@ -101,43 +104,81 @@ export default function CustomerDetail() {
   const [extraOpen, setExtraOpen] = useState(false);
   const [extraBusy, setExtraBusy] = useState(false);
   const [waEnabled, setWaEnabled] = useState(false);
+  const [mealTypes, setMealTypes] = useState<{ id: string; name: string; price: number }[]>([]);
 
   async function load() {
     try {
-      const [{ data }, enabled] = await Promise.all([
+      const [{ data }, enabled, provRes] = await Promise.all([
         api.get(`/customers/${id}`),
         fetchWhatsappFeaturesEnabled(),
+        api.get("/providers/me").catch(() => ({ data: null })),
       ]);
       setC(data);
       setNotesDraft(data.notes || "");
       setWaEnabled(enabled);
+      const types = Array.isArray(provRes?.data?.meal_types)
+        ? provRes.data.meal_types.map((t: any) => ({
+            id: String(t.id),
+            name: String(t.name || t.id),
+            price: Number(t.price) || 0,
+          }))
+        : [];
+      setMealTypes(types);
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || "Customer not found");
       router.push("/provider/customers");
     }
   }
 
-  async function confirmExtra({ date, quantity }: { date: string; quantity: number }) {
+  async function confirmAdjust(args: {
+    date: string;
+    quantity: number;
+    meal_slot?: string | null;
+    meal_type_id?: string | null;
+    meal_price?: number | null;
+  }) {
     if (!id) return;
     setExtraBusy(true);
     try {
-      await api.post("/deliveries/extra", { customer_id: id, date, quantity });
-      toast.success(quantity === 1 ? "Extra meal added" : `${quantity} extra meals added`);
-      setExtraOpen(false);
+      const { data } = await api.post("/deliveries/adjust", {
+        customer_id: id,
+        date: args.date,
+        quantity: args.quantity,
+        meal_slot: args.meal_slot || undefined,
+        meal_type_id: args.meal_type_id || undefined,
+        meal_price: args.meal_price ?? undefined,
+      });
+      toast.success("Meal adjusted");
       load();
+      return data;
     } catch (e: any) {
-      toast.error(e?.response?.data?.detail || "Failed to add extra meal");
+      toast.error(e?.response?.data?.detail || "Failed to adjust meal");
     } finally {
       setExtraBusy(false);
     }
   }
 
-  async function loadAnalysis(nextPeriod = period) {
+  async function loadAnalysis(opts?: {
+    period?: PeriodKey;
+    start?: string;
+    end?: string;
+    meal_slot?: MealSlotFilter;
+  }) {
     if (!id) return;
+    const nextPeriod = opts?.period ?? period;
+    const start = opts?.start ?? customStart;
+    const end = opts?.end ?? customEnd;
+    const slot = opts?.meal_slot ?? mealSlot;
+    if (nextPeriod === "custom" && (!start || !end)) {
+      toast.error("Choose From and To dates for a custom range");
+      return;
+    }
     setAnalysisLoading(true);
     try {
       const [insightsRes, timelineRes] = await Promise.all([
-        api.get<CustomerInsights>(`/customers/${id}/insights`, { params: { period: nextPeriod } }),
+        api.get<CustomerInsights>(`/customers/${id}/insights`, {
+          params: insightsParams({ period: nextPeriod, start, end, meal_slot: slot }),
+        }),
         api.get<{ events: CustomerTimelineEvent[] }>(`/customers/${id}/timeline`),
       ]);
       setInsights(insightsRes.data);
@@ -159,7 +200,7 @@ export default function CustomerDetail() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (tab === "analysis" && id) loadAnalysis(period);
+    if (tab === "analysis" && id) loadAnalysis({ period });
   }, [tab, id]);
 
   function selectTab(next: Tab) {
@@ -170,7 +211,27 @@ export default function CustomerDetail() {
 
   function changePeriod(next: PeriodKey) {
     startTransition(() => setPeriod(next));
-    loadAnalysis(next);
+    if (next === "custom") {
+      const end = customEnd || todayISO();
+      const start = customStart || end;
+      setCustomEnd(end);
+      if (!customStart) setCustomStart(start);
+      loadAnalysis({ period: "custom", start: customStart || start, end });
+      return;
+    }
+    loadAnalysis({ period: next });
+  }
+
+  function changeCustomRange(start: string, end: string) {
+    setCustomStart(start);
+    setCustomEnd(end);
+    startTransition(() => setPeriod("custom"));
+    if (start && end) loadAnalysis({ period: "custom", start, end });
+  }
+
+  function changeMealSlot(slot: MealSlotFilter) {
+    startTransition(() => setMealSlot(slot));
+    loadAnalysis({ meal_slot: slot });
   }
 
   async function saveNotes() {
@@ -222,12 +283,6 @@ export default function CustomerDetail() {
                 Includes opening balance of {fmtCAD(c.opening_balance)}
               </div>
             ) : null}
-            {insights?.is_overdue ? (
-              <div className="text-xs text-rose-700 mt-0.5 font-medium" data-testid="overdue-badge">
-                Overdue {insights.days_overdue} day{insights.days_overdue === 1 ? "" : "s"}
-                {insights.payment_collection_day != null ? ` (due day ${insights.payment_collection_day})` : ""}
-              </div>
-            ) : null}
           </div>
         ) : (
           <div className="text-right shrink-0">
@@ -262,12 +317,6 @@ export default function CustomerDetail() {
               {(typeof c.joining_date === "string" && c.joining_date.slice(0, 10)) ||
                 (typeof c.created_at === "string" && c.created_at.slice(0, 10)) ||
                 "—"}
-            </div>
-          </div>
-          <div>
-            <div className="label-overline">Payment collection day</div>
-            <div className="text-sm" data-testid="customer-collection-day">
-              {c.payment_collection_day != null ? `${c.payment_collection_day} of each month` : "—"}
             </div>
           </div>
           <div className="sm:col-span-2">
@@ -358,7 +407,16 @@ export default function CustomerDetail() {
               <p className="text-sm text-muted-foreground mt-1">Period KPIs, trends, aging, and recent activity for this customer.</p>
             </div>
             <div className="flex flex-col sm:items-end gap-2">
-              <PeriodToggle value={period} onChange={changePeriod} busy={busyAnalysis} />
+              <PeriodToggle
+                value={period}
+                onChange={changePeriod}
+                busy={busyAnalysis}
+                customStart={customStart}
+                customEnd={customEnd}
+                onCustomRangeChange={changeCustomRange}
+                mealSlot={mealSlot}
+                onMealSlotChange={changeMealSlot}
+              />
               {insights ? (
                 <span className="text-xs text-muted-foreground" data-testid="customer-analysis-period">
                   {insights.period.start} to {insights.period.end}
@@ -387,19 +445,7 @@ export default function CustomerDetail() {
                   <>
                     <KpiCard testid="cust-kpi-collections" label="Collections" value={fmtCAD(k.collections_amount?.value || 0)} kpi={k.collections_amount} hint={`${k.collections_count?.value || 0} verified payments`} />
                     <KpiCard testid="cust-kpi-delivered-revenue" label="Delivered revenue" value={fmtCAD(k.delivered_revenue?.value || 0)} kpi={k.delivered_revenue} hint={`${k.delivered_count?.value || 0} delivered meals`} />
-                    <KpiCard testid="cust-kpi-outstanding" label="Outstanding" value={fmtCAD(k.outstanding_total?.value || 0)} kpi={k.outstanding_total} hint="Current receivables" inverseDelta />
-                    <KpiCard
-                      testid="cust-kpi-overdue"
-                      label="Overdue"
-                      value={fmtCAD(k.overdue_total?.value || 0)}
-                      kpi={k.overdue_total}
-                      hint={
-                        insights?.is_overdue
-                          ? `${insights.days_overdue} day${insights.days_overdue === 1 ? "" : "s"} past collection`
-                          : "Not past collection day"
-                      }
-                      inverseDelta
-                    />
+                    <KpiCard testid="cust-kpi-outstanding" label="Outstanding" value={fmtCAD(k.outstanding_total?.value || 0)} kpi={k.outstanding_total} hint="Current balance" inverseDelta />
                   </>
                 ) : (
                   <KpiCard testid="cust-kpi-delivered-meals" label="Delivered meals" value={String(k.delivered_count?.value || 0)} kpi={k.delivered_count} hint="Meals marked delivered" />
@@ -418,12 +464,6 @@ export default function CustomerDetail() {
                   <>
                     <div className="animate-fade-in-up" style={stagger(3)}><CollectionsChart data={insights.series} /></div>
                     <div className="animate-fade-in-up" style={stagger(4)}><AgingChart data={insights.ar_aging} /></div>
-                    <div className="animate-fade-in-up" style={stagger(4)}>
-                      <AgingChart
-                        data={insights.overdue_aging || { "1_7": 0, "8_14": 0, "15_30": 0, "30_plus": 0 }}
-                        variant="overdue"
-                      />
-                    </div>
                   </>
                 ) : null}
               </section>
@@ -473,11 +513,11 @@ export default function CustomerDetail() {
             <div className="flex justify-end">
               <button
                 type="button"
-                data-testid="customer-add-extra"
+                data-testid="customer-add-adjust"
                 onClick={() => setExtraOpen(true)}
                 className="pill-btn btn-secondary h-10 px-4 text-sm inline-flex items-center gap-1.5"
               >
-                <Plus size={16} /> Add extra meal
+                <Plus size={16} /> Adjust meal
               </button>
             </div>
           ) : null}
@@ -604,13 +644,22 @@ export default function CustomerDetail() {
       <ExtraMealsSheet
         open={extraOpen}
         onClose={() => setExtraOpen(false)}
-        onConfirm={confirmExtra}
-        title={`Extra meal for ${c.name}`}
+        onConfirm={confirmAdjust}
+        title={`Adjust meal for ${c.name}`}
         defaultDate={todayISO()}
         showDate
         mealPrice={showMoney ? Number(c.meal_price) || 0 : undefined}
+        mealTypes={mealTypes}
+        defaultMealTypeId={c.meal_type_id || "regular"}
+        mealSlots={Array.isArray(c.meal_slots) && c.meal_slots.length ? c.meal_slots : ["uncategorized"]}
+        defaultMealSlot={
+          Array.isArray(c.meal_slots) && c.meal_slots.length === 1 ? c.meal_slots[0] : null
+        }
+        allowPriceOverride={showMoney}
+        customerId={c.id}
+        customerName={c.name}
         busy={extraBusy}
-        confirmTestId="customer-extra-confirm"
+        confirmTestId="customer-adjust-confirm"
       />
     </div>
   );

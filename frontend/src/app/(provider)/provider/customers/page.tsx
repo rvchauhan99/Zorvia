@@ -47,13 +47,12 @@ const empty = {
   driver_id: "", delivery_sequence: "",
   opening_balance: "0",
   joining_date: "",
-  payment_collection_day: "",
 };
 
-const SAMPLE_CSV = `name,phone,email,address,apartment,postal_code,delivery_days,meal_price,meal_quantity,meal_slots,lunch_meal_quantity,dinner_meal_quantity,driver_email,delivery_sequence,lunch_driver_email,lunch_delivery_sequence,dinner_driver_email,dinner_delivery_sequence,opening_balance,joining_date,payment_collection_day
-Aarav Sharma,4165551212,aarav@example.com,45 Bloor St W,Unit 302,M5S1M2,"0,1,2,3,4",12,2,uncategorized,,,,1,,,,,45.00,2024-03-01,1
-Priya Patel,6475559898,priya@example.com,100 King St E,,M5C1G6,"0,2,4",14,,"lunch,dinner",1,1,,,,,,,-20,2024-06-15,15
-Neha Gupta,9055553344,neha@example.com,12 Queen St W,Suite 5,M5H2N2,"1,3,5",12,1,uncategorized,,,driver@yourkitchen.ca,3,,,,,0,,1
+const SAMPLE_CSV = `name,phone,email,address,apartment,postal_code,delivery_days,meal_price,meal_quantity,meal_slots,lunch_meal_quantity,dinner_meal_quantity,driver_email,delivery_sequence,lunch_driver_email,lunch_delivery_sequence,dinner_driver_email,dinner_delivery_sequence,opening_balance,joining_date
+Aarav Sharma,4165551212,aarav@example.com,45 Bloor St W,Unit 302,M5S1M2,"0,1,2,3,4",12,2,uncategorized,,,,1,,,,,45.00,2024-03-01
+Priya Patel,6475559898,priya@example.com,100 King St E,,M5C1G6,"0,2,4",14,,"lunch,dinner",1,1,,,,,,,-20,2024-06-15
+Neha Gupta,9055553344,neha@example.com,12 Queen St W,Suite 5,M5H2N2,"1,3,5",12,1,uncategorized,,,driver@yourkitchen.ca,3,,,,,0,
 `;
 
 function downloadSampleCsv() {
@@ -113,6 +112,8 @@ export default function Customers() {
   const [debouncedQ, setDebouncedQ] = useState("");
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
+  const [filterDriverId, setFilterDriverId] = useState("");
+  const [filterMealTypeId, setFilterMealTypeId] = useState("");
   const [filterCounts, setFilterCounts] = useState({
     all: 0, pending: 0, paused: 0, inactive: 0, high_balance: 0,
   });
@@ -149,6 +150,8 @@ export default function Customers() {
       params.set("page_size", String(DEFAULT_PAGE_SIZE));
       if (filter !== "all") params.set("status", filter);
       if (debouncedQ) params.set("q", debouncedQ);
+      if (filterDriverId) params.set("driver_id", filterDriverId);
+      if (filterMealTypeId) params.set("meal_type_id", filterMealTypeId);
       if (opts?.cursor) params.set("cursor", opts.cursor);
       const { data } = await api.get(`/customers?${params.toString()}`);
       const page = asPageEnvelope<any>(data);
@@ -164,7 +167,6 @@ export default function Customers() {
   }
 
   async function loadStaff() {
-    if (!canMutate) return;
     try {
       const [{ data }, { data: prov }] = await Promise.all([
         api.get("/providers/me/staff"),
@@ -188,13 +190,13 @@ export default function Customers() {
         ]);
       }
     } catch {
-      // staff list optional for viewers
+      // staff list optional for some roles
     }
   }
 
-  useEffect(() => { load(); }, [debouncedQ, filter]);
+  useEffect(() => { load(); }, [debouncedQ, filter, filterDriverId, filterMealTypeId]);
   useEffect(() => { loadCounts(); }, []);
-  useEffect(() => { loadStaff(); }, [canMutate]);
+  useEffect(() => { loadStaff(); }, []);
 
   function priceForMealType(typeId: string) {
     const row = mealTypes.find((t) => t.id === typeId);
@@ -280,7 +282,6 @@ export default function Customers() {
             : ""),
       opening_balance: c.opening_balance != null ? String(c.opening_balance) : "0",
       joining_date: joining,
-      payment_collection_day: c.payment_collection_day != null ? String(c.payment_collection_day) : "",
     });
     setScheduleMode(detectSlotScheduleMode(ss, slots));
     setShowForm(true);
@@ -468,11 +469,6 @@ export default function Customers() {
         }
       }
       if (form.joining_date) payload.joining_date = form.joining_date;
-      if (form.payment_collection_day !== "" && form.payment_collection_day != null) {
-        payload.payment_collection_day = Number(form.payment_collection_day);
-      } else if (editing) {
-        payload.payment_collection_day = null;
-      }
 
       if (dual) {
         if (scheduleMode === "same") {
@@ -636,11 +632,11 @@ export default function Customers() {
             <div className="flex gap-2 w-full sm:w-auto">
               <button
                 type="button"
-                data-testid="customers-add-extra"
+                data-testid="customers-add-adjust"
                 onClick={() => setExtraOpen(true)}
                 className="pill-btn btn-secondary gap-2 flex-1 sm:flex-none shrink-0 cursor-pointer h-11 inline-flex items-center justify-center"
               >
-                <Plus size={16} weight="bold" /> Extra meal
+                <Plus size={16} weight="bold" /> Adjust meal
               </button>
               <button
                 data-testid="add-customer-btn"
@@ -681,10 +677,36 @@ export default function Customers() {
         ) : null}
       </div>
 
-      <div className="flex items-center gap-2 max-w-md">
-        <div className="flex-1 relative">
-          <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input data-testid="customers-search" placeholder="Search name, phone, email or postal…" value={q} onChange={(e) => setQ(e.target.value)} className="w-full h-10 pl-9 pr-3 rounded-xl bg-white border border-brand-border outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all text-sm" />
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2 max-w-md">
+          <div className="flex-1 relative">
+            <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input data-testid="customers-search" placeholder="Search name, phone, email or postal…" value={q} onChange={(e) => setQ(e.target.value)} className="w-full h-10 pl-9 pr-3 rounded-xl bg-white border border-brand-border outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all text-sm" />
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2" data-testid="customers-extra-filters">
+          <select
+            data-testid="customers-driver-filter"
+            value={filterDriverId}
+            onChange={(e) => setFilterDriverId(e.target.value)}
+            className="h-10 px-3 rounded-xl bg-white border border-brand-border text-sm"
+          >
+            <option value="">All drivers</option>
+            {drivers.map((d: any) => (
+              <option key={d.id} value={d.id}>{d.name || d.email}</option>
+            ))}
+          </select>
+          <select
+            data-testid="customers-meal-type-filter"
+            value={filterMealTypeId}
+            onChange={(e) => setFilterMealTypeId(e.target.value)}
+            className="h-10 px-3 rounded-xl bg-white border border-brand-border text-sm"
+          >
+            <option value="">All meal types</option>
+            {mealTypes.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -951,21 +973,6 @@ export default function Customers() {
               onChange={(e) => setForm({ ...form, joining_date: e.target.value })}
               className={input}
             />
-          </label>
-          <label className="flex flex-col gap-1.5">
-            <span className="label-overline">Payment collection day</span>
-            <input
-              type="number"
-              min={1}
-              max={31}
-              step={1}
-              data-testid="cf-payment-collection-day"
-              value={form.payment_collection_day}
-              onChange={(e) => setForm({ ...form, payment_collection_day: e.target.value })}
-              className={input}
-              placeholder="e.g. 1 or 15"
-            />
-            <span className="text-xs text-muted-foreground">Day of each month you collect (1–31).</span>
           </label>
           <label className="flex flex-col gap-1.5 sm:col-span-2"><span className="label-overline">Address</span><input data-testid="cf-address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className={input} /></label>
           <label className="flex flex-col gap-1.5"><span className="label-overline">Apartment</span><input data-testid="cf-apt" value={form.apartment} onChange={(e) => setForm({ ...form, apartment: e.target.value })} className={input} /></label>

@@ -168,14 +168,14 @@ export default function ProviderDashboard() {
             {canQuickMark ? (
               <button
                 type="button"
-                data-testid="dashboard-add-extra"
+                data-testid="dashboard-add-adjust"
                 onClick={() => {
                   setExtraLocked(null);
                   setExtraOpen(true);
                 }}
                 className="inline-flex items-center gap-2 px-3 h-10 rounded-full bg-secondary text-secondary-foreground text-sm font-semibold hover:bg-brand-sageDark cursor-pointer"
               >
-                <Plus size={16} weight="bold" /> Extra meal
+                <Plus size={16} weight="bold" /> Adjust meal
               </button>
             ) : null}
             {provider?.signup_code ? (
@@ -258,7 +258,18 @@ export default function ProviderDashboard() {
           <StatCard testid="stat-pending" icon={Receipt} label="Pending Payments" value={summary?.pending_payments ?? "—"} hint="Awaiting your verification" tone="amber" />
           {showMoney ? (
             <>
-              <StatCard testid="stat-outstanding" icon={CurrencyDollar} label="Outstanding" value={fmtCAD(summary?.outstanding_total ?? 0)} hint="Across all customers" tone="ink" />
+              <StatCard
+                testid="stat-outstanding"
+                icon={CurrencyDollar}
+                label="Outstanding"
+                value={fmtCAD(summary?.outstanding_total ?? 0)}
+                hint={
+                  Number(summary?.customer_credit_total || 0) > 0
+                    ? `Receivables owed · Credit on account: ${fmtCAD(summary.customer_credit_total)}`
+                    : "Receivables owed (excludes advances)"
+                }
+                tone="ink"
+              />
               <StatCard testid="stat-collections" icon={Users} label="Today's Collections" value={fmtCAD(summary?.collections_today?.amount ?? 0)} hint={`${summary?.collections_today?.count ?? 0} verified today`} tone="secondary" />
             </>
           ) : null}
@@ -297,14 +308,14 @@ export default function ProviderDashboard() {
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          data-testid={`quick-extra-${d.id}`}
+                          data-testid={`quick-adjust-${d.id}`}
                           onClick={() => {
                             setExtraLocked({ id: d.customer_id, name: d.customer_name });
                             setExtraOpen(true);
                           }}
                           className="h-11 min-h-[44px] px-3 rounded-full border border-brand-border bg-white text-sm font-medium cursor-pointer hover:bg-brand-surface inline-flex items-center gap-1"
                         >
-                          <Plus size={14} /> Extra
+                          <Plus size={14} /> Adjust
                         </button>
                         <button data-testid={`quick-delivered-${d.id}`} onClick={() => markDelivery(d.id, "delivered")} className="h-11 min-h-[44px] px-4 rounded-full bg-secondary text-secondary-foreground text-sm font-medium active:scale-95 transition-transform cursor-pointer hover:bg-brand-sageDark">Deliver</button>
                         <button data-testid={`quick-missed-${d.id}`} onClick={() => markDelivery(d.id, "missed")} className="h-11 min-h-[44px] px-4 rounded-full border border-destructive/40 bg-white text-destructive text-sm font-medium cursor-pointer hover:bg-destructive/10">Miss</button>

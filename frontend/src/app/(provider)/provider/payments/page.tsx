@@ -10,6 +10,7 @@ import { asPageEnvelope, DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import StatusPill from "@/components/StatusPill";
 import AppSheet from "@/components/AppSheet";
 import RecordPaymentSheet from "@/components/RecordPaymentSheet";
+import CustomerAsyncSelect from "@/components/CustomerAsyncSelect";
 import LoadMoreButton from "@/components/LoadMoreButton";
 import { StatusFilterCards } from "@/components/StatusFilterCards";
 import { InlineLoader } from "@/components/loaders";
@@ -23,6 +24,8 @@ export default function Payments() {
   const [filter, setFilter] = useState("pending");
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
+  const [range, setRange] = useState({ start: "", end: "" });
+  const [customerFilter, setCustomerFilter] = useState<{ id: string; name: string } | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [viewing, setViewing] = useState<any>(null);
@@ -50,6 +53,9 @@ export default function Payments() {
         const status = opts.statusOverride ?? filter;
         if (status !== "all") params.set("status", status);
         if (debouncedQ) params.set("q", debouncedQ);
+        if (range.start) params.set("start", range.start);
+        if (range.end) params.set("end", range.end);
+        if (customerFilter?.id) params.set("customer_id", customerFilter.id);
         params.set("limit", String(DEFAULT_PAGE_SIZE));
         if (opts.cursor) params.set("cursor", opts.cursor);
         const { data } = await api.get(`/payments?${params.toString()}`);
@@ -65,7 +71,7 @@ export default function Payments() {
         setLoadingMore(false);
       }
     },
-    [filter, debouncedQ],
+    [filter, debouncedQ, range.start, range.end, customerFilter?.id],
   );
 
   useEffect(() => {
@@ -145,6 +151,35 @@ export default function Payments() {
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search name or ref"
               className="h-10 flex-1 sm:flex-none px-3 rounded-xl bg-white border border-brand-border text-sm min-w-0 sm:min-w-[180px]"
+            />
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <span className="label-overline">From</span>
+            <input
+              type="date"
+              data-testid="payment-range-start"
+              value={range.start}
+              onChange={(e) => setRange({ ...range, start: e.target.value })}
+              className="h-10 px-3 rounded-xl bg-white border border-brand-border text-sm"
+            />
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <span className="label-overline">To</span>
+            <input
+              type="date"
+              data-testid="payment-range-end"
+              value={range.end}
+              onChange={(e) => setRange({ ...range, end: e.target.value })}
+              className="h-10 px-3 rounded-xl bg-white border border-brand-border text-sm"
+            />
+          </label>
+          <div className="min-w-[200px] flex-1 sm:flex-none" data-testid="payment-customer-filter">
+            <CustomerAsyncSelect
+              testid="payment-customer"
+              value={customerFilter}
+              onChange={(opt) => setCustomerFilter(opt ? { id: opt.id, name: opt.name } : null)}
+              placeholder="Filter by customer"
+              activeOnly={false}
             />
           </div>
           {canMutate ? (
