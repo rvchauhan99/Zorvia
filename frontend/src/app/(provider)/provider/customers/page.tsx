@@ -45,12 +45,15 @@ const empty = {
     dinner: { driver_id: "", delivery_sequence: "" },
   },
   driver_id: "", delivery_sequence: "",
+  opening_balance: "0",
+  joining_date: "",
+  payment_collection_day: "",
 };
 
-const SAMPLE_CSV = `name,phone,email,address,apartment,postal_code,delivery_days,meal_price,meal_quantity,meal_slots,lunch_meal_quantity,dinner_meal_quantity,driver_email,delivery_sequence,lunch_driver_email,lunch_delivery_sequence,dinner_driver_email,dinner_delivery_sequence
-Aarav Sharma,4165551212,aarav@example.com,45 Bloor St W,Unit 302,M5S1M2,"0,1,2,3,4",12,2,uncategorized,,,,1,,,,
-Priya Patel,6475559898,priya@example.com,100 King St E,,M5C1G6,"0,2,4",14,,"lunch,dinner",1,1,,,,,,
-Neha Gupta,9055553344,neha@example.com,12 Queen St W,Suite 5,M5H2N2,"1,3,5",12,1,uncategorized,,,driver@yourkitchen.ca,3,,,,
+const SAMPLE_CSV = `name,phone,email,address,apartment,postal_code,delivery_days,meal_price,meal_quantity,meal_slots,lunch_meal_quantity,dinner_meal_quantity,driver_email,delivery_sequence,lunch_driver_email,lunch_delivery_sequence,dinner_driver_email,dinner_delivery_sequence,opening_balance,joining_date,payment_collection_day
+Aarav Sharma,4165551212,aarav@example.com,45 Bloor St W,Unit 302,M5S1M2,"0,1,2,3,4",12,2,uncategorized,,,,1,,,,,45.00,2024-03-01,1
+Priya Patel,6475559898,priya@example.com,100 King St E,,M5C1G6,"0,2,4",14,,"lunch,dinner",1,1,,,,,,,-20,2024-06-15,15
+Neha Gupta,9055553344,neha@example.com,12 Queen St W,Suite 5,M5H2N2,"1,3,5",12,1,uncategorized,,,driver@yourkitchen.ca,3,,,,,0,,1
 `;
 
 function downloadSampleCsv() {
@@ -180,7 +183,7 @@ export default function Customers() {
 
   function openCreate() {
     setEditing(null);
-    setForm(empty);
+    setForm({ ...empty, joining_date: todayISO() });
     setScheduleMode("same");
     setShowForm(true);
   }
@@ -212,6 +215,10 @@ export default function Customers() {
     const lunchSched = ss.lunch || {};
     const dinnerSched = ss.dinner || {};
     const sa = c.slot_assignments || {};
+    const joining =
+      (typeof c.joining_date === "string" && c.joining_date.slice(0, 10)) ||
+      (typeof c.created_at === "string" && c.created_at.slice(0, 10)) ||
+      "";
     setForm({
       name: c.name, email: c.email || "", phone: c.phone || "", address: c.address || "",
       apartment: c.apartment || "", postal_code: c.postal_code || "", notes: c.notes || "",
@@ -240,6 +247,9 @@ export default function Customers() {
           : (slots.length === 1 && slots[0] !== "uncategorized" && sa[slots[0]]?.delivery_sequence != null
             ? String(sa[slots[0]].delivery_sequence)
             : ""),
+      opening_balance: c.opening_balance != null ? String(c.opening_balance) : "0",
+      joining_date: joining,
+      payment_collection_day: c.payment_collection_day != null ? String(c.payment_collection_day) : "",
     });
     setScheduleMode(detectSlotScheduleMode(ss, slots));
     setShowForm(true);
@@ -418,6 +428,19 @@ export default function Customers() {
       };
       if (form.email) payload.email = form.email;
       if (form.meal_price !== "" && form.meal_price != null) payload.meal_price = Number(form.meal_price);
+      if (canMutate) {
+        if (form.opening_balance !== "" && form.opening_balance != null) {
+          payload.opening_balance = Number(form.opening_balance);
+        } else {
+          payload.opening_balance = 0;
+        }
+      }
+      if (form.joining_date) payload.joining_date = form.joining_date;
+      if (form.payment_collection_day !== "" && form.payment_collection_day != null) {
+        payload.payment_collection_day = Number(form.payment_collection_day);
+      } else if (editing) {
+        payload.payment_collection_day = null;
+      }
 
       if (dual) {
         if (scheduleMode === "same") {
@@ -832,6 +855,46 @@ export default function Customers() {
           {canMutate ? (
             <label className="flex flex-col gap-1.5"><span className="label-overline">Price per meal (CAD)</span><input type="number" step="0.5" data-testid="cf-price" value={form.meal_price} onChange={(e) => setForm({ ...form, meal_price: e.target.value })} className={input} placeholder="Uses default if empty" /></label>
           ) : null}
+          {canMutate ? (
+            <label className="flex flex-col gap-1.5 sm:col-span-2">
+              <span className="label-overline">Opening balance (CAD)</span>
+              <input
+                type="number"
+                step="0.01"
+                data-testid="cf-opening-balance"
+                value={form.opening_balance}
+                onChange={(e) => setForm({ ...form, opening_balance: e.target.value })}
+                className={input}
+                placeholder="0"
+              />
+              <span className="text-xs text-muted-foreground">Positive = outstanding owed; negative = advance credit. Leave 0 for new customers.</span>
+            </label>
+          ) : null}
+          <label className="flex flex-col gap-1.5">
+            <span className="label-overline">Joining date</span>
+            <input
+              type="date"
+              data-testid="cf-joining-date"
+              value={form.joining_date || ""}
+              onChange={(e) => setForm({ ...form, joining_date: e.target.value })}
+              className={input}
+            />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="label-overline">Payment collection day</span>
+            <input
+              type="number"
+              min={1}
+              max={31}
+              step={1}
+              data-testid="cf-payment-collection-day"
+              value={form.payment_collection_day}
+              onChange={(e) => setForm({ ...form, payment_collection_day: e.target.value })}
+              className={input}
+              placeholder="e.g. 1 or 15"
+            />
+            <span className="text-xs text-muted-foreground">Day of each month you collect (1–31).</span>
+          </label>
           <label className="flex flex-col gap-1.5 sm:col-span-2"><span className="label-overline">Address</span><input data-testid="cf-address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className={input} /></label>
           <label className="flex flex-col gap-1.5"><span className="label-overline">Apartment</span><input data-testid="cf-apt" value={form.apartment} onChange={(e) => setForm({ ...form, apartment: e.target.value })} className={input} /></label>
           <label className="flex flex-col gap-1.5"><span className="label-overline">Postal code</span><input data-testid="cf-postal" value={form.postal_code} onChange={(e) => setForm({ ...form, postal_code: e.target.value.toUpperCase() })} className={`${input} uppercase`} /></label>

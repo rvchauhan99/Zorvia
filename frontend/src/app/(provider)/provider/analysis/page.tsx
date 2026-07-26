@@ -33,6 +33,7 @@ function TopList({
   amountKey,
   testid,
   showMoney,
+  subtitleKey,
 }: {
   title: string;
   description: string;
@@ -40,6 +41,7 @@ function TopList({
   amountKey: string;
   testid: string;
   showMoney: boolean;
+  subtitleKey?: string;
 }) {
   return (
     <div className="card-tinted p-4 sm:p-5" data-testid={testid}>
@@ -68,6 +70,13 @@ function TopList({
                   <div className="font-medium truncate">{row.name || "Unknown customer"}</div>
                 )}
                 {row.count ? <div className="text-xs text-muted-foreground">{row.count} payment{row.count === 1 ? "" : "s"}</div> : null}
+                {subtitleKey && row[subtitleKey] != null ? (
+                  <div className="text-xs text-muted-foreground">
+                    {subtitleKey === "days_overdue"
+                      ? `${row.days_overdue} day${row.days_overdue === 1 ? "" : "s"} overdue`
+                      : String(row[subtitleKey])}
+                  </div>
+                ) : null}
               </div>
               {showMoney ? (
                 <div className="font-semibold">{fmtCAD(row[amountKey] || 0)}</div>
@@ -159,6 +168,14 @@ export default function AnalysisPage() {
                   <KpiCard testid="kpi-collections" label="Collections" value={fmtCAD(k.collections_amount?.value || 0)} kpi={k.collections_amount} hint={`${k.collections_count?.value || 0} verified payments`} />
                   <KpiCard testid="kpi-delivered-revenue" label="Delivered revenue" value={fmtCAD(k.delivered_revenue?.value || 0)} kpi={k.delivered_revenue} hint={`${k.delivered_count?.value || 0} delivered meals`} />
                   <KpiCard testid="kpi-outstanding" label="Outstanding" value={fmtCAD(k.outstanding_total?.value || 0)} kpi={k.outstanding_total} hint="Current receivables" inverseDelta />
+                  <KpiCard
+                    testid="kpi-overdue"
+                    label="Overdue"
+                    value={fmtCAD(k.overdue_total?.value || 0)}
+                    kpi={k.overdue_total}
+                    hint={`${k.overdue_customers_count?.value || 0} past collection day`}
+                    inverseDelta
+                  />
                 </>
               ) : (
                 <KpiCard testid="kpi-delivered-meals" label="Delivered meals" value={String(k.delivered_count?.value || 0)} kpi={k.delivered_count} hint="Meals marked delivered this period" />
@@ -179,6 +196,9 @@ export default function AnalysisPage() {
               <>
                 <div className="animate-fade-in-up" style={stagger(3)}><CollectionsChart data={data.series} /></div>
                 <div className="animate-fade-in-up" style={stagger(4)}><AgingChart data={data.ar_aging} /></div>
+                <div className="animate-fade-in-up" style={stagger(4)}>
+                  <AgingChart data={data.overdue_aging || { "1_7": 0, "8_14": 0, "15_30": 0, "30_plus": 0 }} variant="overdue" />
+                </div>
               </>
             ) : null}
             <div className="animate-fade-in-up" style={stagger(5)}><AreaChart data={data.areas} showMoney={showMoney} /></div>
@@ -194,6 +214,17 @@ export default function AnalysisPage() {
                     rows={data.top_outstanding}
                     amountKey="outstanding"
                     testid="analysis-top-outstanding"
+                    showMoney={showMoney}
+                  />
+                </div>
+                <div className="animate-fade-in-up" style={stagger(6)}>
+                  <TopList
+                    title="Top overdue"
+                    description="Past payment collection day with the largest balances."
+                    rows={data.top_overdue || []}
+                    amountKey="overdue_amount"
+                    subtitleKey="days_overdue"
+                    testid="analysis-top-overdue"
                     showMoney={showMoney}
                   />
                 </div>

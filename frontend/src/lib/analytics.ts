@@ -14,6 +14,9 @@ export type BusinessInsight = {
   href?: string;
 };
 
+export type AgingBuckets = Record<"0_7" | "8_14" | "15_30" | "30_plus", number>;
+export type OverdueAgingBuckets = Record<"1_7" | "8_14" | "15_30" | "30_plus", number>;
+
 export type BusinessInsights = {
   period: { key: PeriodKey; start: string; end: string };
   prior_period: { start: string; end: string };
@@ -25,8 +28,18 @@ export type BusinessInsights = {
     cancelled: number;
     collections_amount: number;
   }>;
-  ar_aging: Record<"0_7" | "8_14" | "15_30" | "30_plus", number>;
+  ar_aging: AgingBuckets;
+  overdue_aging?: OverdueAgingBuckets;
   top_outstanding: Array<{ customer_id?: string; name: string; outstanding: number }>;
+  top_overdue?: Array<{
+    customer_id?: string;
+    name: string;
+    outstanding: number;
+    overdue_amount?: number;
+    days_overdue?: number;
+    payment_collection_day?: number | null;
+    last_due_date?: string | null;
+  }>;
   top_collectors: Array<{ customer_id?: string; name: string; amount: number; count: number }>;
   areas: Array<{ area: string; customers: number; outstanding: number }>;
   highlights: BusinessInsight[];
@@ -40,6 +53,11 @@ export type CustomerInsights = {
   kpis: Record<string, KpiValue>;
   series: BusinessInsights["series"];
   ar_aging: BusinessInsights["ar_aging"];
+  overdue_aging?: OverdueAgingBuckets;
+  is_overdue?: boolean;
+  days_overdue?: number;
+  last_due_date?: string | null;
+  payment_collection_day?: number | null;
   highlights: BusinessInsight[];
 };
 
@@ -77,5 +95,15 @@ export function agingRows(ar: BusinessInsights["ar_aging"]) {
     { label: "8-14 days", value: ar["8_14"] || 0 },
     { label: "15-30 days", value: ar["15_30"] || 0 },
     { label: "30+ days", value: ar["30_plus"] || 0 },
+  ];
+}
+
+export function overdueAgingRows(ar?: OverdueAgingBuckets) {
+  const d = ar || { "1_7": 0, "8_14": 0, "15_30": 0, "30_plus": 0 };
+  return [
+    { label: "1-7 days", value: d["1_7"] || 0 },
+    { label: "8-14 days", value: d["8_14"] || 0 },
+    { label: "15-30 days", value: d["15_30"] || 0 },
+    { label: "30+ days", value: d["30_plus"] || 0 },
   ];
 }

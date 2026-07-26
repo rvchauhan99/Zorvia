@@ -217,6 +217,17 @@ export default function CustomerDetail() {
           <div className="text-right shrink-0">
             <div className="label-overline">Outstanding</div>
             <div className={`font-display font-black text-2xl ${c.outstanding > 0 ? "text-primary" : ""}`}>{fmtCAD(c.outstanding || 0)}</div>
+            {Number(c.opening_balance || 0) !== 0 ? (
+              <div className="text-xs text-muted-foreground mt-0.5" data-testid="opening-balance-note">
+                Includes opening balance of {fmtCAD(c.opening_balance)}
+              </div>
+            ) : null}
+            {insights?.is_overdue ? (
+              <div className="text-xs text-rose-700 mt-0.5 font-medium" data-testid="overdue-badge">
+                Overdue {insights.days_overdue} day{insights.days_overdue === 1 ? "" : "s"}
+                {insights.payment_collection_day != null ? ` (due day ${insights.payment_collection_day})` : ""}
+              </div>
+            ) : null}
           </div>
         ) : (
           <div className="text-right shrink-0">
@@ -244,6 +255,20 @@ export default function CustomerDetail() {
           <div>
             <div className="label-overline">Email</div>
             <div className="text-sm break-all">{c.email || "—"}</div>
+          </div>
+          <div>
+            <div className="label-overline">Joining date</div>
+            <div className="text-sm" data-testid="customer-joining-date">
+              {(typeof c.joining_date === "string" && c.joining_date.slice(0, 10)) ||
+                (typeof c.created_at === "string" && c.created_at.slice(0, 10)) ||
+                "—"}
+            </div>
+          </div>
+          <div>
+            <div className="label-overline">Payment collection day</div>
+            <div className="text-sm" data-testid="customer-collection-day">
+              {c.payment_collection_day != null ? `${c.payment_collection_day} of each month` : "—"}
+            </div>
           </div>
           <div className="sm:col-span-2">
             <div className="label-overline">Address</div>
@@ -358,6 +383,18 @@ export default function CustomerDetail() {
                     <KpiCard testid="cust-kpi-collections" label="Collections" value={fmtCAD(k.collections_amount?.value || 0)} kpi={k.collections_amount} hint={`${k.collections_count?.value || 0} verified payments`} />
                     <KpiCard testid="cust-kpi-delivered-revenue" label="Delivered revenue" value={fmtCAD(k.delivered_revenue?.value || 0)} kpi={k.delivered_revenue} hint={`${k.delivered_count?.value || 0} delivered meals`} />
                     <KpiCard testid="cust-kpi-outstanding" label="Outstanding" value={fmtCAD(k.outstanding_total?.value || 0)} kpi={k.outstanding_total} hint="Current receivables" inverseDelta />
+                    <KpiCard
+                      testid="cust-kpi-overdue"
+                      label="Overdue"
+                      value={fmtCAD(k.overdue_total?.value || 0)}
+                      kpi={k.overdue_total}
+                      hint={
+                        insights?.is_overdue
+                          ? `${insights.days_overdue} day${insights.days_overdue === 1 ? "" : "s"} past collection`
+                          : "Not past collection day"
+                      }
+                      inverseDelta
+                    />
                   </>
                 ) : (
                   <KpiCard testid="cust-kpi-delivered-meals" label="Delivered meals" value={String(k.delivered_count?.value || 0)} kpi={k.delivered_count} hint="Meals marked delivered" />
@@ -376,6 +413,12 @@ export default function CustomerDetail() {
                   <>
                     <div className="animate-fade-in-up" style={stagger(3)}><CollectionsChart data={insights.series} /></div>
                     <div className="animate-fade-in-up" style={stagger(4)}><AgingChart data={insights.ar_aging} /></div>
+                    <div className="animate-fade-in-up" style={stagger(4)}>
+                      <AgingChart
+                        data={insights.overdue_aging || { "1_7": 0, "8_14": 0, "15_30": 0, "30_plus": 0 }}
+                        variant="overdue"
+                      />
+                    </div>
                   </>
                 ) : null}
               </section>

@@ -46,6 +46,7 @@ export default function Reports() {
   const [data, setData] = useState<any>(null);
   const [range, setRange] = useState({ start: "", end: todayISO() });
   const [statementMonth, setStatementMonth] = useState(todayISO().slice(0, 7));
+  const [outstandingFilter, setOutstandingFilter] = useState<"all" | "overdue">("all");
 
   const moneyTab = tab === "outstanding" || tab === "collections" || tab === "statement";
   const canExport = showMoney || !moneyTab;
@@ -64,7 +65,9 @@ export default function Reports() {
     try {
       let url;
       if (tab === "daily") url = `/reports/daily-deliveries${range.start ? `?start=${range.start}&end=${range.end}` : ""}`;
-      else if (tab === "outstanding") url = "/reports/outstanding";
+      else if (tab === "outstanding") {
+        url = outstandingFilter === "overdue" ? "/reports/outstanding?overdue_only=true" : "/reports/outstanding";
+      }
       else if (tab === "collections") url = `/reports/collections${range.start ? `?start=${range.start}&end=${range.end}` : ""}`;
       else if (tab === "active") url = "/reports/active-customers";
       else if (tab === "statement") url = `/reports/statement?month=${statementMonth}`;
@@ -76,7 +79,7 @@ export default function Reports() {
       setData(null);
     }
   }
-  useEffect(() => { load(); }, [tab, range.start, range.end, statementMonth, showMoney]);
+  useEffect(() => { load(); }, [tab, range.start, range.end, statementMonth, showMoney, outstandingFilter]);
 
   function exportCSV() {
     if (!data || !canExport) return;
@@ -202,9 +205,51 @@ export default function Reports() {
           )
         ) : tab === "outstanding" ? (
           <>
-            <div className="mb-3 text-sm">Total outstanding: <span className="font-display font-bold text-2xl text-primary">{fmtCAD(data.total)}</span></div>
+            <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+              <div className="flex flex-wrap gap-4 text-sm">
+                <div>
+                  Total outstanding:{" "}
+                  <span className="font-display font-bold text-2xl text-primary">{fmtCAD(data.total)}</span>
+                </div>
+                <div>
+                  Overdue:{" "}
+                  <span className="font-display font-bold text-2xl text-rose-700" data-testid="outstanding-overdue-total">
+                    {fmtCAD(data.overdue_total || 0)}
+                  </span>
+                  <span className="text-muted-foreground ml-1">
+                    ({data.overdue_count || 0} customer{(data.overdue_count || 0) === 1 ? "" : "s"})
+                  </span>
+                </div>
+              </div>
+              <div className="flex gap-1.5" data-testid="outstanding-filter">
+                <button
+                  type="button"
+                  onClick={() => setOutstandingFilter("all")}
+                  className={`px-3 h-9 rounded-full text-sm font-medium border cursor-pointer ${
+                    outstandingFilter === "all"
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-white border-brand-border hover:bg-brand-surface"
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOutstandingFilter("overdue")}
+                  className={`px-3 h-9 rounded-full text-sm font-medium border cursor-pointer ${
+                    outstandingFilter === "overdue"
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-white border-brand-border hover:bg-brand-surface"
+                  }`}
+                >
+                  Overdue only
+                </button>
+              </div>
+            </div>
             {rows.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground">No outstanding balances</div>
+              <div className="p-8 text-center text-muted-foreground">
+                {outstandingFilter === "overdue" ? "No overdue balances" : "No outstanding balances"}
+              </div>
             ) : (
               <>
                 <ul className="md:hidden divide-y divide-brand-border -mx-4 sm:-mx-5">
@@ -213,18 +258,30 @@ export default function Reports() {
                       <div className="min-w-0">
                         <div className="font-medium truncate">{r.name}</div>
                         <div className="text-xs text-muted-foreground mt-0.5 truncate">{[r.phone, r.email].filter(Boolean).join(" · ")}</div>
+                        <div className="text-xs mt-1 flex flex-wrap gap-2">
+                          {r.payment_collection_day != null ? (
+                            <span className="text-muted-foreground">Collect day {r.payment_collection_day}</span>
+                          ) : (
+                            <span className="text-muted-foreground">No collect day</span>
+                          )}
+                          {r.is_overdue ? (
+                            <span className="text-rose-700 font-medium">{r.days_overdue}d overdue</span>
+                          ) : null}
+                        </div>
                       </div>
                       <div className="shrink-0 font-semibold text-primary">{fmtCAD(r.outstanding)}</div>
                     </li>
                   ))}
                 </ul>
                 <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-sm min-w-[560px]">
+              <table className="w-full text-sm min-w-[720px]">
                   <thead className="text-left bg-brand-surface">
                     <tr>
                       <th className="px-3 py-2 label-overline">Customer</th>
                       <th className="px-3 py-2 label-overline">Phone</th>
                       <th className="px-3 py-2 label-overline">Email</th>
+                      <th className="px-3 py-2 label-overline">Collect day</th>
+                      <th className="px-3 py-2 label-overline">Overdue</th>
                       <th className="px-3 py-2 label-overline text-right">Outstanding</th>
                     </tr>
                   </thead>
@@ -234,6 +291,16 @@ export default function Reports() {
                         <td className="px-3 py-2 font-medium">{r.name}</td>
                         <td className="px-3 py-2 text-muted-foreground">{r.phone}</td>
                         <td className="px-3 py-2 text-muted-foreground">{r.email}</td>
+                        <td className="px-3 py-2 text-muted-foreground">
+                          {r.payment_collection_day != null ? r.payment_collection_day : "—"}
+                        </td>
+                        <td className="px-3 py-2">
+                          {r.is_overdue ? (
+                            <span className="text-rose-700 font-medium">{r.days_overdue}d</span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
                         <td className="px-3 py-2 text-right font-semibold text-primary">{fmtCAD(r.outstanding)}</td>
                       </tr>
                     ))}
