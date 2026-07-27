@@ -99,7 +99,7 @@ export default function Settings() {
     }));
   }
 
-  function updMonthlyPlan(idx: number, field: string, value: string | number) {
+  function updMonthlyPlan(idx: number, field: string, value: string | number | number[]) {
     const plans = [...(mb.plans || [])];
     plans[idx] = { ...plans[idx], [field]: value };
     updMonthlyBilling({ plans });
@@ -735,10 +735,14 @@ export default function Settings() {
                                   type="checkbox"
                                   checked={(plan.weekdays || []).includes(wi)}
                                   onChange={(e) => {
-                                    const set = new Set(plan.weekdays || []);
+                                    const set = new Set<number>(
+                                      Array.isArray(plan.weekdays)
+                                        ? plan.weekdays.map((n: unknown) => Number(n)).filter((n: number) => Number.isFinite(n))
+                                        : []
+                                    );
                                     if (e.target.checked) set.add(wi);
                                     else set.delete(wi);
-                                    updMonthlyPlan(idx, "weekdays", Array.from(set).sort());
+                                    updMonthlyPlan(idx, "weekdays", Array.from(set).sort((a, b) => a - b));
                                   }}
                                   className="accent-primary"
                                 />
