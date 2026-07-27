@@ -52,6 +52,10 @@ export default function Reports() {
   const [debouncedQ, setDebouncedQ] = useState("");
   const [minAmount, setMinAmount] = useState("");
   const [statementActivityOnly, setStatementActivityOnly] = useState(false);
+  const [collectionsView, setCollectionsView] = useState<"received" | "due">("received");
+  const [dueDate, setDueDate] = useState(todayISO());
+  const [dueCollectionDay, setDueCollectionDay] = useState("");
+  const [dueMonth, setDueMonth] = useState(todayISO().slice(0, 7));
   const [areaPrefix, setAreaPrefix] = useState("");
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
@@ -76,6 +80,7 @@ export default function Reports() {
     setHasMore(false);
     setAreaPrefix("");
     setStatementActivityOnly(false);
+    setCollectionsView("received");
   }
 
   function outstandingParams(balance: "owed" | "credit", cursor?: string | null) {
@@ -101,7 +106,15 @@ export default function Reports() {
       if (tab === "daily") url = `/reports/daily-deliveries${range.start ? `?start=${range.start}&end=${range.end}` : ""}`;
       else if (tab === "outstanding") url = `/reports/outstanding?${outstandingParams("owed")}`;
       else if (tab === "customer-credit") url = `/reports/outstanding?${outstandingParams("credit")}`;
-      else if (tab === "collections") url = `/reports/collections${range.start ? `?start=${range.start}&end=${range.end}` : ""}`;
+      else if (tab === "collections") {
+        if (collectionsView === "due") {
+          const params = new URLSearchParams({ month: dueMonth, due_date: dueDate });
+          if (dueCollectionDay) params.set("collection_day", dueCollectionDay);
+          url = `/reports/payment-due?${params.toString()}`;
+        } else {
+          url = `/reports/collections${range.start ? `?start=${range.start}&end=${range.end}` : ""}`;
+        }
+      }
       else if (tab === "active") url = "/reports/active-customers";
       else if (tab === "statement") {
         const params = new URLSearchParams({ month: statementMonth });
@@ -157,7 +170,7 @@ export default function Reports() {
 
   useEffect(() => {
     load();
-  }, [tab, range.start, range.end, statementMonth, showMoney, debouncedQ, minAmount, statementActivityOnly, areaPrefix]);
+  }, [tab, range.start, range.end, statementMonth, showMoney, debouncedQ, minAmount, statementActivityOnly, areaPrefix, collectionsView, dueDate, dueCollectionDay, dueMonth]);
 
   function exportCSV() {
     if (!data || !canExport) return;
@@ -204,7 +217,7 @@ export default function Reports() {
         {tabButton(tab === "statement", "Statement", () => selectTab("statement"), "rtab-statement")}
       </div>
 
-      {(tab === "daily" || tab === "collections") ? (
+      {(tab === "daily" || (tab === "collections" && collectionsView === "received")) ? (
         <div className="flex flex-wrap items-center gap-3 text-sm">
           <label className="flex items-center gap-2">
             <span className="label-overline">From</span>
@@ -213,6 +226,54 @@ export default function Reports() {
           <label className="flex items-center gap-2">
             <span className="label-overline">To</span>
             <input data-testid="range-end" type="date" value={range.end} onChange={(e) => setRange({ ...range, end: e.target.value })} className="h-10 px-3 rounded-xl bg-white border border-brand-border transition-all" />
+          </label>
+        </div>
+      ) : null}
+
+      {tab === "collections" ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            data-testid="collections-view-received"
+            onClick={() => setCollectionsView("received")}
+            className={`px-3 h-10 rounded-full text-sm border cursor-pointer ${collectionsView === "received" ? "bg-primary text-primary-foreground border-primary" : "bg-white border-brand-border"}`}
+          >
+            Payments received
+          </button>
+          <button
+            type="button"
+            data-testid="collections-view-due"
+            onClick={() => setCollectionsView("due")}
+            className={`px-3 h-10 rounded-full text-sm border cursor-pointer ${collectionsView === "due" ? "bg-primary text-primary-foreground border-primary" : "bg-white border-brand-border"}`}
+          >
+            Amounts due
+          </button>
+        </div>
+      ) : null}
+
+      {tab === "collections" && collectionsView === "due" ? (
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <label className="flex items-center gap-2">
+            <span className="label-overline">Due date</span>
+            <input data-testid="due-date" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="h-10 px-3 rounded-xl bg-white border border-brand-border" />
+          </label>
+          <label className="flex items-center gap-2">
+            <span className="label-overline">Billing month</span>
+            <input data-testid="due-month" type="month" value={dueMonth} onChange={(e) => setDueMonth(e.target.value)} className="h-10 px-3 rounded-xl bg-white border border-brand-border" />
+          </label>
+          <label className="flex items-center gap-2">
+            <span className="label-overline">Collection day</span>
+            <select
+              data-testid="due-collection-day"
+              value={dueCollectionDay}
+              onChange={(e) => setDueCollectionDay(e.target.value)}
+              className="h-10 px-3 rounded-xl bg-white border border-brand-border"
+            >
+              <option value="">All</option>
+              {[1, 5, 10, 15, 20, 25, 28].map((d) => (
+                <option key={d} value={String(d)}>{d}</option>
+              ))}
+            </select>
           </label>
         </div>
       ) : null}
@@ -461,6 +522,48 @@ export default function Reports() {
           </>
         ) : tab === "collections" ? (
           <>
+            {collectionsView === "due" ? (
+              <>
+                <div className="mb-3 text-sm">
+                  Due total: <span className="font-display font-bold text-2xl text-secondary">{fmtCAD(data?.totals?.due_amount ?? 0)}</span>
+                  {" · "}
+                  Overdue: <span className="font-semibold text-primary">{fmtCAD(data?.totals?.overdue_amount ?? 0)}</span>
+                  {" · "}
+                  {data?.totals?.customer_count ?? 0} customers
+                </div>
+                {rows.length === 0 ? (
+                  <div className="p-8 text-center text-muted-foreground">No amounts due for this filter.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm min-w-[720px]">
+                      <thead className="text-left bg-brand-surface">
+                        <tr>
+                          <th className="px-3 py-2 label-overline">Customer</th>
+                          <th className="px-3 py-2 label-overline">Plan</th>
+                          <th className="px-3 py-2 label-overline">Due date</th>
+                          <th className="px-3 py-2 label-overline text-right">Month charge</th>
+                          <th className="px-3 py-2 label-overline text-right">Balance due</th>
+                          <th className="px-3 py-2 label-overline">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-brand-border">
+                        {rows.map((r: any) => (
+                          <tr key={r.customer_id} className="hover:bg-brand-surface/60">
+                            <td className="px-3 py-2 font-medium">{r.name}</td>
+                            <td className="px-3 py-2">{r.monthly_plan_name}</td>
+                            <td className="px-3 py-2">{r.collection_due_date || "—"}</td>
+                            <td className="px-3 py-2 text-right">{fmtCAD(r.month_charge_after_tax ?? r.month_charge)}</td>
+                            <td className="px-3 py-2 text-right font-semibold text-secondary">{fmtCAD(r.balance_due)}</td>
+                            <td className="px-3 py-2">{r.is_overdue ? `${r.days_overdue}d overdue` : "Current"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
             <div className="mb-3 text-sm">Total collected: <span className="font-display font-bold text-2xl text-secondary">{fmtCAD(data.total_amount)}</span> across {data.total_count} payments</div>
             {rows.length === 0 ? (
               <div className="p-8 text-center text-muted-foreground">No collections in range.</div>
@@ -499,6 +602,8 @@ export default function Reports() {
                 </div>
               </>
             )}
+              </>
+            )}
           </>
         ) : tab === "active" ? (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -533,6 +638,66 @@ export default function Reports() {
             </div>
             {rows.length === 0 ? (
               <div className="p-8 text-center text-muted-foreground">No statement rows for this month.</div>
+            ) : data.billing_mode === "monthly_flat" ? (
+              <>
+                <ul className="md:hidden divide-y divide-brand-border -mx-4 sm:-mx-5">
+                  {rows.map((r: any, i: number) => (
+                    <li key={r.customer_id || `statement-${r.email || r.name || i}`} className="px-4 sm:px-5 py-4 flex flex-col gap-2">
+                      <div className="font-medium">{r.name}</div>
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
+                        <span className="text-muted-foreground">Plan</span>
+                        <span className="text-right">{r.plan_name || "—"}</span>
+                        <span className="text-muted-foreground">Month charge</span>
+                        <span className="text-right font-semibold">{fmtCAD(r.month_charge_after_tax ?? r.month_charge_before_tax)}</span>
+                        <span className="text-muted-foreground">Due</span>
+                        <span className="text-right">{r.collection_due_date || "—"}</span>
+                        {r.tier_applied && r.policy_variant !== "monthly_fixed" ? (
+                          <>
+                            <span className="text-muted-foreground">Tier</span>
+                            <span className="text-right">{String(r.tier_applied).replace(/_/g, " ")}</span>
+                          </>
+                        ) : null}
+                        <span className="text-muted-foreground">Meals</span>
+                        <span className="text-right">{r.delivered_count}</span>
+                        <span className="text-muted-foreground">Paid $</span>
+                        <span className="text-right text-secondary">{fmtCAD(r.verified_payments_amount)}</span>
+                        <span className="text-muted-foreground">Outstanding</span>
+                        <span className="text-right font-semibold text-primary">{fmtCAD(r.outstanding)}</span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-sm min-w-[720px]">
+                    <thead className="text-left bg-brand-surface">
+                      <tr>
+                        <th className="px-3 py-2 label-overline">Customer</th>
+                        <th className="px-3 py-2 label-overline">Plan</th>
+                        <th className="px-3 py-2 label-overline text-right">Month charge</th>
+                        <th className="px-3 py-2 label-overline">Due</th>
+                        <th className="px-3 py-2 label-overline">Tier</th>
+                        <th className="px-3 py-2 label-overline">Meals</th>
+                        <th className="px-3 py-2 label-overline text-right">Paid $</th>
+                        <th className="px-3 py-2 label-overline text-right">Outstanding</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-brand-border">
+                      {rows.map((r: any, i: number) => (
+                        <tr key={r.customer_id || `statement-${r.email || r.name || i}`} className="hover:bg-brand-surface/60 transition-colors">
+                          <td className="px-3 py-2 font-medium">{r.name}</td>
+                          <td className="px-3 py-2">{r.plan_name || "—"}</td>
+                          <td className="px-3 py-2 text-right font-semibold">{fmtCAD(r.month_charge_after_tax ?? r.month_charge_before_tax)}</td>
+                          <td className="px-3 py-2">{r.collection_due_date || "—"}</td>
+                          <td className="px-3 py-2">{r.policy_variant === "monthly_fixed" ? "fixed" : (r.tier_applied ? String(r.tier_applied).replace(/_/g, " ") : "—")}</td>
+                          <td className="px-3 py-2">{r.delivered_count}</td>
+                          <td className="px-3 py-2 text-right text-secondary">{fmtCAD(r.verified_payments_amount)}</td>
+                          <td className="px-3 py-2 text-right font-semibold text-primary">{fmtCAD(r.outstanding)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             ) : (
               <>
                 <ul className="md:hidden divide-y divide-brand-border -mx-4 sm:-mx-5">

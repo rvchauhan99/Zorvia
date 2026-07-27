@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { fmtCAD } from "@/lib/format";
 import AppSheet from "@/components/AppSheet";
 import CustomerAsyncSelect, { type CustomerAsyncOption } from "@/components/CustomerAsyncSelect";
 import ImageSourceField from "@/components/ImageSourceField";
@@ -24,18 +25,61 @@ export default function RecordPaymentSheet({ open, onClose, onRecorded, lockedCu
   const [reference, setReference] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [billingHint, setBillingHint] = useState<{
+    outstanding: number;
+    month_charge?: number | null;
+    collection_due_date?: string | null;
+    plan_name?: string | null;
+    monthly?: boolean;
+  } | null>(null);
 
   useEffect(() => {
     if (!open) return;
     setAmount("");
     setReference("");
     setFile(null);
+    setBillingHint(null);
     if (lockedCustomer) {
       setCustomer({ id: lockedCustomer.id, name: lockedCustomer.name });
     } else {
       setCustomer(null);
     }
   }, [open, lockedCustomer]);
+
+  useEffect(() => {
+    const cid = lockedCustomer?.id || customer?.id;
+    if (!open || !cid) {
+      setBillingHint(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await api.get(`/customers/${cid}`);
+        if (cancelled) return;
+        const outstanding = Number(data?.outstanding) || 0;
+        const monthly = data?.billing?.billing_mode === "monthly_flat";
+        const monthCharge = data?.current_month_billing?.month_charge_after_tax
+          ?? data?.current_month_billing?.month_charge_before_tax
+          ?? null;
+        setBillingHint({
+          outstanding,
+          monthly,
+          month_charge: monthCharge != null ? Number(monthCharge) : null,
+          collection_due_date: data?.billing?.collection_due_date || data?.current_month_billing?.collection_due_date || null,
+          plan_name: data?.billing?.monthly_plan_name || data?.current_month_billing?.plan_name || null,
+        });
+        setAmount((prev) => {
+          if (prev) return prev;
+          if (outstanding > 0) return outstanding.toFixed(2);
+          return prev;
+        });
+      } catch {
+        if (!cancelled) setBillingHint(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open, lockedCustomer?.id, customer?.id]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -123,6 +167,19 @@ export default function RecordPaymentSheet({ open, onClose, onRecorded, lockedCu
           />
         </div>
       )}
+
+      {billingHint ? (
+        <div className="mb-4 rounded-xl border border-brand-border bg-white px-4 py-3 text-sm" data-testid="record-payment-billing-hint">
+          <div>Outstanding: <span className="font-semibold text-primary">{fmtCAD(billingHint.outstanding)}</span></div>
+          {billingHint.monthly ? (
+            <div className="text-xs text-muted-foreground mt-1">
+              {billingHint.plan_name || "Monthly plan"}
+              {billingHint.month_charge != null ? ` · month charge ${fmtCAD(billingHint.month_charge)}` : ""}
+              {billingHint.collection_due_date ? ` · due ${billingHint.collection_due_date}` : ""}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="flex flex-col gap-3">
         <label className="flex flex-col gap-1.5">

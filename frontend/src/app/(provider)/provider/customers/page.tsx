@@ -47,12 +47,14 @@ const empty = {
   driver_id: "", delivery_sequence: "",
   opening_balance: "0",
   joining_date: "",
+  payment_collection_day: "",
+  monthly_plan_id: "",
 };
 
-const SAMPLE_CSV = `name,phone,email,address,apartment,postal_code,delivery_days,meal_price,meal_quantity,meal_slots,lunch_meal_quantity,dinner_meal_quantity,driver_email,delivery_sequence,lunch_driver_email,lunch_delivery_sequence,dinner_driver_email,dinner_delivery_sequence,opening_balance,joining_date
-Aarav Sharma,4165551212,aarav@example.com,45 Bloor St W,Unit 302,M5S1M2,"0,1,2,3,4",12,2,uncategorized,,,,1,,,,,45.00,2024-03-01
-Priya Patel,6475559898,priya@example.com,100 King St E,,M5C1G6,"0,2,4",14,,"lunch,dinner",1,1,,,,,,,-20,2024-06-15
-Neha Gupta,9055553344,neha@example.com,12 Queen St W,Suite 5,M5H2N2,"1,3,5",12,1,uncategorized,,,driver@yourkitchen.ca,3,,,,,0,
+const SAMPLE_CSV = `name,phone,email,address,apartment,postal_code,lat,lng,delivery_days,meal_price,meal_quantity,meal_slots,lunch_meal_quantity,dinner_meal_quantity,driver_email,delivery_sequence,lunch_driver_email,lunch_delivery_sequence,dinner_driver_email,dinner_delivery_sequence,opening_balance,joining_date,payment_collection_day,monthly_plan_id
+Aarav Sharma,4165551212,aarav@example.com,45 Bloor St W,Unit 302,M5S1M2,,,,"0,1,2,3,4",12,2,uncategorized,,,,1,,,,,45.00,2024-03-01,1,mon_fri
+Priya Patel,6475559898,priya@example.com,100 King St E,,M5C1G6,43.6496,-79.3776,"0,2,4",14,,"lunch,dinner",1,1,,,,,,,-20,2024-06-15,15,
+Neha Gupta,9055553344,neha@example.com,12 Queen St W,Suite 5,M5H2N2,,,,"1,3,5",12,1,uncategorized,,,driver@yourkitchen.ca,,,,,,0,,1,mon_sat
 `;
 
 function downloadSampleCsv() {
@@ -117,6 +119,10 @@ export default function Customers() {
   const [filterCounts, setFilterCounts] = useState({
     all: 0, pending: 0, paused: 0, inactive: 0, high_balance: 0,
   });
+  const [monthlyBillingEnabled, setMonthlyBillingEnabled] = useState(false);
+  const [monthlyPlans, setMonthlyPlans] = useState<{ id: string; name: string; monthly_fee_cad?: number }[]>([]);
+  const [routePreview, setRoutePreview] = useState<any>(null);
+  const [routePreviewLoading, setRoutePreviewLoading] = useState(false);
 
   const input = "h-11 w-full px-4 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all";
   const drivers = useMemo(() => staff.filter((s) => (s.role || "admin") === "driver"), [staff]);
@@ -125,6 +131,54 @@ export default function Customers() {
     const id = window.setTimeout(() => setDebouncedQ(q.trim()), 350);
     return () => window.clearTimeout(id);
   }, [q]);
+
+  // Debounced route placement preview while the create/edit sheet is open
+  useEffect(() => {
+    if (!showForm || !canMutate) return;
+    const address = (form.address || "").trim();
+    if (!address) {
+      if (!editing) setRoutePreview(null);
+      return;
+    }
+    const slots: string[] = Array.isArray(form.meal_slots) && form.meal_slots.length
+      ? form.meal_slots
+      : ["uncategorized"];
+    const meal_slot = slots.includes("lunch") && slots.includes("dinner")
+      ? "lunch"
+      : slots[0] || "uncategorized";
+    let driver_id = form.driver_id || "";
+    if (meal_slot === "lunch") driver_id = form.slot_assignments?.lunch?.driver_id || driver_id;
+    if (meal_slot === "dinner") driver_id = form.slot_assignments?.dinner?.driver_id || driver_id;
+
+    const t = window.setTimeout(() => {
+      setRoutePreviewLoading(true);
+      api
+        .post("/route-planning/preview-placement", {
+          address: form.address || "",
+          apartment: form.apartment || "",
+          postal_code: form.postal_code || "",
+          meal_slot,
+          driver_id: driver_id || null,
+        })
+        .then(({ data }) => setRoutePreview(data))
+        .catch(() => {
+          /* non-fatal — keep prior preview */
+        })
+        .finally(() => setRoutePreviewLoading(false));
+    }, 500);
+    return () => window.clearTimeout(t);
+  }, [
+    showForm,
+    canMutate,
+    form.address,
+    form.apartment,
+    form.postal_code,
+    form.driver_id,
+    form.meal_slots,
+    form.slot_assignments?.lunch?.driver_id,
+    form.slot_assignments?.dinner?.driver_id,
+    editing,
+  ]);
 
   async function loadCounts() {
     try {
@@ -173,6 +227,15 @@ export default function Customers() {
         api.get("/providers/me"),
       ]);
       setStaff(data || []);
+      setMonthlyBillingEnabled(!!prov?.settings?.monthly_billing?.enabled);
+      const plans = Array.isArray(prov?.settings?.monthly_billing?.plans)
+        ? prov.settings.monthly_billing.plans.map((p: any) => ({
+            id: String(p.id),
+            name: String(p.name || p.id),
+            monthly_fee_cad: Number(p.monthly_fee_cad) || 0,
+          }))
+        : [];
+      setMonthlyPlans(plans);
       if (Array.isArray(prov?.meal_types) && prov.meal_types.length) {
         setMealTypes(
           prov.meal_types.map((t: any) => ({
@@ -214,6 +277,7 @@ export default function Customers() {
 
   function openCreate() {
     setEditing(null);
+    setRoutePreview(null);
     const price = priceForMealType("regular");
     setForm({ ...empty, joining_date: todayISO(), meal_type_id: "regular", meal_price: String(price) });
     setScheduleMode("same");
@@ -221,6 +285,22 @@ export default function Customers() {
   }
   function openEdit(c: any) {
     setEditing(c);
+    setRoutePreview(
+      c.lat != null && c.lng != null
+        ? {
+            lat: c.lat,
+            lng: c.lng,
+            geocode_status: c.geocode_status || "ok",
+            delivery_sequence: c.delivery_sequence ?? null,
+            before: null,
+            after: null,
+            routing_configured: true,
+            from_stored: true,
+          }
+        : c.geocode_status
+          ? { geocode_status: c.geocode_status, from_stored: true }
+          : null
+    );
     const slots = normalizeMealSlots(c.meal_slots);
     const ss: Record<string, Record<string, number>> = {};
     const rawSs = c.slot_schedules || {};
@@ -282,6 +362,8 @@ export default function Customers() {
             : ""),
       opening_balance: c.opening_balance != null ? String(c.opening_balance) : "0",
       joining_date: joining,
+      payment_collection_day: c.payment_collection_day != null ? String(c.payment_collection_day) : "",
+      monthly_plan_id: c.monthly_plan_id || "",
     });
     setScheduleMode(detectSlotScheduleMode(ss, slots));
     setShowForm(true);
@@ -469,6 +551,12 @@ export default function Customers() {
         }
       }
       if (form.joining_date) payload.joining_date = form.joining_date;
+      if (monthlyBillingEnabled && form.payment_collection_day !== "" && form.payment_collection_day != null) {
+        payload.payment_collection_day = Number(form.payment_collection_day);
+      }
+      if (monthlyBillingEnabled) {
+        payload.monthly_plan_id = form.monthly_plan_id || null;
+      }
 
       if (dual) {
         if (scheduleMode === "same") {
@@ -610,7 +698,10 @@ export default function Customers() {
       const fd = new FormData();
       fd.append("file", file);
       const { data } = await api.post("/customers/import", fd);
-      toast.success(`Imported ${data.created} customer(s)`);
+      const parts = [`Imported ${data.created} customer(s)`];
+      if (data.geocoded) parts.push(`${data.geocoded} geocoded`);
+      if (data.route_placed) parts.push(`${data.route_placed} placed on route`);
+      toast.success(parts.join(" · "));
       if (data.errors?.length) toast.message(`${data.errors.length} row(s) skipped`);
       reloadAll();
     } catch (err: any) {
@@ -626,6 +717,15 @@ export default function Customers() {
         <div>
           <span className="label-overline">CRM</span>
           <h1 className="font-display font-black text-2xl sm:text-4xl mt-0.5 sm:mt-1">Customers</h1>
+          {canMutate ? (
+            <Link
+              href="/provider/route-planning"
+              data-testid="customers-route-planning-link"
+              className="text-sm text-brand-teal underline-offset-2 hover:underline mt-1 inline-block"
+            >
+              Route planning
+            </Link>
+          ) : null}
         </div>
         {canMutate ? (
           <div className="flex flex-col gap-2 w-full sm:w-auto sm:items-end">
@@ -765,6 +865,11 @@ export default function Customers() {
                         {c.rejected ? <span className="text-[10px] uppercase tracking-widest bg-red-100 text-red-900 px-2 py-0.5 rounded-full">Rejected</span> : null}
                         {isPaused(c) ? <span className="text-[10px] uppercase tracking-widest bg-sky-100 text-sky-900 px-2 py-0.5 rounded-full">Paused</span> : null}
                         {!c.active ? <span className="text-[10px] uppercase tracking-widest bg-neutral-200 text-neutral-800 px-2 py-0.5 rounded-full">Inactive</span> : null}
+                        {c.geocode_status === "ok" ? (
+                          <span className="text-[10px] uppercase tracking-widest bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded-full">Geocoded</span>
+                        ) : c.geocode_status === "failed" ? (
+                          <span className="text-[10px] uppercase tracking-widest bg-orange-100 text-orange-900 px-2 py-0.5 rounded-full">Address issue</span>
+                        ) : null}
                       </div>
                     </div>
                     <div className="text-right shrink-0">
@@ -974,9 +1079,80 @@ export default function Customers() {
               className={input}
             />
           </label>
+          {monthlyBillingEnabled ? (
+            <>
+              <label className="flex flex-col gap-1.5">
+                <span className="label-overline">Monthly plan</span>
+                <select
+                  data-testid="cf-monthly-plan"
+                  value={form.monthly_plan_id || ""}
+                  onChange={(e) => setForm({ ...form, monthly_plan_id: e.target.value })}
+                  className={input}
+                >
+                  <option value="">Auto-match from schedule</option>
+                  {monthlyPlans.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                      {p.monthly_fee_cad != null ? ` · $${Number(p.monthly_fee_cad).toFixed(2)}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="label-overline">Collection day override (1–31)</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={31}
+                  data-testid="cf-collection-day"
+                  value={form.payment_collection_day}
+                  onChange={(e) => setForm({ ...form, payment_collection_day: e.target.value })}
+                  className={input}
+                  placeholder="Uses kitchen default if empty"
+                />
+              </label>
+            </>
+          ) : null}
           <label className="flex flex-col gap-1.5 sm:col-span-2"><span className="label-overline">Address</span><input data-testid="cf-address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className={input} /></label>
           <label className="flex flex-col gap-1.5"><span className="label-overline">Apartment</span><input data-testid="cf-apt" value={form.apartment} onChange={(e) => setForm({ ...form, apartment: e.target.value })} className={input} /></label>
           <label className="flex flex-col gap-1.5"><span className="label-overline">Postal code</span><input data-testid="cf-postal" value={form.postal_code} onChange={(e) => setForm({ ...form, postal_code: e.target.value.toUpperCase() })} className={`${input} uppercase`} /></label>
+          <div
+            className="sm:col-span-2 rounded-xl border border-brand-border bg-brand-surface/50 px-3 py-3 flex flex-col gap-1.5"
+            data-testid="cf-route-preview"
+          >
+            <span className="label-overline">Location &amp; route</span>
+            {routePreviewLoading ? (
+              <p className="text-xs text-muted-foreground">Looking up address…</p>
+            ) : routePreview ? (
+              <>
+                <p className="text-sm" data-testid="cf-latlng">
+                  {routePreview.lat != null && routePreview.lng != null
+                    ? `${Number(routePreview.lat).toFixed(5)}, ${Number(routePreview.lng).toFixed(5)}`
+                    : "—"}
+                  <span className="text-muted-foreground text-xs ml-2">
+                    · {routePreview.geocode_status || "pending"}
+                  </span>
+                </p>
+                {routePreview.delivery_sequence != null ? (
+                  <p className="text-xs text-muted-foreground" data-testid="cf-route-summary">
+                    Suggested stop #{routePreview.delivery_sequence}
+                    {routePreview.before?.name ? ` · after ${routePreview.before.name}` : ""}
+                    {routePreview.after?.name ? ` · before ${routePreview.after.name}` : ""}
+                    {!routePreview.before && !routePreview.after ? " · first / only stop in pool" : ""}
+                    {routePreview.from_stored ? " (saved)" : " (auto if sequence left blank)"}
+                  </p>
+                ) : routePreview.geocode_status === "failed" ? (
+                  <p className="text-xs text-amber-800">Address could not be geocoded — fix address or place later in Route planning.</p>
+                ) : routePreview.routing_configured === false ? (
+                  <p className="text-xs text-muted-foreground">Routing key not set — lat/lng preview unavailable; you can still assign driver &amp; sequence manually.</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Leave sequence blank to auto-insert into the best gap when you save.</p>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground">Enter an address to preview coordinates and suggested route position.</p>
+            )}
+          </div>
           {isCategorized(form.meal_slots) && isDualSlots(form.meal_slots) ? (
             <>
               <label className="flex flex-col gap-1.5">
@@ -1098,7 +1274,7 @@ export default function Customers() {
                   placeholder="e.g. 1 (earlier stop)"
                 />
                 <span className="text-xs text-muted-foreground">
-                  Stop number for the assigned driver (or unassigned pool). Inserting at an existing number shifts later stops down.
+                  Leave blank to auto-place in the best gap (for the selected driver, or unassigned pool). Setting a number inserts and shifts later stops.
                 </span>
               </label>
             </>

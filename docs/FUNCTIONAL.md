@@ -72,7 +72,7 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 | Feature | Behavior |
 |---------|----------|
 | Profile | Org name, contact, Interac email, address fields |
-| Settings | `cutoff_hours`, **meal types** (Regular / Jain / Fasting + custom) with per-type CAD price, timezone, signup code (shareable), kitchen logo (512×512), `closed_dates` (holidays), change password |
+| Settings | `cutoff_hours`, **meal types** (Regular / Jain / Fasting + custom) with per-type CAD price, timezone, signup code (shareable), kitchen logo (512×512), `closed_dates` (holidays), **monthly billing policy** (opt-in; default off), change password |
 | Signup code | Chosen by provider at signup; **letters/numbers only** (3–32); stored uppercase; unique case-insensitively across tenants; consumers join with case-insensitive match |
 | Kitchen logo | Optional; Camera or Upload on settings → Pillow square resize 512 → R2 (`logos/`) or data-URL fallback |
 | Consumer avatar | Optional on signup (deferred upload after verify) and profile; Camera or Upload; 256×256 → R2 (`avatars/`) |
@@ -122,6 +122,21 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 | Meal schedule | Customer `meal_slots` (uncategorized default, or lunch and/or dinner) + `slot_schedules` qty per slot; Same every day / Custom per day; dual slots = two stops/day with allocated qty (not duplicated); optional per-slot drivers |
 | List pagination | Provider payments + customers CRM use cursor pages (Load more, page size 25); statement report uses batched aggregations |
 
+### 4.5b Monthly flat billing (opt-in, tenant-wide)
+
+**Default:** `settings.monthly_billing.enabled = false` — all tenants use per-meal outstanding until an admin enables monthly billing in Settings.
+
+When enabled, **all customers** on that tenant switch to monthly-period billing; per-delivery line charges no longer accrue in outstanding.
+
+| Setting | Behavior |
+|---------|----------|
+| Policy variant | **`monthly_adjustable`**: flat fee, extra days free, 2-tier cancellation (≤ N deduct daily rate; > N recalc at penalty daily rate). **`monthly_fixed`**: always charge flat monthly plan fee regardless of skips/extras. See [`MONTHLY_BILLING.md`](MONTHLY_BILLING.md). |
+| Plan templates | Editable Mon–Fri / Mon–Sat defaults (fee, standard days, weekdays); auto-matched from customer schedule; optional `monthly_plan_id` override on customer. |
+| Collection day | Provider `default_collection_day` (1–31, required when enabled); per-customer `payment_collection_day` override in CRM when monthly billing on. |
+| Outstanding | `opening_balance` + Σ calendar-month charges (after tax) − verified payments |
+| Reports | `GET /reports/payment-due` — amounts due by collection due date; Collections tab **Amounts due** sub-view |
+| Statement | Monthly statement rows include plan, tier, collection due date when monthly billing active |
+
 ### 4.6 Reports (provider)
 
 - Dashboard remains the day-of-operations cockpit: today’s required meals, pending / delivered / missed / cancelled deliveries, today’s collections, **outstanding receivables** (sum of customers who owe only — advances excluded), optional customer-credit total, pending payment approvals, pending customer approvals, and route quick actions.
@@ -133,7 +148,8 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 - Outstanding balances (**owed only**, `outstanding > 0`; highest amount first; search / min amount / Load more). Default Reports tab.  
 - Customer credit (advance balances, `outstanding < 0`; largest credit first; same search / min / pagination)  
 - Daily deliveries  
-- Collections  
+- Collections (payments received by submission date)  
+- **Payment due** (`GET /reports/payment-due`) — monthly kitchens: who owes what by collection due date  
 - Active customers  
 - Area summary (optional FSA prefix)  
 - Dashboard summary  
@@ -334,6 +350,7 @@ WhatsApp menu shares are **not** included in the SaaS subscription.
 | Action button colors | `btn-danger` for delete/reject/cancel-delivery; `btn-secondary` for deliver/verify; `btn-outline` for dismiss Cancel |
 | CSV import + invites | Sample CSV download on Customers; `POST /customers/import` (driver_email + delivery_sequence; `opening_balance` / `current_outstanding`, `joining_date`); invite HTML → `/consumer-signup?code=` |
 | Customer route master | Optional `driver_id` + `delivery_sequence`; unique per driver pool; insert/move at N auto-shifts later stops; new deliveries inherit `route_order` + driver |
+| Route planning | `/provider/route-planning`; OpenRouteService geocode + optimize (free API key); unassigned → driver pools via **assign by sequence** (ranges / even-split) or checkbox append; create/import auto-insert + lat/lng preview — [`ROUTE_PLANNING.md`](ROUTE_PLANNING.md) |
 | SMS stub | `send_sms` + `sms_notifications` setting; cancel confirmation |
 | Menu | Upload image anytime; history kept; consumer sees current (latest); email notify (Resend); WhatsApp share (Meta Cloud API) — see `docs/WHATSAPP_SETUP.md` |
 | WhatsApp credit | Prepaid wallet separate from SaaS plan; packages CAD 25/50/100 via Interac; admin approve adds credit; share deducts `WHATSAPP_COST_PER_MSG_CAD` per successful send; one successful share per menu; share disabled when balance &lt; blast estimate. Product gated by `WHATSAPP_FEATURES_ENABLED` (default off). |

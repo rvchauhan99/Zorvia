@@ -322,10 +322,42 @@ export default function CustomerDetail() {
           <div className="sm:col-span-2">
             <div className="label-overline">Address</div>
             <div className="text-sm">{c.address}{c.apartment ? `, ${c.apartment}` : ""}{c.postal_code ? ` · ${c.postal_code}` : ""}</div>
+            {(c.lat != null && c.lng != null) || c.geocode_status ? (
+              <div className="text-xs text-muted-foreground mt-1" data-testid="customer-latlng">
+                {c.lat != null && c.lng != null
+                  ? `${Number(c.lat).toFixed(5)}, ${Number(c.lng).toFixed(5)}`
+                  : "—"}
+                {" · "}
+                {c.geocode_status || "pending"}
+              </div>
+            ) : null}
           </div>
+          {showMoney && c.billing?.billing_mode === "monthly_flat" ? (
+            <div className="sm:col-span-2 rounded-xl border border-brand-border bg-white p-4 flex flex-col gap-2" data-testid="customer-monthly-billing-card">
+              <div className="label-overline">Monthly billing</div>
+              <div className="font-medium">
+                {c.billing?.monthly_plan_name || c.current_month_billing?.plan_name || "Plan"}
+                {" · "}
+                {fmtCAD(c.billing?.monthly_fee ?? c.current_month_billing?.monthly_fee ?? 0)}
+                {c.billing?.policy_variant === "monthly_fixed" ? " · Fixed" : " · Adjustable"}
+              </div>
+              {c.current_month_billing ? (
+                <div className="text-sm text-muted-foreground">
+                  This month: {fmtCAD(c.current_month_billing.month_charge_after_tax ?? c.current_month_billing.month_charge_before_tax)}
+                  {c.current_month_billing.tier_applied ? ` · ${String(c.current_month_billing.tier_applied).replace(/_/g, " ")}` : ""}
+                </div>
+              ) : null}
+              <div className="text-sm text-muted-foreground">
+                Collection day: {c.billing?.payment_collection_day ?? "—"}
+                {c.billing?.collection_due_date ? ` · Due ${c.billing.collection_due_date}` : ""}
+              </div>
+            </div>
+          ) : null}
           {showMoney ? (
             <div>
-              <div className="label-overline">Meal type / price</div>
+              <div className="label-overline">
+                {c.billing?.billing_mode === "monthly_flat" ? "Meal type (kitchen)" : "Meal type / price"}
+              </div>
               <div className="font-medium" data-testid="customer-meal-type-price">
                 {(c.meal_type_id || "regular").replace(/^\w/, (ch: string) => ch.toUpperCase())}
                 {" · "}

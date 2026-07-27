@@ -4,13 +4,28 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
-import { Plus, Trash } from "@phosphor-icons/react";
+import {
+  Plus,
+  Trash,
+  Storefront,
+  ListDashes,
+  CreditCard,
+  BellRinging,
+  ShieldCheck,
+  FloppyDisk,
+  Copy,
+  CalendarCheck,
+  UserPlus,
+  Key
+} from "@phosphor-icons/react";
 import { todayISO } from "@/lib/format";
 import { useAuth } from "@/lib/auth";
 import { canMutateAdmin } from "@/lib/roles";
 import ImageSourceField from "@/components/ImageSourceField";
 import { PageLoader } from "@/components/loaders";
 import { fetchWhatsappFeaturesEnabled } from "@/lib/whatsapp-features";
+
+type TabId = "general" | "operations" | "billing" | "notifications" | "team";
 
 export default function Settings() {
   const { session, ready } = useAuth();
@@ -26,7 +41,10 @@ export default function Settings() {
   const [pwBusy, setPwBusy] = useState(false);
   const [hasPassword, setHasPassword] = useState(true);
   const [waEnabled, setWaEnabled] = useState(false);
-  const input = "h-11 px-4 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all";
+  const [activeTab, setActiveTab] = useState<TabId>("general");
+
+  const inputClass =
+    "h-11 px-4 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all w-full text-sm";
 
   async function load() {
     const [{ data: p }, { data: s }, { data: me }, enabled] = await Promise.all([
@@ -58,6 +76,42 @@ export default function Settings() {
   function updSettings(k: string, v: string | string[] | boolean | number) {
     setProv((p: any) => ({ ...p, settings: { ...p.settings, [k]: v } }));
   }
+
+  const mb = prov.settings?.monthly_billing || {
+    enabled: false,
+    policy_variant: "monthly_adjustable",
+    extra_days_included: true,
+    default_collection_day: 1,
+    plans: [
+      { id: "mon_fri", name: "Mon-Fri", monthly_fee_cad: 220, standard_days: 20, weekdays: [0, 1, 2, 3, 4] },
+      { id: "mon_sat", name: "Mon-Sat", monthly_fee_cad: 240, standard_days: 24, weekdays: [0, 1, 2, 3, 4, 5] },
+    ],
+    cancellation: { free_cancellations: 2, recalc_daily_rate_cad: 12 },
+  };
+
+  function updMonthlyBilling(patch: Record<string, unknown>) {
+    setProv((p: any) => ({
+      ...p,
+      settings: {
+        ...p.settings,
+        monthly_billing: { ...(p.settings?.monthly_billing || mb), ...patch },
+      },
+    }));
+  }
+
+  function updMonthlyPlan(idx: number, field: string, value: string | number) {
+    const plans = [...(mb.plans || [])];
+    plans[idx] = { ...plans[idx], [field]: value };
+    updMonthlyBilling({ plans });
+  }
+
+  function updMonthlyCancellation(field: string, value: number) {
+    updMonthlyBilling({
+      cancellation: { ...(mb.cancellation || {}), [field]: value },
+    });
+  }
+
+  const weekdayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
   const mealTypes: { id: string; name: string; price: number | string; is_system?: boolean }[] =
     Array.isArray(prov.meal_types) && prov.meal_types.length
@@ -127,7 +181,7 @@ export default function Settings() {
           return;
         }
       }
-      const payload = {
+      const payload: Record<string, unknown> = {
         name: prov.name,
         address: prov.address,
         interac_email: prov.interac_email,
@@ -136,13 +190,36 @@ export default function Settings() {
         timezone: prov.settings?.timezone,
         closed_dates: prov.settings?.closed_dates || [],
         sms_notifications: !!prov.settings?.sms_notifications,
+        whatsapp_menu_share: prov.settings?.whatsapp_menu_share !== false,
         tax_rate_percent: Number(prov.settings?.tax_rate_percent ?? 0),
+        monthly_billing: {
+          ...mb,
+          enabled: !!mb.enabled,
+          policy_variant: mb.policy_variant || "monthly_adjustable",
+          extra_days_included: mb.extra_days_included !== false,
+          default_collection_day: mb.enabled ? Number(mb.default_collection_day || 1) : mb.default_collection_day,
+          plans: (mb.plans || []).map((p: any) => ({
+            ...p,
+            monthly_fee_cad: Number(p.monthly_fee_cad),
+            standard_days: Number(p.standard_days),
+            weekdays: p.weekdays || [],
+          })),
+          cancellation: {
+            free_cancellations: Number(mb.cancellation?.free_cancellations ?? 2),
+            recalc_daily_rate_cad: Number(mb.cancellation?.recalc_daily_rate_cad ?? 12),
+          },
+        },
       };
+      if (mb.enabled && (!mb.default_collection_day || Number(mb.default_collection_day) < 1)) {
+        toast.error("Default collection day (1–31) is required when monthly billing is enabled");
+        setSaving(false);
+        return;
+      }
       const { data } = await api.patch("/providers/me", payload);
       setProv(data);
-      toast.success("Settings saved");
+      toast.success("Settings saved successfully");
     } catch (e: any) {
-      toast.error(e?.response?.data?.detail || "Failed");
+      toast.error(e?.response?.data?.detail || "Failed to save settings");
     } finally {
       setSaving(false);
     }
@@ -216,286 +293,639 @@ export default function Settings() {
     }
   }
 
+  const navItems = [
+    { id: "general", label: "General Profile", icon: Storefront, description: "Kitchen info, logo & signup code" },
+    { id: "operations", label: "Operations & Menu", icon: ListDashes, description: "Meal types, taxes & closed dates" },
+    { id: "billing", label: "Monthly Billing", icon: CreditCard, description: "Flat-rate monthly plan options" },
+    { id: "notifications", label: "Notifications", icon: BellRinging, description: "SMS & WhatsApp preferences" },
+    { id: "team", label: "Team & Security", icon: ShieldCheck, description: "Passwords & staff access" },
+  ] as const;
+
   return (
-    <div className="flex flex-col gap-3 sm:gap-5 animate-fade-in-up max-w-3xl">
-      <div>
-        <span className="label-overline">Configuration</span>
-        <h1 className="font-display font-black text-2xl sm:text-4xl mt-0.5 sm:mt-1">Settings</h1>
-      </div>
-
-      <div className="card-tinted p-4 sm:p-6 flex flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
-            <div className="label-overline">Signup code</div>
-            <div className="font-mono font-semibold text-lg break-all">{prov.signup_code}</div>
-          </div>
-          <button data-testid="copy-code-settings" onClick={() => { navigator.clipboard.writeText(prov.signup_code); toast.success("Copied"); }} className="pill-btn btn-outline cursor-pointer hover:bg-brand-surface h-11 min-h-[44px] shrink-0">Copy</button>
+    <div className="flex flex-col gap-6 animate-fade-in-up pb-28">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+        <div className="shrink-0">
+          <span className="label-overline">Configuration</span>
+          <h1 className="font-display font-black text-3xl sm:text-4xl mt-1">Settings</h1>
         </div>
-        <p className="text-xs text-muted-foreground">Share this with consumers to let them sign themselves up. You approve them from the Customers page.</p>
-      </div>
 
-      <div className="card-tinted p-4 sm:p-6 flex flex-col gap-4" data-testid="kitchen-logo-section">
-        <div>
-          <h2 className="font-display font-bold text-lg sm:text-xl">Kitchen logo</h2>
-          <p className="text-sm text-muted-foreground mt-1">Stored as a 512×512 JPEG on Cloudflare R2 (or inline fallback).</p>
-        </div>
-        <ImageSourceField
-          onChange={onLogoPick}
-          disabled={logoBusy}
-          testid="kitchen-logo"
-          uploadInputTestId="kitchen-logo-input"
-          remotePreviewUrl={prov.logo_url || null}
-          showClear={false}
-        />
-        {prov.logo_url ? (
-          <button type="button" data-testid="kitchen-logo-remove" disabled={logoBusy} onClick={removeLogo} className="text-sm text-destructive hover:underline cursor-pointer disabled:opacity-60 self-start">
-            Remove logo
-          </button>
-        ) : null}
-      </div>
-
-      <div className="card-tinted p-4 sm:p-6 flex flex-col gap-4" data-testid="change-password-section">
-        <div>
-          <h2 className="font-display font-bold text-xl">{hasPassword ? "Change password" : "Set password"}</h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            {hasPassword
-              ? "Requires your current password."
-              : "You signed in with Google. Set a password to also use email login."}
-          </p>
-        </div>
-        <form onSubmit={changePassword} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {hasPassword ? (
-            <label className="flex flex-col gap-1.5 sm:col-span-2">
-              <span className="label-overline">Current password</span>
-              <input data-testid="pw-current" type="password" required className={input} value={pwForm.current_password} onChange={(e) => setPwForm({ ...pwForm, current_password: e.target.value })} />
-            </label>
-          ) : null}
-          <label className="flex flex-col gap-1.5">
-            <span className="label-overline">New password</span>
-            <input data-testid="pw-new" type="password" required minLength={6} className={input} value={pwForm.new_password} onChange={(e) => setPwForm({ ...pwForm, new_password: e.target.value })} />
-          </label>
-          <label className="flex flex-col gap-1.5">
-            <span className="label-overline">Confirm new password</span>
-            <input data-testid="pw-confirm" type="password" required minLength={6} className={input} value={pwForm.confirm_password} onChange={(e) => setPwForm({ ...pwForm, confirm_password: e.target.value })} />
-          </label>
-          <button data-testid="pw-submit" type="submit" disabled={pwBusy} className="pill-btn btn-outline h-11 sm:col-span-2 cursor-pointer disabled:opacity-60">
-            {pwBusy ? (hasPassword ? "Updating…" : "Setting…") : (hasPassword ? "Update password" : "Set password")}
-          </button>
-        </form>
-      </div>
-
-      <div className="card-tinted p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <label className="flex flex-col gap-1.5">
-          <span className="label-overline">Business name</span>
-          <input data-testid="s-name" className={input} value={prov.name || ""} onChange={(e) => upd("name", e.target.value)} />
-        </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="label-overline">Interac payment email</span>
-          <input data-testid="s-interac" type="email" className={input} value={prov.interac_email || ""} onChange={(e) => upd("interac_email", e.target.value)} />
-        </label>
-        <label className="flex flex-col gap-1.5 sm:col-span-2">
-          <span className="label-overline">Address</span>
-          <input data-testid="s-address" className={input} value={prov.address || ""} onChange={(e) => upd("address", e.target.value)} />
-        </label>
-        <div className="sm:col-span-2 flex flex-col gap-3" data-testid="s-meal-types">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <span className="label-overline">Meal types</span>
-              <p className="text-xs text-muted-foreground mt-0.5">Per-type CAD prices. Regular / Jain / Fasting are always available; add custom types if needed.</p>
-            </div>
-            <button
-              type="button"
-              data-testid="s-meal-type-add"
-              onClick={addCustomMealType}
-              className="inline-flex items-center gap-1.5 h-10 px-3 rounded-full border border-brand-border bg-white text-sm font-medium hover:bg-brand-surface cursor-pointer"
-            >
-              <Plus size={14} weight="bold" /> Add type
-            </button>
-          </div>
-          <ul className="flex flex-col gap-2">
-            {mealTypes.map((t) => {
-              const locked = !!t.is_system || ["regular", "jain", "fasting"].includes(t.id);
+        <nav
+          className="card-tinted p-1.5 sm:p-2 min-w-0 w-full sm:w-auto sm:max-w-[calc(100%-12rem)] sm:ml-auto"
+          role="tablist"
+          aria-label="Settings sections"
+          data-testid="settings-tabs"
+        >
+          <div className="flex gap-1.5 overflow-x-auto pb-0.5 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const active = activeTab === item.id;
               return (
-                <li key={t.id} className="flex flex-col sm:flex-row gap-2 sm:items-center" data-testid={`s-meal-type-${t.id}`}>
-                  <input
-                    data-testid={`s-meal-type-name-${t.id}`}
-                    className={`${input} flex-1`}
-                    value={t.name}
-                    disabled={locked}
-                    onChange={(e) => updMealTypeName(t.id, e.target.value)}
-                    aria-label="Meal type name"
+                <button
+                  key={item.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  title={item.description}
+                  data-testid={`settings-tab-${item.id}`}
+                  onClick={() => setActiveTab(item.id as TabId)}
+                  className={`flex items-center gap-2 px-3 sm:px-3.5 py-2 rounded-xl text-left transition-all cursor-pointer shrink-0 snap-start ${
+                    active
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "hover:bg-brand-surface text-foreground/80 hover:text-foreground"
+                  }`}
+                >
+                  <Icon
+                    size={18}
+                    className={`shrink-0 ${active ? "text-primary-foreground" : "text-primary"}`}
+                    weight={active ? "bold" : "regular"}
                   />
-                  <div className="flex items-center gap-2">
-                    <input
-                      data-testid={t.id === "regular" ? "s-price" : `s-meal-type-price-${t.id}`}
-                      type="number"
-                      step="0.5"
-                      min={0.01}
-                      className={`${input} w-28`}
-                      value={t.price}
-                      onChange={(e) => updMealTypePrice(t.id, e.target.value)}
-                      aria-label={`${t.name} price CAD`}
-                    />
-                    <span className="text-xs text-muted-foreground shrink-0">CAD</span>
-                    {!locked ? (
-                      <button
-                        type="button"
-                        data-testid={`s-meal-type-remove-${t.id}`}
-                        onClick={() => removeMealType(t.id)}
-                        className="h-11 w-11 inline-flex items-center justify-center rounded-xl border border-destructive/30 text-destructive hover:bg-destructive/10 cursor-pointer"
-                        aria-label="Remove meal type"
-                      >
-                        <Trash size={16} />
-                      </button>
-                    ) : (
-                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground w-11 text-center">Core</span>
-                    )}
-                  </div>
-                </li>
+                  <span
+                    className={`font-display font-bold text-sm leading-tight whitespace-nowrap ${
+                      active ? "text-primary-foreground" : "text-foreground"
+                    }`}
+                  >
+                    {item.label}
+                  </span>
+                </button>
               );
             })}
-          </ul>
-        </div>
-        <label className="flex flex-col gap-1.5">
-          <span className="label-overline">Cancellation cutoff (h)</span>
-          <input data-testid="s-cutoff" type="number" className={input} value={prov.settings?.cutoff_hours ?? 4} onChange={(e) => updSettings("cutoff_hours", e.target.value)} />
-        </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="label-overline">Tax rate % (GST/HST)</span>
-          <input
-            data-testid="s-tax-rate"
-            type="number"
-            min={0}
-            max={100}
-            step="0.01"
-            className={input}
-            value={prov.settings?.tax_rate_percent ?? 0}
-            onChange={(e) => updSettings("tax_rate_percent", e.target.value)}
-          />
-          <span className="text-xs text-muted-foreground">Add-on on meal prices for outstanding &amp; statements. 0 = no tax.</span>
-        </label>
-        <label className="flex flex-col gap-1.5 sm:col-span-2">
-          <span className="label-overline">Timezone</span>
-          <select data-testid="s-tz" className={input} value={prov.settings?.timezone || "America/Toronto"} onChange={(e) => updSettings("timezone", e.target.value)}>
-            <option value="America/Toronto">America/Toronto</option>
-            <option value="America/Vancouver">America/Vancouver</option>
-            <option value="America/Edmonton">America/Edmonton</option>
-            <option value="America/Winnipeg">America/Winnipeg</option>
-            <option value="America/Halifax">America/Halifax</option>
-            <option value="America/St_Johns">America/St_Johns</option>
-          </select>
-        </label>
-        <label className="flex items-center gap-3 sm:col-span-2 min-h-[44px]" data-testid="sms-notifications-toggle">
-          <input
-            type="checkbox"
-            checked={!!prov.settings?.sms_notifications}
-            onChange={(e) => updSettings("sms_notifications", e.target.checked)}
-            className="h-5 w-5 rounded border-brand-border"
-          />
-          <span>
-            <span className="font-medium text-sm">SMS notifications</span>
-            <span className="block text-xs text-muted-foreground">Confirm consumer cancellations by SMS when Twilio is configured</span>
-          </span>
-        </label>
-        {waEnabled ? (
-          <label className="flex items-center gap-3 sm:col-span-2 min-h-[44px]" data-testid="whatsapp-menu-share-toggle">
-            <input
-              type="checkbox"
-              checked={prov.settings?.whatsapp_menu_share !== false}
-              onChange={(e) => updSettings("whatsapp_menu_share", e.target.checked)}
-              className="h-5 w-5 rounded border-brand-border"
-            />
-            <span>
-              <span className="font-medium text-sm">WhatsApp menu share</span>
-              <span className="block text-xs text-muted-foreground">
-                Allow sharing menu updates to opted-in customers via MealHQ WhatsApp
-              </span>
-            </span>
-          </label>
-        ) : null}
+          </div>
+        </nav>
       </div>
 
-      <div className="card-tinted p-4 sm:p-6 flex flex-col gap-4" data-testid="closed-dates-section">
-        <div>
-          <h2 className="font-display font-bold text-xl">Closed dates / holidays</h2>
-          <p className="text-sm text-muted-foreground mt-1">No deliveries will be generated on these dates.</p>
-        </div>
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="flex flex-col gap-1.5">
-            <span className="label-overline">Add date</span>
-            <input
-              data-testid="closed-date-input"
-              type="date"
-              className={input}
-              value={newClosed}
-              onChange={(e) => setNewClosed(e.target.value)}
-            />
-          </label>
-          <button
-            type="button"
-            data-testid="closed-date-add"
-            onClick={addClosedDate}
-            className="pill-btn btn-outline gap-2 h-11 cursor-pointer hover:bg-brand-surface"
-          >
-            <Plus size={16} /> Add
-          </button>
-        </div>
-        {closedDates.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No closed dates configured.</p>
-        ) : (
-          <ul className="divide-y divide-brand-border border border-brand-border rounded-xl overflow-hidden">
-            {closedDates.map((d) => (
-              <li key={d} className="flex items-center justify-between px-4 py-3 bg-white">
-                <span className="font-mono text-sm" data-testid={`closed-date-${d}`}>{d}</span>
-                <button
-                  type="button"
-                  data-testid={`closed-date-remove-${d}`}
-                  onClick={() => removeClosedDate(d)}
-                  className="icon-btn icon-btn-danger"
-                  title="Remove"
-                >
-                  <Trash size={16} />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      <main className="flex flex-col gap-6">
+          {/* GENERAL TAB */}
+          {activeTab === "general" && (
+            <div className="flex flex-col gap-6">
+              {/* Kitchen Basic Profile */}
+              <div className="card-tinted p-5 sm:p-6 flex flex-col gap-5">
+                <div>
+                  <h2 className="font-display font-bold text-xl">Kitchen Identity</h2>
+                  <p className="text-sm text-muted-foreground mt-0.5">Your kitchen details and default contact info.</p>
+                </div>
 
-      <div className="card-tinted p-4 sm:p-6 flex flex-col gap-4" data-testid="staff-section">
-        <div>
-          <h2 className="font-display font-bold text-xl">Staff</h2>
-          <p className="text-sm text-muted-foreground mt-1">Admins, drivers (deliveries only), and viewers (read-only).</p>
-        </div>
-        <ul className="divide-y divide-brand-border border border-brand-border rounded-xl overflow-hidden">
-          {staff.map((s) => (
-            <li key={s.id} data-testid={`staff-row-${s.id}`} className="flex items-center justify-between px-4 py-3 bg-white gap-3">
-              <div className="min-w-0">
-                <div className="font-medium truncate">{s.name || s.email}</div>
-                <div className="text-xs text-muted-foreground truncate">{s.email}</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <label className="flex flex-col gap-1.5">
+                    <span className="label-overline">Business name</span>
+                    <input data-testid="s-name" className={inputClass} value={prov.name || ""} onChange={(e) => upd("name", e.target.value)} />
+                  </label>
+
+                  <label className="flex flex-col gap-1.5">
+                    <span className="label-overline">Interac payment email</span>
+                    <input data-testid="s-interac" type="email" className={inputClass} value={prov.interac_email || ""} onChange={(e) => upd("interac_email", e.target.value)} />
+                  </label>
+
+                  <label className="flex flex-col gap-1.5 sm:col-span-2">
+                    <span className="label-overline">Address</span>
+                    <input data-testid="s-address" className={inputClass} value={prov.address || ""} onChange={(e) => upd("address", e.target.value)} />
+                  </label>
+
+                  <label className="flex flex-col gap-1.5 sm:col-span-2">
+                    <span className="label-overline">Timezone</span>
+                    <select data-testid="s-tz" className={inputClass} value={prov.settings?.timezone || "America/Toronto"} onChange={(e) => updSettings("timezone", e.target.value)}>
+                      <option value="America/Toronto">America/Toronto (EST/EDT)</option>
+                      <option value="America/Vancouver">America/Vancouver (PST/PDT)</option>
+                      <option value="America/Edmonton">America/Edmonton (MST/MDT)</option>
+                      <option value="America/Winnipeg">America/Winnipeg (CST/CDT)</option>
+                      <option value="America/Halifax">America/Halifax (AST/ADT)</option>
+                      <option value="America/St_Johns">America/St_Johns (NST/NDT)</option>
+                    </select>
+                  </label>
+                </div>
               </div>
-              <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-brand-surface">{s.role || "admin"}</span>
-            </li>
-          ))}
-        </ul>
-        <form onSubmit={createStaff} className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-          <input data-testid="staff-name" required placeholder="Name" className={input} value={staffForm.name} onChange={(e) => setStaffForm({ ...staffForm, name: e.target.value })} />
-          <input data-testid="staff-email" required type="email" placeholder="Email" className={input} value={staffForm.email} onChange={(e) => setStaffForm({ ...staffForm, email: e.target.value })} />
-          <input data-testid="staff-password" required type="password" minLength={6} placeholder="Password" className={input} value={staffForm.password} onChange={(e) => setStaffForm({ ...staffForm, password: e.target.value })} />
-          <select data-testid="staff-role" className={input} value={staffForm.role} onChange={(e) => setStaffForm({ ...staffForm, role: e.target.value })}>
-            <option value="driver">Driver</option>
-            <option value="viewer">Viewer</option>
-            <option value="admin">Admin</option>
-          </select>
-          <button data-testid="staff-create" type="submit" disabled={staffBusy} className="pill-btn btn-outline h-11 sm:col-span-2 cursor-pointer disabled:opacity-60">
-            {staffBusy ? "Creating…" : "Add staff"}
-          </button>
-        </form>
-      </div>
 
-      <div className="flex justify-stretch sm:justify-end">
-        <button data-testid="s-save" disabled={saving} onClick={save} className="pill-btn btn-primary disabled:opacity-60 cursor-pointer h-12 w-full sm:w-auto">
-          {saving ? "Saving…" : "Save settings"}
+              {/* Kitchen Logo Section */}
+              <div className="card-tinted p-5 sm:p-6 flex flex-col gap-4" data-testid="kitchen-logo-section">
+                <div>
+                  <h2 className="font-display font-bold text-xl">Kitchen Branding</h2>
+                  <p className="text-sm text-muted-foreground mt-0.5">Upload a square logo (512×512 PNG/JPEG) to display on customer portals and menus.</p>
+                </div>
+                <ImageSourceField
+                  onChange={onLogoPick}
+                  disabled={logoBusy}
+                  testid="kitchen-logo"
+                  uploadInputTestId="kitchen-logo-input"
+                  remotePreviewUrl={prov.logo_url || null}
+                  showClear={false}
+                />
+                {prov.logo_url ? (
+                  <button
+                    type="button"
+                    data-testid="kitchen-logo-remove"
+                    disabled={logoBusy}
+                    onClick={removeLogo}
+                    className="text-sm text-destructive hover:underline cursor-pointer disabled:opacity-60 self-start font-medium inline-flex items-center gap-1.5"
+                  >
+                    <Trash size={14} /> Remove logo
+                  </button>
+                ) : null}
+              </div>
+
+              {/* Signup Code */}
+              <div className="card-tinted p-5 sm:p-6 flex flex-col gap-3">
+                <div>
+                  <h2 className="font-display font-bold text-xl">Customer Registration Code</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">Share this code with new consumers to allow self-signup.</p>
+                </div>
+                <div className="flex items-center justify-between gap-3 p-3.5 bg-brand-surface/60 rounded-xl border border-brand-border/60">
+                  <div className="font-mono font-bold text-xl tracking-wider text-primary">{prov.signup_code}</div>
+                  <button
+                    data-testid="copy-code-settings"
+                    onClick={() => {
+                      navigator.clipboard.writeText(prov.signup_code);
+                      toast.success("Signup code copied to clipboard");
+                    }}
+                    className="pill-btn btn-outline cursor-pointer hover:bg-white h-10 min-h-[40px] text-xs gap-1.5 shrink-0"
+                  >
+                    <Copy size={15} /> Copy Code
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* OPERATIONS TAB */}
+          {activeTab === "operations" && (
+            <div className="flex flex-col gap-6">
+              {/* Meal Types */}
+              <div className="card-tinted p-5 sm:p-6 flex flex-col gap-4" data-testid="s-meal-types">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <h2 className="font-display font-bold text-xl">Meal Types & Pricing</h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">Configure meal options and default CAD pricing offered to your customers.</p>
+                  </div>
+                  <button
+                    type="button"
+                    data-testid="s-meal-type-add"
+                    onClick={addCustomMealType}
+                    className="pill-btn btn-outline h-9 px-3 text-xs gap-1.5 hover:bg-brand-surface cursor-pointer"
+                  >
+                    <Plus size={14} weight="bold" /> Add Custom Type
+                  </button>
+                </div>
+
+                <div className="flex flex-col gap-2.5">
+                  {mealTypes.map((t) => {
+                    const locked = !!t.is_system || ["regular", "jain", "fasting"].includes(t.id);
+                    return (
+                      <div
+                        key={t.id}
+                        className="flex flex-col sm:flex-row gap-3 sm:items-center p-3 rounded-xl border border-brand-border bg-white"
+                        data-testid={`s-meal-type-${t.id}`}
+                      >
+                        <input
+                          data-testid={`s-meal-type-name-${t.id}`}
+                          className={`${inputClass} flex-1 font-medium`}
+                          value={t.name}
+                          disabled={locked}
+                          onChange={(e) => updMealTypeName(t.id, e.target.value)}
+                          aria-label="Meal type name"
+                        />
+                        <div className="flex items-center gap-2 shrink-0">
+                          <div className="relative flex items-center">
+                            <span className="absolute left-3 text-xs font-semibold text-muted-foreground">$</span>
+                            <input
+                              data-testid={t.id === "regular" ? "s-price" : `s-meal-type-price-${t.id}`}
+                              type="number"
+                              step="0.5"
+                              min={0.01}
+                              className={`${inputClass} w-28 pl-7 pr-3 font-mono`}
+                              value={t.price}
+                              onChange={(e) => updMealTypePrice(t.id, e.target.value)}
+                              aria-label={`${t.name} price CAD`}
+                            />
+                          </div>
+                          <span className="text-xs text-muted-foreground font-medium">CAD</span>
+                          {!locked ? (
+                            <button
+                              type="button"
+                              data-testid={`s-meal-type-remove-${t.id}`}
+                              onClick={() => removeMealType(t.id)}
+                              className="h-10 w-10 inline-flex items-center justify-center rounded-xl border border-destructive/30 text-destructive hover:bg-destructive/10 cursor-pointer transition-colors"
+                              aria-label="Remove meal type"
+                            >
+                              <Trash size={16} />
+                            </button>
+                          ) : (
+                            <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/70 bg-brand-surface px-2.5 py-1.5 rounded-lg text-center min-w-[50px]">
+                              Core
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Cutoff & Tax Rules */}
+              <div className="card-tinted p-5 sm:p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <label className="flex flex-col gap-1.5">
+                  <span className="label-overline">Cancellation Cutoff (Hours)</span>
+                  <input data-testid="s-cutoff" type="number" className={inputClass} value={prov.settings?.cutoff_hours ?? 4} onChange={(e) => updSettings("cutoff_hours", e.target.value)} />
+                  <span className="text-xs text-muted-foreground">Hours before delivery time after which customers cannot cancel.</span>
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="label-overline">Tax Rate % (GST/HST)</span>
+                  <input
+                    data-testid="s-tax-rate"
+                    type="number"
+                    min={0}
+                    max={100}
+                    step="0.01"
+                    className={inputClass}
+                    value={prov.settings?.tax_rate_percent ?? 0}
+                    onChange={(e) => updSettings("tax_rate_percent", e.target.value)}
+                  />
+                  <span className="text-xs text-muted-foreground">Applied to meal prices on outstanding statements. 0 = tax exempt.</span>
+                </label>
+              </div>
+
+              {/* Closed Dates / Holidays */}
+              <div className="card-tinted p-5 sm:p-6 flex flex-col gap-4" data-testid="closed-dates-section">
+                <div>
+                  <h2 className="font-display font-bold text-xl">Closed Dates & Holidays</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">No deliveries will be scheduled or charged on these specified dates.</p>
+                </div>
+                <div className="flex flex-wrap items-end gap-3">
+                  <label className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
+                    <span className="label-overline">Add Closure Date</span>
+                    <input
+                      data-testid="closed-date-input"
+                      type="date"
+                      className={inputClass}
+                      value={newClosed}
+                      onChange={(e) => setNewClosed(e.target.value)}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    data-testid="closed-date-add"
+                    onClick={addClosedDate}
+                    className="pill-btn btn-outline gap-2 h-11 text-xs cursor-pointer hover:bg-brand-surface"
+                  >
+                    <Plus size={16} /> Add Holiday
+                  </button>
+                </div>
+
+                {closedDates.length === 0 ? (
+                  <div className="p-4 rounded-xl border border-dashed border-brand-border text-center text-xs text-muted-foreground">
+                    No closed dates or kitchen holidays currently configured.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {closedDates.map((d) => (
+                      <div key={d} className="flex items-center justify-between px-3.5 py-2.5 bg-white border border-brand-border rounded-xl">
+                        <div className="flex items-center gap-2">
+                          <CalendarCheck size={16} className="text-primary" />
+                          <span className="font-mono text-sm font-medium" data-testid={`closed-date-${d}`}>{d}</span>
+                        </div>
+                        <button
+                          type="button"
+                          data-testid={`closed-date-remove-${d}`}
+                          onClick={() => removeClosedDate(d)}
+                          className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-destructive hover:bg-destructive/10 cursor-pointer transition-colors"
+                          title="Remove"
+                        >
+                          <Trash size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* MONTHLY BILLING TAB */}
+          {activeTab === "billing" && (
+            <div className="flex flex-col gap-6" data-testid="monthly-billing-section">
+              <div className="card-tinted p-5 sm:p-6 flex flex-col gap-5">
+                <div>
+                  <h2 className="font-display font-bold text-xl">Monthly Subscription Policy</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Enable fixed or adjustable flat-rate monthly subscriptions instead of daily per-meal billing.
+                  </p>
+                </div>
+
+                {/* Explanation Box */}
+                <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-xs text-foreground/80 flex flex-col gap-2.5" data-testid="monthly-billing-guide">
+                  <p className="font-semibold text-primary">How Monthly Billing Works</p>
+                  <ul className="list-disc pl-4 space-y-1 text-muted-foreground">
+                    <li><strong className="text-foreground">Adjustable monthly:</strong> Flat rate fee with skip recalculations & free skip allowances.</li>
+                    <li><strong className="text-foreground">Fixed monthly:</strong> Constant fee each month regardless of skips or extra delivery days.</li>
+                    <li><strong className="text-foreground">Collection day:</strong> Default payment collection day (1–31) each month.</li>
+                  </ul>
+                </div>
+
+                <label className="flex items-center gap-3 p-3.5 rounded-xl border border-brand-border bg-white cursor-pointer" data-testid="monthly-billing-toggle">
+                  <input
+                    type="checkbox"
+                    checked={!!mb.enabled}
+                    onChange={(e) => updMonthlyBilling({ enabled: e.target.checked })}
+                    className="h-5 w-5 rounded accent-primary border-brand-border cursor-pointer"
+                  />
+                  <div>
+                    <span className="font-bold text-sm text-foreground">Enable Flat Monthly Subscriptions</span>
+                    <span className="block text-xs text-muted-foreground">Replaces per-meal daily accrual for all customers</span>
+                  </div>
+                </label>
+
+                {mb.enabled && (
+                  <div className="flex flex-col gap-5 pt-2">
+                    {/* Policy Variant Selection */}
+                    <div className="flex flex-col gap-2" data-testid="monthly-billing-variant">
+                      <span className="label-overline">Subscription Variant</span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <label
+                          className={`flex flex-col p-3.5 rounded-xl border cursor-pointer transition-all ${
+                            mb.policy_variant !== "monthly_fixed"
+                              ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+                              : "border-brand-border bg-white hover:bg-brand-surface"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="radio"
+                              name="policy_variant"
+                              checked={mb.policy_variant !== "monthly_fixed"}
+                              onChange={() => updMonthlyBilling({ policy_variant: "monthly_adjustable" })}
+                              className="accent-primary"
+                            />
+                            <span className="font-bold text-sm">Adjustable Monthly</span>
+                          </div>
+                          <span className="text-xs text-muted-foreground mt-1 pl-5">
+                            Flat fee with extra days included and skip recalculation rules.
+                          </span>
+                        </label>
+
+                        <label
+                          className={`flex flex-col p-3.5 rounded-xl border cursor-pointer transition-all ${
+                            mb.policy_variant === "monthly_fixed"
+                              ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+                              : "border-brand-border bg-white hover:bg-brand-surface"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="radio"
+                              name="policy_variant"
+                              checked={mb.policy_variant === "monthly_fixed"}
+                              onChange={() => updMonthlyBilling({ policy_variant: "monthly_fixed" })}
+                              className="accent-primary"
+                            />
+                            <span className="font-bold text-sm">Fixed Monthly</span>
+                          </div>
+                          <span className="text-xs text-muted-foreground mt-1 pl-5">
+                            Fixed monthly rate regardless of meal skips or extra delivery days.
+                          </span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <label className="flex flex-col gap-1.5 max-w-xs">
+                      <span className="label-overline">Default Collection Day (1–31)</span>
+                      <input
+                        data-testid="monthly-default-collection-day"
+                        type="number"
+                        min={1}
+                        max={31}
+                        className={inputClass}
+                        value={mb.default_collection_day ?? 1}
+                        onChange={(e) => updMonthlyBilling({ default_collection_day: Number(e.target.value) })}
+                      />
+                    </label>
+
+                    {/* Plan Templates */}
+                    <div className="flex flex-col gap-3" data-testid="monthly-billing-plans">
+                      <span className="label-overline">Subscription Plans</span>
+                      {(mb.plans || []).map((plan: any, idx: number) => (
+                        <div key={plan.id || idx} className="border border-brand-border rounded-xl p-4 bg-white flex flex-col gap-3">
+                          <div className="font-bold text-sm text-primary flex items-center gap-2">
+                            <CreditCard size={16} /> {plan.name || plan.id}
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <label className="flex flex-col gap-1 text-xs">
+                              <span className="font-medium text-muted-foreground">Monthly Fee (CAD)</span>
+                              <input
+                                type="number"
+                                min={0.01}
+                                step="0.5"
+                                className={inputClass}
+                                value={plan.monthly_fee_cad}
+                                onChange={(e) => updMonthlyPlan(idx, "monthly_fee_cad", Number(e.target.value))}
+                              />
+                            </label>
+                            <label className="flex flex-col gap-1 text-xs">
+                              <span className="font-medium text-muted-foreground">Standard Expected Days</span>
+                              <input
+                                type="number"
+                                min={1}
+                                className={inputClass}
+                                value={plan.standard_days}
+                                onChange={(e) => updMonthlyPlan(idx, "standard_days", Number(e.target.value))}
+                              />
+                            </label>
+                          </div>
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            {weekdayLabels.map((label, wi) => (
+                              <label key={label} className="inline-flex items-center gap-1.5 text-xs bg-brand-surface px-2.5 py-1.5 rounded-lg cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={(plan.weekdays || []).includes(wi)}
+                                  onChange={(e) => {
+                                    const set = new Set(plan.weekdays || []);
+                                    if (e.target.checked) set.add(wi);
+                                    else set.delete(wi);
+                                    updMonthlyPlan(idx, "weekdays", Array.from(set).sort());
+                                  }}
+                                  className="accent-primary"
+                                />
+                                {label}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Cancellation Rules */}
+                    {mb.policy_variant !== "monthly_fixed" && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-brand-border pt-4">
+                        <label className="flex flex-col gap-1.5">
+                          <span className="label-overline">Free Cancellations / Month</span>
+                          <input
+                            data-testid="monthly-free-cancellations"
+                            type="number"
+                            min={0}
+                            className={inputClass}
+                            value={mb.cancellation?.free_cancellations ?? 2}
+                            onChange={(e) => updMonthlyCancellation("free_cancellations", Number(e.target.value))}
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1.5">
+                          <span className="label-overline">Recalc Daily Rate (CAD)</span>
+                          <input
+                            data-testid="monthly-recalc-rate"
+                            type="number"
+                            min={0.01}
+                            step="0.5"
+                            className={inputClass}
+                            value={mb.cancellation?.recalc_daily_rate_cad ?? 12}
+                            onChange={(e) => updMonthlyCancellation("recalc_daily_rate_cad", Number(e.target.value))}
+                          />
+                        </label>
+                        <label className="flex items-center gap-2.5 sm:col-span-2 text-xs font-medium cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={mb.extra_days_included !== false}
+                            onChange={(e) => updMonthlyBilling({ extra_days_included: e.target.checked })}
+                            className="h-4 w-4 rounded accent-primary cursor-pointer"
+                          />
+                          <span>Extra delivery days in long months included at no additional charge</span>
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* NOTIFICATIONS TAB */}
+          {activeTab === "notifications" && (
+            <div className="flex flex-col gap-6">
+              <div className="card-tinted p-5 sm:p-6 flex flex-col gap-4">
+                <div>
+                  <h2 className="font-display font-bold text-xl">Communication & Alerts</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">Manage automated alerts sent to your customers.</p>
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  <label className="flex items-start gap-3 p-4 rounded-xl border border-brand-border bg-white cursor-pointer hover:bg-brand-surface/50 transition-colors" data-testid="sms-notifications-toggle">
+                    <input
+                      type="checkbox"
+                      checked={!!prov.settings?.sms_notifications}
+                      onChange={(e) => updSettings("sms_notifications", e.target.checked)}
+                      className="h-5 w-5 mt-0.5 rounded accent-primary border-brand-border cursor-pointer"
+                    />
+                    <div>
+                      <span className="font-bold text-sm text-foreground">SMS Confirmation Notifications</span>
+                      <span className="block text-xs text-muted-foreground mt-0.5">
+                        Automatically send SMS confirmations for customer meal cancellations (Twilio integration required).
+                      </span>
+                    </div>
+                  </label>
+
+                  {waEnabled && (
+                    <label className="flex items-start gap-3 p-4 rounded-xl border border-brand-border bg-white cursor-pointer hover:bg-brand-surface/50 transition-colors" data-testid="whatsapp-menu-share-toggle">
+                      <input
+                        type="checkbox"
+                        checked={prov.settings?.whatsapp_menu_share !== false}
+                        onChange={(e) => updSettings("whatsapp_menu_share", e.target.checked)}
+                        className="h-5 w-5 mt-0.5 rounded accent-primary border-brand-border cursor-pointer"
+                      />
+                      <div>
+                        <span className="font-bold text-sm text-foreground">WhatsApp Broadcast & Menu Sharing</span>
+                        <span className="block text-xs text-muted-foreground mt-0.5">
+                          Allow outbound menu updates to opted-in customers via official MealHQ WhatsApp.
+                        </span>
+                      </div>
+                    </label>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TEAM & SECURITY TAB */}
+          {activeTab === "team" && (
+            <div className="flex flex-col gap-6">
+              {/* Staff List & Creation */}
+              <div className="card-tinted p-5 sm:p-6 flex flex-col gap-4" data-testid="staff-section">
+                <div>
+                  <h2 className="font-display font-bold text-xl">Staff Accounts</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">Manage permissions for Drivers, Viewers, and Admins.</p>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  {staff.map((s) => (
+                    <div key={s.id} data-testid={`staff-row-${s.id}`} className="flex items-center justify-between p-3.5 bg-white border border-brand-border rounded-xl gap-3">
+                      <div className="min-w-0">
+                        <div className="font-bold text-sm truncate">{s.name || s.email}</div>
+                        <div className="text-xs text-muted-foreground truncate">{s.email}</div>
+                      </div>
+                      <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-full bg-brand-surface text-primary border border-brand-border">
+                        {s.role || "admin"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <form onSubmit={createStaff} className="flex flex-col gap-3 pt-3 border-t border-brand-border">
+                  <span className="label-overline">Add New Staff Member</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <input data-testid="staff-name" required placeholder="Full Name" className={inputClass} value={staffForm.name} onChange={(e) => setStaffForm({ ...staffForm, name: e.target.value })} />
+                    <input data-testid="staff-email" required type="email" placeholder="Email Address" className={inputClass} value={staffForm.email} onChange={(e) => setStaffForm({ ...staffForm, email: e.target.value })} />
+                    <input data-testid="staff-password" required type="password" minLength={6} placeholder="Password" className={inputClass} value={staffForm.password} onChange={(e) => setStaffForm({ ...staffForm, password: e.target.value })} />
+                    <select data-testid="staff-role" className={inputClass} value={staffForm.role} onChange={(e) => setStaffForm({ ...staffForm, role: e.target.value })}>
+                      <option value="driver">Driver (Deliveries only)</option>
+                      <option value="viewer">Viewer (Read-only)</option>
+                      <option value="admin">Admin (Full Access)</option>
+                    </select>
+                  </div>
+                  <button data-testid="staff-create" type="submit" disabled={staffBusy} className="pill-btn btn-outline h-10 text-xs gap-1.5 cursor-pointer disabled:opacity-60 self-start">
+                    <UserPlus size={16} /> {staffBusy ? "Creating…" : "Create Staff Account"}
+                  </button>
+                </form>
+              </div>
+
+              {/* Password Change */}
+              <div className="card-tinted p-5 sm:p-6 flex flex-col gap-4" data-testid="change-password-section">
+                <div>
+                  <h2 className="font-display font-bold text-xl">{hasPassword ? "Security & Password" : "Set Password"}</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {hasPassword
+                      ? "Update your login password."
+                      : "Signed in with Google? Set a password to enable traditional email sign-in."}
+                  </p>
+                </div>
+
+                <form onSubmit={changePassword} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {hasPassword && (
+                    <label className="flex flex-col gap-1.5 sm:col-span-2">
+                      <span className="label-overline">Current Password</span>
+                      <input data-testid="pw-current" type="password" required className={inputClass} value={pwForm.current_password} onChange={(e) => setPwForm({ ...pwForm, current_password: e.target.value })} />
+                    </label>
+                  )}
+                  <label className="flex flex-col gap-1.5">
+                    <span className="label-overline">New Password</span>
+                    <input data-testid="pw-new" type="password" required minLength={6} className={inputClass} value={pwForm.new_password} onChange={(e) => setPwForm({ ...pwForm, new_password: e.target.value })} />
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="label-overline">Confirm New Password</span>
+                    <input data-testid="pw-confirm" type="password" required minLength={6} className={inputClass} value={pwForm.confirm_password} onChange={(e) => setPwForm({ ...pwForm, confirm_password: e.target.value })} />
+                  </label>
+                  <button data-testid="pw-submit" type="submit" disabled={pwBusy} className="pill-btn btn-outline h-10 text-xs gap-1.5 sm:col-span-2 cursor-pointer disabled:opacity-60">
+                    <Key size={16} /> {pwBusy ? "Updating…" : hasPassword ? "Update Password" : "Set Password"}
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+      </main>
+
+      {/* Sticky Bottom Action Bar */}
+      <div className="fixed bottom-0 left-0 right-0 p-4 glass-nav z-30 flex justify-end items-center px-6 sm:px-12 border-t border-brand-border">
+        <button
+          data-testid="s-save"
+          disabled={saving}
+          onClick={save}
+          className="pill-btn btn-primary disabled:opacity-60 cursor-pointer h-11 text-sm font-bold gap-2 px-8 shadow-md hover:scale-[1.02] active:scale-95 transition-all"
+        >
+          <FloppyDisk size={18} weight="bold" />
+          {saving ? "Saving Changes…" : "Save Settings"}
         </button>
       </div>
     </div>

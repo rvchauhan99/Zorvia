@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { House, Users, Truck, Receipt, DotsThree, SignOut, ChartLine, Sparkle, Warning, CreditCard, ForkKnife, CookingPot } from "@phosphor-icons/react";
+import { House, Users, Truck, Receipt, DotsThree, SignOut, ChartLine, Sparkle, Warning, CreditCard, ForkKnife, CookingPot, Path } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
 import { isAdmin, isDriver as roleIsDriver, canMutateAdmin, staffRole } from "@/lib/roles";
@@ -78,8 +78,8 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
         (it) => it.to === "/provider/deliveries" || it.to === "/provider/kitchen"
       );
     }
-    return allItems;
-  }, [isDriver]);
+    return allItems.filter((it) => !("adminOnly" in it && it.adminOnly) || canMutate);
+  }, [isDriver, canMutate]);
 
   const sideItems = useMemo(
     () => items.filter((it) => it.to !== "/provider/more"),
@@ -100,7 +100,13 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
       router.replace("/provider/deliveries");
       return;
     }
-    if (!isAdmin(session) && (pathname.startsWith("/provider/settings") || pathname.startsWith("/provider/subscription") || pathname.startsWith("/provider/menu"))) {
+    if (
+      !isAdmin(session) &&
+      (pathname.startsWith("/provider/settings") ||
+        pathname.startsWith("/provider/subscription") ||
+        pathname.startsWith("/provider/menu") ||
+        pathname.startsWith("/provider/route-planning"))
+    ) {
       router.replace(isDriver ? "/provider/deliveries" : "/provider");
     }
   }, [ready, session, router, isDriver, pathname]);
@@ -232,6 +238,17 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
           })}
           {!isDriver ? (
             <>
+              {canMutate ? (
+                <Link
+                  href="/provider/route-planning"
+                  data-testid="side-nav-route-planning"
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors duration-150 ${
+                    pathname.startsWith("/provider/route-planning") ? "bg-brand-surface text-primary" : "text-foreground hover:bg-brand-surface"
+                  }`}
+                >
+                  <Path size={20} /> Route planning
+                </Link>
+              ) : null}
               {canMutate ? (
                 <Link
                   href="/provider/menu"

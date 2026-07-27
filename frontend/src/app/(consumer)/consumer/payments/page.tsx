@@ -29,7 +29,12 @@ export default function ConsumerPayments() {
     const [{ data: m }, { data: p }] = await Promise.all([
       api.get("/consumer/me"), api.get("/consumer/payments"),
     ]);
-    setMe(m); setPayments(p);
+    setMe(m);
+    setPayments(p);
+    const suggested = Number(m?.suggested_payment_cad);
+    if (suggested > 0) {
+      setForm((f) => (f.amount ? f : { ...f, amount: suggested.toFixed(2) }));
+    }
   }
   useEffect(() => { load(); }, []);
 
@@ -94,6 +99,13 @@ export default function ConsumerPayments() {
           <div className="label-overline">Send Interac e-Transfer to</div>
           <div className="font-display font-bold text-lg mt-1">{me.provider.interac_email || "—"}</div>
           <div className="text-xs text-muted-foreground mt-1">{me.provider.name} · Outstanding: <span className="font-semibold text-primary">{fmtCAD(me.outstanding || 0)}</span></div>
+          {me.billing?.billing_mode === "monthly_flat" ? (
+            <div className="text-xs text-muted-foreground mt-1" data-testid="pay-monthly-hint">
+              {me.billing.monthly_plan_name || "Monthly plan"}
+              {me.billing.collection_due_date ? ` · due ${me.billing.collection_due_date}` : ""}
+              {me.suggested_payment_cad > 0 ? ` · suggested ${fmtCAD(me.suggested_payment_cad)}` : ""}
+            </div>
+          ) : null}
         </div>
       ) : null}
 

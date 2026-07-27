@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Gear, ChartLine, SignOut, ArrowRight, CreditCard, ForkKnife, WhatsappLogo, CookingPot } from "@phosphor-icons/react";
+import { Gear, ChartLine, SignOut, ArrowRight, CreditCard, ForkKnife, WhatsappLogo, CookingPot, Path } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
 import { canMutateAdmin, isDriver } from "@/lib/roles";
@@ -23,6 +23,7 @@ export default function More() {
   const items = useMemo(() => {
     const all = [
       { to: "/provider/kitchen", label: "Kitchen", icon: CookingPot, testid: "more-kitchen" },
+      { to: "/provider/route-planning", label: "Route planning", icon: Path, testid: "more-route-planning", adminOnly: true },
       { to: "/provider/menu", label: "Menu", icon: ForkKnife, testid: "more-menu", adminOnly: true },
       ...(waEnabled
         ? [{ to: "/provider/whatsapp-credit", label: "WhatsApp credit", icon: WhatsappLogo, testid: "more-wa-credit", adminOnly: true }]

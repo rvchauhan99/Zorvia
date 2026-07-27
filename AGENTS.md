@@ -7,8 +7,10 @@ You are working in the **MealHQ** product monorepo (user-facing brand and API ti
 1. [`docs/PLATFORM_BLUEPRINT.md`](docs/PLATFORM_BLUEPRINT.md) — requirements, flowcharts, decisions, known issues  
 2. [`docs/FUNCTIONAL.md`](docs/FUNCTIONAL.md) — product behavior and journeys  
 3. [`docs/TECHNICAL.md`](docs/TECHNICAL.md) — APIs, data model, env, runbook  
-4. [`memory/INDEX.md`](memory/INDEX.md) — short memory map  
-5. [`design_guidelines.json`](design_guidelines.json) — when touching UI
+4. [`docs/MONTHLY_BILLING.md`](docs/MONTHLY_BILLING.md) — optional tenant monthly billing (providers)  
+5. [`docs/ROUTE_PLANNING.md`](docs/ROUTE_PLANNING.md) — free ORS route planning (geocode + optimize)  
+6. [`memory/INDEX.md`](memory/INDEX.md) — short memory map  
+7. [`design_guidelines.json`](design_guidelines.json) — when touching UI
 
 Do **not** re-derive platform architecture from scratch each session if these docs cover the question.
 

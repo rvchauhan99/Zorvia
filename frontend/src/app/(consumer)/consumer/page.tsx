@@ -82,6 +82,10 @@ export default function ConsumerHome() {
   const nextDelivery = upcoming.find((d) => d.status === "pending");
   const cutoffHours = me?.provider?.settings?.cutoff_hours ?? 4;
   const mealPrice = Number(me?.customer?.meal_price) || 0;
+  const billing = me?.billing;
+  const monthlyBilling = billing?.billing_mode === "monthly_flat";
+  const monthlyFixed = billing?.policy_variant === "monthly_fixed";
+  const currentMonth = me?.current_month_billing;
   const extraOpen = extraTarget !== null;
   const extraDefaultDate =
     extraTarget && extraTarget !== "new" ? extraTarget.delivery_date : todayISO();
@@ -146,14 +150,48 @@ export default function ConsumerHome() {
         <div className="stat-card">
           <div className="flex items-center justify-between"><span className="label-overline">Outstanding</span><CurrencyDollar size={20} className="text-primary" weight="duotone" /></div>
           <div className="font-display font-black text-2xl sm:text-3xl break-words">{fmtCAD(me?.outstanding ?? 0)}</div>
+          {monthlyBilling && me?.suggested_payment_cad != null ? (
+            <div className="text-xs text-muted-foreground mt-0.5">Suggested payment {fmtCAD(me.suggested_payment_cad)}</div>
+          ) : null}
           <Link data-testid="pay-now-link" href="/consumer/payments" className="text-xs text-primary font-medium hover:underline">Submit a payment →</Link>
         </div>
         <div className="stat-card">
-          <div className="flex items-center justify-between"><span className="label-overline">Next delivery</span><Truck size={20} className="text-secondary" weight="duotone" /></div>
-          <div className="font-display font-black text-xl sm:text-2xl">{nextDelivery ? fmtDate(nextDelivery.delivery_date) : "—"}</div>
-          <div className="text-xs text-muted-foreground truncate">{me?.provider?.name || ""}</div>
+          <div className="flex items-center justify-between">
+            <span className="label-overline">{monthlyBilling ? "Monthly plan" : "Next delivery"}</span>
+            <Truck size={20} className="text-secondary" weight="duotone" />
+          </div>
+          {monthlyBilling ? (
+            <>
+              <div className="font-display font-black text-xl sm:text-2xl">{billing?.monthly_plan_name || "Plan"}</div>
+              <div className="text-xs text-muted-foreground truncate">
+                {fmtCAD(billing?.monthly_fee ?? 0)}
+                {billing?.collection_due_date ? ` · due ${fmtDate(billing.collection_due_date)}` : ""}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="font-display font-black text-xl sm:text-2xl">{nextDelivery ? fmtDate(nextDelivery.delivery_date) : "—"}</div>
+              <div className="text-xs text-muted-foreground truncate">{me?.provider?.name || ""}</div>
+            </>
+          )}
         </div>
       </div>
+
+      {monthlyBilling && currentMonth ? (
+        <div className="card-tinted p-4 text-sm text-muted-foreground" data-testid="consumer-monthly-billing-summary">
+          {monthlyFixed ? (
+            <p>Your fixed monthly fee is {fmtCAD(currentMonth.monthly_fee)} for this month regardless of skips.</p>
+          ) : (
+            <p>
+              This month: {fmtCAD(currentMonth.month_charge_after_tax ?? currentMonth.month_charge_before_tax)}
+              {currentMonth.cancelled_units != null ? ` · ${currentMonth.cancelled_units} cancellation(s)` : ""}
+              {currentMonth.free_cancellations_remaining != null && currentMonth.policy_variant === "monthly_adjustable"
+                ? ` · ${currentMonth.free_cancellations_remaining} free cancellation(s) left`
+                : ""}
+            </p>
+          )}
+        </div>
+      ) : null}
 
       {menu?.image_url ? (
         <section className="card-tinted p-4 sm:p-5 flex flex-col gap-3" data-testid="consumer-menu-section">
@@ -272,7 +310,12 @@ export default function ConsumerHome() {
         )}
       >
         <p className="text-sm text-muted-foreground">
-          Subject to your provider&apos;s {cutoffHours}h cutoff before delivery. You won&apos;t be charged for this meal if cancellation succeeds.
+          Subject to your provider&apos;s {cutoffHours}h cutoff before delivery.{" "}
+          {monthlyFixed
+            ? "Your monthly fee is unchanged if cancellation succeeds."
+            : monthlyBilling
+              ? "Cancellation may reduce this month\u2019s flat fee (adjustable plan)."
+              : "You won\u2019t be charged for this meal if cancellation succeeds."}
         </p>
       </AppSheet>
 
