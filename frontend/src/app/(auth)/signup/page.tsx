@@ -8,6 +8,7 @@ import { ArrowRight } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
 import { trackEvent } from "@/lib/ga";
+import { CA_PROVINCES, formatCaPostal, isValidCaPostal } from "@/lib/ca-provinces";
 
 export default function ProviderSignup() {
   const { providerSignup } = useAuth();
@@ -23,6 +24,11 @@ export default function ProviderSignup() {
     org_name: "",
     signup_code: "",
     address: "",
+    apartment: "",
+    city: "",
+    province: "ON",
+    country: "CA",
+    postal_code: "",
     interac_email: "",
     meal_price_default: 12,
     timezone: "America/Toronto",
@@ -37,10 +43,28 @@ export default function ProviderSignup() {
       toast.error("Passwords do not match");
       return;
     }
+    if (!(form.address || "").trim() || !(form.city || "").trim() || !(form.province || "").trim() || !(form.postal_code || "").trim()) {
+      toast.error("Address, city, province, and postal code are required");
+      return;
+    }
+    if (!isValidCaPostal(form.postal_code)) {
+      toast.error("Enter a valid Canadian postal code (e.g. M5H 2M9)");
+      return;
+    }
     setSubmitting(true);
     try {
       const { confirm_password: _, ...rest } = form;
-      const payload = { ...rest, meal_price_default: Number(form.meal_price_default), cutoff_hours: Number(form.cutoff_hours) };
+      const payload = {
+        ...rest,
+        address: form.address.trim(),
+        apartment: (form.apartment || "").trim(),
+        city: form.city.trim(),
+        province: (form.province || "ON").trim().toUpperCase(),
+        country: "CA",
+        postal_code: formatCaPostal(form.postal_code),
+        meal_price_default: Number(form.meal_price_default),
+        cutoff_hours: Number(form.cutoff_hours),
+      };
       const s = await providerSignup(payload);
       trackEvent("signup_complete", { flow: "provider" });
       if ("pending_email_verification" in s && s.pending_email_verification) {
@@ -68,7 +92,7 @@ export default function ProviderSignup() {
           <div className="lg:col-span-2 flex flex-col gap-4">
             <span className="label-overline">Provider signup</span>
             <h1 className="font-display font-black text-4xl leading-tight">Start your<br/><span className="text-primary">tiffin workspace</span>.</h1>
-            <p className="text-sm text-muted-foreground">You'll be able to add customers, generate daily delivery lists and reconcile Interac payments right away.</p>
+            <p className="text-sm text-muted-foreground">You&apos;ll be able to add customers, generate daily delivery lists and reconcile Interac payments right away.</p>
             <div className="card-tinted p-4 text-sm mt-4">
               <div className="label-overline">What you get</div>
               <ul className="mt-3 space-y-2 text-foreground/80 list-disc pl-4">
@@ -118,8 +142,35 @@ export default function ProviderSignup() {
                 <span className="text-xs text-muted-foreground">Letters and numbers only. Customers use this code to join. Must be unique.</span>
               </label>
               <label className={`${label} sm:col-span-2`}>
-                <span className="label-overline">Business address</span>
-                <input data-testid="signup-address" className={input} value={form.address} onChange={upd("address")} placeholder="123 King St W, Toronto ON" />
+                <span className="label-overline">Street address</span>
+                <input data-testid="signup-address" required className={input} value={form.address} onChange={upd("address")} placeholder="123 King St W" />
+              </label>
+              <label className={label}>
+                <span className="label-overline">Apartment / unit</span>
+                <input data-testid="signup-apt" className={input} value={form.apartment} onChange={upd("apartment")} />
+              </label>
+              <label className={label}>
+                <span className="label-overline">City</span>
+                <input data-testid="signup-city" required className={input} value={form.city} onChange={upd("city")} placeholder="Toronto" />
+              </label>
+              <label className={label}>
+                <span className="label-overline">Province / territory</span>
+                <select data-testid="signup-province" required className={input} value={form.province || "ON"} onChange={upd("province")}>
+                  {CA_PROVINCES.map((p) => (
+                    <option key={p.code} value={p.code}>{p.code} — {p.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className={label}>
+                <span className="label-overline">Postal code</span>
+                <input
+                  data-testid="signup-postal"
+                  required
+                  className={`${input} uppercase`}
+                  value={form.postal_code}
+                  onChange={(e) => setForm({ ...form, postal_code: e.target.value.toUpperCase() })}
+                  placeholder="M5H 2M9"
+                />
               </label>
               <label className={label}>
                 <span className="label-overline">Interac payment email</span>

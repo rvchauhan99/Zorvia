@@ -57,7 +57,7 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 
 | Feature | Behavior | Acceptance |
 |---------|----------|------------|
-| Provider email signup | Creates `providers` + `platform_users`, starts **trial**; provider chooses unique alphanumeric `signup_code`; sends email OTP via Resend; **no JWT until verified** | After `/verify-email`, can log in; org + code exist |
+| Provider email signup | Creates `providers` + `platform_users`, starts **trial**; provider chooses unique alphanumeric `signup_code`; captures **CA kitchen address** (street, apt, city, province, postal — same fields as customer master); sends email OTP via Resend; **no JWT until verified** | After `/verify-email`, can log in; org + code + structured address exist |
 | Unified email login | Tries provider then consumer; blocks unverified (`403`) and inaccessible provider subscription | Correct `user_type` session |
 | Google Sign-In | Firebase ID token → `POST /api/auth/google`; matches existing account by **email** (primary id) or `google_uid`, then backfills `google_uid`; new provider needs `org_name` + `signup_code`; new consumer needs `signup_code`; email treated verified | Same account as password signup for that email; buttons disabled until Firebase client + fields ready; **501** if server Firebase unset |
 | Account linking | Email is the primary identity. Manual signup → later Google login links; Google-only → set password via forgot/reset or Settings/Profile **Set password** | Same `user_id`; both methods work |
@@ -71,8 +71,8 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 
 | Feature | Behavior |
 |---------|----------|
-| Profile | Org name, contact, Interac email, address fields |
-| Settings | `cutoff_hours`, **meal types** (Regular / Jain / Fasting + custom) with per-type CAD price, timezone, signup code (shareable), kitchen logo (512×512), `closed_dates` (holidays), **monthly billing policy** (opt-in; default off), change password |
+| Profile | Org name, contact, Interac email, **CA kitchen address** (street, apt, city, province, postal — same as customer master) |
+| Settings | `cutoff_hours`, **meal types** (Regular / Jain / Fasting + custom) with per-type CAD price, timezone, signup code (shareable), kitchen logo (512×512), `closed_dates` (holidays), **monthly billing policy** (opt-in; default off), change password; Kitchen Identity uses structured CA address |
 | Signup code | Chosen by provider at signup; **letters/numbers only** (3–32); stored uppercase; unique case-insensitively across tenants; consumers join with case-insensitive match |
 | Kitchen logo | Optional; Camera or Upload on settings → Pillow square resize 512 → R2 (`logos/`) or data-URL fallback |
 | Consumer avatar | Optional on signup (deferred upload after verify) and profile; Camera or Upload; 256×256 → R2 (`avatars/`) |
@@ -230,7 +230,7 @@ WhatsApp menu shares are **not** included in the SaaS subscription.
 
 ### Journey A — Provider onboarding
 
-1. Land on `/` → Sign up → `/signup` (password + confirm; choose alphanumeric signup code)  
+1. Land on `/` → Sign up → `/signup` (password + confirm; choose alphanumeric signup code; CA kitchen address)  
 2. Verify email via OTP → `/verify-email` → redirect `/provider`  
 3. Copy signup code from settings / dashboard; optional kitchen logo  
 4. Add or approve customers; open Deliveries for today  

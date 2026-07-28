@@ -67,6 +67,23 @@ function stopAddress(s: Stop) {
   return [s.address, s.apartment, s.postal_code].filter(Boolean).join(", ");
 }
 
+function kitchenAddressLine(kitchen: {
+  address?: string;
+  street?: string;
+  apartment?: string;
+  city?: string;
+  province?: string;
+  postal_code?: string;
+}) {
+  if (kitchen.street || kitchen.city || kitchen.province || kitchen.postal_code) {
+    return [kitchen.street, kitchen.apartment, kitchen.city, kitchen.province, kitchen.postal_code]
+      .map((p) => (p || "").trim())
+      .filter(Boolean)
+      .join(", ");
+  }
+  return (kitchen.address || "").trim();
+}
+
 function mapsUrlForStops(kitchenAddress: string, stops: Stop[]) {
   const parts = [kitchenAddress, ...stops.map(stopAddress)].filter(Boolean);
   if (!parts.length) return "https://maps.google.com";
@@ -446,6 +463,7 @@ export default function RoutePlanningPage() {
   };
 
   const kitchen = plan?.kitchen || {};
+  const kitchenLine = kitchenAddressLine(kitchen);
   const configured = !!plan?.routing_configured;
   const autoCollapse = stops.length > COLLAPSE_THRESHOLD;
 
@@ -579,7 +597,7 @@ export default function RoutePlanningPage() {
                 <div className="min-w-0 flex-1">
                   <p className="font-medium text-xs">Kitchen start</p>
                   <p className="text-xs text-muted-foreground truncate">
-                    {kitchen.address || "No address set — add one in Settings"}
+                    {kitchenLine || "No address set — add one in Settings"}
                   </p>
                   <div className="flex items-center gap-1.5 mt-1">
                     {kitchen.geocode_status === "ok" ? (
@@ -950,7 +968,7 @@ export default function RoutePlanningPage() {
                         <a
                           data-testid={`route-pool-maps-${section.key}`}
                           className="text-[10px] text-brand-teal flex items-center gap-0.5 hover:underline underline-offset-2"
-                          href={mapsUrlForStops(kitchen.address || "", section.stops.filter((s) => s.delivery_sequence != null))}
+                          href={mapsUrlForStops(kitchenLine || "", section.stops.filter((s) => s.delivery_sequence != null))}
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}
@@ -978,7 +996,7 @@ export default function RoutePlanningPage() {
                 <a
                   data-testid="route-open-maps"
                   className="sr-only"
-                  href={mapsUrlForStops(kitchen.address || "", mapsStops)}
+                  href={mapsUrlForStops(kitchenLine || "", mapsStops)}
                   target="_blank"
                   rel="noopener noreferrer"
                 >

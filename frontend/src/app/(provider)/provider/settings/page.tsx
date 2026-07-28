@@ -24,6 +24,7 @@ import { canMutateAdmin } from "@/lib/roles";
 import ImageSourceField from "@/components/ImageSourceField";
 import { PageLoader } from "@/components/loaders";
 import { fetchWhatsappFeaturesEnabled } from "@/lib/whatsapp-features";
+import { CA_PROVINCES, formatCaPostal, isValidCaPostal } from "@/lib/ca-provinces";
 
 type TabId = "general" | "operations" | "billing" | "notifications" | "team";
 
@@ -181,9 +182,24 @@ export default function Settings() {
           return;
         }
       }
+      if (!(prov.address || "").trim() || !(prov.city || "").trim() || !(prov.province || "").trim() || !(prov.postal_code || "").trim()) {
+        toast.error("Address, city, province, and postal code are required");
+        setSaving(false);
+        return;
+      }
+      if (!isValidCaPostal(prov.postal_code)) {
+        toast.error("Enter a valid Canadian postal code (e.g. M5H 2M9)");
+        setSaving(false);
+        return;
+      }
       const payload: Record<string, unknown> = {
         name: prov.name,
-        address: prov.address,
+        address: (prov.address || "").trim(),
+        apartment: (prov.apartment || "").trim(),
+        city: (prov.city || "").trim(),
+        province: (prov.province || "ON").trim().toUpperCase(),
+        country: "CA",
+        postal_code: formatCaPostal(prov.postal_code || ""),
         interac_email: prov.interac_email,
         meal_types: typesPayload,
         cutoff_hours: Number(prov.settings?.cutoff_hours),
@@ -376,8 +392,43 @@ export default function Settings() {
                   </label>
 
                   <label className="flex flex-col gap-1.5 sm:col-span-2">
-                    <span className="label-overline">Address</span>
+                    <span className="label-overline">Street address</span>
                     <input data-testid="s-address" className={inputClass} value={prov.address || ""} onChange={(e) => upd("address", e.target.value)} />
+                  </label>
+
+                  <label className="flex flex-col gap-1.5">
+                    <span className="label-overline">Apartment / unit</span>
+                    <input data-testid="s-apt" className={inputClass} value={prov.apartment || ""} onChange={(e) => upd("apartment", e.target.value)} />
+                  </label>
+
+                  <label className="flex flex-col gap-1.5">
+                    <span className="label-overline">City</span>
+                    <input data-testid="s-city" className={inputClass} value={prov.city || ""} onChange={(e) => upd("city", e.target.value)} />
+                  </label>
+
+                  <label className="flex flex-col gap-1.5">
+                    <span className="label-overline">Province / territory</span>
+                    <select
+                      data-testid="s-province"
+                      className={inputClass}
+                      value={prov.province || "ON"}
+                      onChange={(e) => upd("province", e.target.value)}
+                    >
+                      {CA_PROVINCES.map((p) => (
+                        <option key={p.code} value={p.code}>{p.code} — {p.name}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="flex flex-col gap-1.5">
+                    <span className="label-overline">Postal code</span>
+                    <input
+                      data-testid="s-postal"
+                      className={`${inputClass} uppercase`}
+                      value={prov.postal_code || ""}
+                      onChange={(e) => upd("postal_code", e.target.value.toUpperCase())}
+                      placeholder="M5H 2M9"
+                    />
                   </label>
 
                   <label className="flex flex-col gap-1.5 sm:col-span-2">
