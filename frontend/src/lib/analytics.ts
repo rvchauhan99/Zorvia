@@ -67,6 +67,8 @@ export type CustomerTimelineEvent = {
   type: "delivery" | "payment" | "pause" | "note" | string;
   at?: string;
   date?: string;
+  comment?: string;
+  operation?: string;
   data?: Record<string, any>;
 };
 

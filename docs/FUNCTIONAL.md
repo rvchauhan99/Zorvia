@@ -84,8 +84,9 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 |---------|----------|
 | CRUD | List/create/get/patch/delete customers under tenant |
 | Customer 360 | `GET /customers/{id}` includes outstanding + deliveries + payments; timeline at `GET /customers/{id}/timeline`; Analysis tab via `GET /customers/{id}/insights?period=` and `?tab=analysis` |
+| Payment history | Customer detail tab `?tab=payments` — policy-aware ledger with derived **comment** / **operation** on each row (no free-text DB field). **Per-meal:** payments + meal deliveries chronologically. **Monthly:** payments with renewal/credit comments + plan fee / credit / next renewal summary. Entry points: Customers list **History**, Customer subscriptions **History**, Analysis tab **Payment history** panel → View full history. APIs: `GET /customers/{id}/payments` and timeline events include `comment` + `operation`. |
 | Filters (UI) | Compact horizontal chips: all \| pending \| paused \| inactive \| high_balance (with counts) |
-| Mobile list | Whole customer card opens Analysis (`/provider/customers/{id}?tab=analysis`); action buttons stop propagation |
+| Mobile list | Whole customer card opens Analysis (`/provider/customers/{id}?tab=analysis`); action buttons (including Payment history) stop propagation |
 | Delivery days | Weekday indices `0=Mon … 6=Sun` |
 | Meal type | Provider Settings define Regular / Jain / Fasting (+ custom); CRM defaults to **Regular**; changing type auto-fills price from settings (editable) |
 | Meal price | Per-customer CAD unit price on generated deliveries; defaults from selected meal type’s price when omitted |
@@ -107,7 +108,7 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 | Delivery proof view | Thumbnail + **View** on deliveries list (Delivered/All tabs), customer 360 Deliveries tab, and dashboard delivered rows; in-app sheet with full image + open in new tab |
 | Consumer cancel | Upcoming `pending` only; blocked for past dates; within `cutoff_hours` before assumed **local noon** (provider timezone) |
 | Adjust meal | Consumer or provider admin sets **absolute** tiffin count (1–20) and/or **meal type** on a pending stop for a date; `extra_quantity = max(0, quantity − schedule base)`; one stop per customer×date×slot; consumer uses same cutoff as cancel; type change refreshes `meal_price` from provider meal types (provider may override price); UI is **preview-then-save** (Show summary projects kitchen/own-day plan without writing; Save calls adjust); adjust response still includes day summary. Legacy `POST …/extra` remains as additive wrapper. |
-| Kitchen cook plan | `/provider/kitchen` for admin/driver/viewer; `GET /reports/kitchen-summary` (shared helper also returned from adjust); counts by meal type × slot for pending+delivered; pack list with CRM notes; delivery snapshots `meal_type_id`/`meal_type_name` at generate/adjust |
+| Kitchen cook plan | `/provider/kitchen` for admin/driver/viewer; `GET /reports/kitchen-summary` (shared helper also returned from adjust); counts by meal type × slot for pending+delivered; pack list with CRM notes; delivery snapshots `meal_type_id`/`meal_type_name` at generate/adjust. **Print** downloads `GET /reports/kitchen-print.pdf` for the **full** filter-matched pack list (not only the current UI page), generated server-side via Playwright Chromium. |
 
 ### 4.5 Payments (Interac)
 
@@ -137,7 +138,7 @@ When enabled, **all customers** on that tenant switch to monthly-period billing;
 | Collection day | Provider `default_collection_day` (1–31, required when enabled); per-customer `payment_collection_day` override in CRM when monthly billing on. |
 | Outstanding | Balance = `opening_balance` + Σ calendar-month charges (after tax) − verified payments. **Listing:** per-meal and Adjustable = all balances `> 0`. **Fixed Monthly** = overdue only (past collection day). |
 | Reports | `GET /reports/payment-due` — amounts due by collection due date; Collections tab **Amounts due** sub-view. Fixed: `GET /reports/monthly-dues` + Outstanding renewal/overdue columns. |
-| Monthly dues UI | `/provider/monthly-dues` — Fixed Monthly **Customer subscriptions** roster (all active + renewal dates); Quick Renew when owed |
+| Monthly dues UI | `/provider/monthly-dues` — Fixed Monthly **Customer subscriptions** roster (all active + renewal dates); Amount = plan fee; Credit when advance on file; **History** → customer Payment history (`?tab=payments`); Quick Renew anytime (full-fee early pay advances renewal; partial = credit only) |
 | Statement | Monthly statement rows include plan, tier, collection due date when monthly billing active |
 
 ### 4.6 Reports (provider)
@@ -149,11 +150,12 @@ When enabled, **all customers** on that tenant switch to monthly-period billing;
 - Analysis and customer Analysis use shared KPI/section skeletons on first load; period changes keep previous KPIs visible (stale-while-revalidate) with a small spinner on the period toggle, then staggered reveal of charts/lists.
 - Per-customer Analysis (customer detail tab) reuses the same analytics kit (including custom dates + meal slot) via `GET /customers/{id}/insights` plus the activity timeline.
 - Outstanding balances (**owed only**, `outstanding > 0`; highest amount first; search / min amount / cursor Prev–Next + page size). Default Reports tab. Under **Fixed Monthly**, Outstanding shows **overdue only** (past collection day) with renewal date + overdue-by columns; per-meal and Adjustable unchanged.  
-- Customer credit (advance balances, `outstanding < 0`; largest credit first; same search / min / pagination)  
+- Customer credit (advance balances, `outstanding < 0`; largest credit first; same search / min / pagination; under **Fixed Monthly**, rows include next renewal when prepaid)  
 - Daily deliveries  
 - Collections (payments received by submission date)  
 - **Payment due** (`GET /reports/payment-due`) — monthly kitchens: who owes what by collection due date  
-- **Customer subscriptions** (`GET /reports/monthly-dues`, Fixed Monthly only) — all active customers, overdue-first then nearest renewal; Quick Renew when owed  
+- **Customer subscriptions** (`GET /reports/monthly-dues`, Fixed Monthly only) — all active customers, overdue-first then nearest renewal; Amount = plan fee; credit + prepaid-aware renewal; Quick Renew anytime  
+- **Customer credit** (`GET /reports/outstanding?balance=credit`) — advances for all policies; Fixed rows include next renewal when prepaid  
 - Active customers  
 - Area summary (optional FSA prefix)  
 - Dashboard summary  

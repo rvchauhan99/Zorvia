@@ -54,6 +54,7 @@ function percent(value?: number) {
 }
 
 function timelineLabel(ev: CustomerTimelineEvent) {
+  if (ev.comment) return ev.comment.split(" · ")[0] || ev.comment;
   if (ev.type === "delivery") return `Delivery ${ev.data?.status || ""}`.trim();
   if (ev.type === "payment") return `Payment ${ev.data?.status || ""}`.trim();
   if (ev.type === "pause") return "Pause window";
@@ -62,6 +63,15 @@ function timelineLabel(ev: CustomerTimelineEvent) {
 }
 
 function timelineDetail(ev: CustomerTimelineEvent, showMoney: boolean) {
+  if (ev.comment) {
+    const rest = ev.comment.includes(" · ") ? ev.comment.split(" · ").slice(1).join(" · ") : "";
+    if (ev.type === "payment" && showMoney) {
+      return `${fmtCAD(ev.data?.amount || 0)}${rest ? ` · ${rest}` : ""}`;
+    }
+    if (rest) return rest;
+    if (ev.type === "payment" && showMoney) return fmtCAD(ev.data?.amount || 0);
+    return fmtDate(ev.date || "") || "—";
+  }
   if (ev.type === "delivery") {
     const qty = Math.max(1, Number(ev.data?.quantity) || 1);
     const meals = qty === 1 ? "1 meal" : `${qty} meals`;
@@ -266,9 +276,15 @@ export default function CustomerDetail() {
     if (tab === "payments" && id) {
       paymentsPaging.resetToFirstPage();
       fetchPayments({ cursor: null });
+      // Per-meal: also refresh timeline for mixed meals+payments ledger
+      if (c?.billing?.billing_mode !== "monthly_flat") {
+        api.get<{ events: CustomerTimelineEvent[] }>(`/customers/${id}/timeline`)
+          .then((res) => setTimeline(res.data.events || []))
+          .catch(() => {});
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset+fetch when tab opens or page size changes
-  }, [tab, id, paymentsPaging.pageSize]);
+  }, [tab, id, paymentsPaging.pageSize, c?.billing?.billing_mode]);
 
   function selectTab(next: Tab) {
     setTab(next);
@@ -363,7 +379,7 @@ export default function CustomerDetail() {
         {tabBtn(tab === "overview", "Overview", () => selectTab("overview"), "ctab-overview")}
         {tabBtn(tab === "analysis", "Analysis", () => selectTab("analysis"), "ctab-analysis")}
         {tabBtn(tab === "deliveries", "Deliveries", () => selectTab("deliveries"), "ctab-deliveries")}
-        {tabBtn(tab === "payments", "Payments", () => selectTab("payments"), "ctab-payments")}
+        {tabBtn(tab === "payments", "Payment history", () => selectTab("payments"), "ctab-payments")}
         {tabBtn(tab === "pauses", "Pauses", () => selectTab("pauses"), "ctab-pauses")}
         {tabBtn(tab === "notes", "Notes", () => selectTab("notes"), "ctab-notes")}
       </div>
@@ -576,7 +592,62 @@ export default function CustomerDetail() {
             <div className="card-tinted p-6 text-center text-sm text-muted-foreground">Analysis unavailable.</div>
           )}
 
-          <div className="card-tinted overflow-hidden animate-fade-in-up" style={stagger(5)} data-testid="customer-timeline">
+          <div className="card-tinted overflow-hidden animate-fade-in-up" style={stagger(5)} data-testid="customer-payment-history-panel">
+            <div className="px-4 py-3 border-b border-brand-border flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-display font-bold text-lg">Payment history</h3>
+                <p className="text-xs text-muted-foreground">
+                  {c.billing?.billing_mode === "monthly_flat"
+                    ? "Recent payments and renewal comments."
+                    : "Recent payments and meals."}
+                </p>
+              </div>
+              <button
+                type="button"
+                data-testid="customer-view-payment-history"
+                onClick={() => selectTab("payments")}
+                className="shrink-0 text-sm font-medium text-primary hover:underline cursor-pointer"
+              >
+                View all
+              </button>
+            </div>
+            {busyAnalysis && timeline.length === 0 ? (
+              <div className="p-6 space-y-3 animate-pulse">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="h-4 w-48 rounded bg-brand-surface" />
+                ))}
+              </div>
+            ) : (
+              <ul className="divide-y divide-brand-border">
+                {timeline.filter((ev) =>
+                  c.billing?.billing_mode === "monthly_flat"
+                    ? ev.type === "payment"
+                    : ev.type === "payment" || ev.type === "delivery"
+                ).length === 0 ? (
+                  <li className="p-6 text-center text-sm text-muted-foreground">No payment history yet.</li>
+                ) : (
+                  timeline
+                    .filter((ev) =>
+                      c.billing?.billing_mode === "monthly_flat"
+                        ? ev.type === "payment"
+                        : ev.type === "payment" || ev.type === "delivery"
+                    )
+                    .slice(0, 8)
+                    .map((ev, idx) => (
+                      <li key={`ph-${ev.type}-${ev.at}-${idx}`} className="p-4 flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-medium truncate">{ev.comment || timelineLabel(ev)}</div>
+                          <div className="text-xs text-muted-foreground mt-0.5 truncate">{timelineDetail(ev, showMoney)}</div>
+                        </div>
+                        <div className="text-xs text-muted-foreground shrink-0">{ev.date || (ev.at || "").slice(0, 10) || "—"}</div>
+                      </li>
+                    ))
+                )}
+              </ul>
+            )}
+          </div>
+
+          <div className="card-tinted overflow-hidden animate-fade-in-up" style={stagger(6)} data-testid="customer-timeline">
             <div className="px-4 py-3 border-b border-brand-border">
               <h3 className="font-display font-bold text-lg">Activity timeline</h3>
               <p className="text-xs text-muted-foreground">Deliveries, payments, pauses, and notes.</p>
@@ -685,7 +756,7 @@ export default function CustomerDetail() {
       ) : null}
 
       {tab === "payments" ? (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3" data-testid="customer-payment-history">
           {canMutate ? (
             <div className="flex justify-end">
               <button
@@ -698,47 +769,107 @@ export default function CustomerDetail() {
               </button>
             </div>
           ) : null}
-          <div className="card-tinted overflow-hidden">
-            {paymentsLoading && customerPayments.length === 0 ? (
-              <InlineLoader testid="customer-payments-loading" />
-            ) : (
-              <ul className="divide-y divide-brand-border">
-                {customerPayments.length === 0 ? (
-                  <li className="p-6 text-center text-sm text-muted-foreground">No payments yet.</li>
+          {c.billing?.billing_mode === "monthly_flat" && showMoney ? (
+            <div className="card-tinted p-4 text-sm" data-testid="payment-history-monthly-summary">
+              <div className="font-medium">
+                {c.billing?.monthly_plan_name || "Monthly plan"}
+                {" · "}
+                {fmtCAD(c.billing?.monthly_fee ?? 0)}
+                {c.billing?.policy_variant === "monthly_fixed" ? " · Fixed" : " · Adjustable"}
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">
+                {Number(c.outstanding) < 0 ? (
+                  <>Credit on file: {fmtCAD(Math.abs(Number(c.outstanding)))}</>
                 ) : (
-                  customerPayments.map((p: any) => (
-                    <li key={p.id} className="p-4 flex items-center gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium">{showMoney ? fmtCAD(p.amount) : (p.reference || "Payment")}</div>
-                        <div className="text-xs text-muted-foreground font-mono truncate">{showMoney ? p.reference : fmtDate(p.submitted_at || p.verified_at)}</div>
-                      </div>
-                      <StatusPill status={p.status} />
-                    </li>
-                  ))
+                  <>Outstanding: {fmtCAD(c.outstanding || 0)}</>
+                )}
+                {c.billing?.collection_due_date || c.billing?.renewal_date
+                  ? ` · Next renewal ${c.billing?.renewal_date || c.billing?.collection_due_date}`
+                  : ""}
+              </div>
+            </div>
+          ) : null}
+          <div className="card-tinted overflow-hidden">
+            <div className="px-4 py-3 border-b border-brand-border">
+              <h3 className="font-display font-bold text-lg">Payment history</h3>
+              <p className="text-xs text-muted-foreground">
+                {c.billing?.billing_mode === "monthly_flat"
+                  ? "Payments with renewal / credit comments."
+                  : "Payments and meal deliveries with operation comments."}
+              </p>
+            </div>
+            {c.billing?.billing_mode === "monthly_flat" ? (
+              paymentsLoading && customerPayments.length === 0 ? (
+                <InlineLoader testid="customer-payments-loading" />
+              ) : (
+                <ul className="divide-y divide-brand-border">
+                  {customerPayments.length === 0 ? (
+                    <li className="p-6 text-center text-sm text-muted-foreground">No payments yet.</li>
+                  ) : (
+                    customerPayments.map((p: any) => (
+                      <li key={p.id} className="p-4 flex items-start gap-3" data-testid={`payment-history-row-${p.id}`}>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium">{showMoney ? fmtCAD(p.amount) : (p.reference || "Payment")}</div>
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            {p.comment || (showMoney ? p.reference : fmtDate(p.submitted_at || p.verified_at))}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground mt-1">
+                            {fmtDate(p.submitted_at || p.verified_at)}
+                          </div>
+                        </div>
+                        <StatusPill status={p.status} />
+                      </li>
+                    ))
+                  )}
+                </ul>
+              )
+            ) : (
+              <ul className="divide-y divide-brand-border" data-testid="payment-history-ledger">
+                {timeline.filter((ev) => ev.type === "payment" || ev.type === "delivery").length === 0 ? (
+                  <li className="p-6 text-center text-sm text-muted-foreground">No payments or meals yet.</li>
+                ) : (
+                  timeline
+                    .filter((ev) => ev.type === "payment" || ev.type === "delivery")
+                    .map((ev, idx) => (
+                      <li key={`${ev.type}-${ev.at}-${idx}`} className="p-4 flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-brand-surface text-muted-foreground">
+                              {ev.type === "payment" ? "Payment" : "Meal"}
+                            </span>
+                            <span className="font-medium truncate">{ev.comment || timelineLabel(ev)}</span>
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5 truncate">{timelineDetail(ev, showMoney)}</div>
+                        </div>
+                        <div className="text-xs text-muted-foreground shrink-0">{ev.date || (ev.at || "").slice(0, 10) || "—"}</div>
+                      </li>
+                    ))
                 )}
               </ul>
             )}
           </div>
-          <CursorPaginationBar
-            currentPage={paymentsPaging.currentPage}
-            totalPages={paymentsPaging.totalPages}
-            from={paymentsPaging.from}
-            to={paymentsPaging.to}
-            total={paymentsPaging.total}
-            pageSize={paymentsPaging.pageSize}
-            hasMore={paymentsPaging.hasMore}
-            loading={paymentsLoading}
-            onPrev={() => {
-              const c = paymentsPaging.goPrev();
-              if (c !== undefined) fetchPayments({ cursor: c });
-            }}
-            onNext={() => {
-              const c = paymentsPaging.goNext();
-              if (c !== undefined) fetchPayments({ cursor: c });
-            }}
-            onPageSizeChange={(size: AllowedPageSize) => paymentsPaging.setPageSize(size)}
-            testidPrefix="customer-payments-pagination"
-          />
+          {c.billing?.billing_mode === "monthly_flat" ? (
+            <CursorPaginationBar
+              currentPage={paymentsPaging.currentPage}
+              totalPages={paymentsPaging.totalPages}
+              from={paymentsPaging.from}
+              to={paymentsPaging.to}
+              total={paymentsPaging.total}
+              pageSize={paymentsPaging.pageSize}
+              hasMore={paymentsPaging.hasMore}
+              loading={paymentsLoading}
+              onPrev={() => {
+                const cur = paymentsPaging.goPrev();
+                if (cur !== undefined) fetchPayments({ cursor: cur });
+              }}
+              onNext={() => {
+                const cur = paymentsPaging.goNext();
+                if (cur !== undefined) fetchPayments({ cursor: cur });
+              }}
+              onPageSizeChange={(size: AllowedPageSize) => paymentsPaging.setPageSize(size)}
+              testidPrefix="customer-payments-pagination"
+            />
+          ) : null}
           <RecordPaymentSheet
             open={recordOpen}
             onClose={() => setRecordOpen(false)}
@@ -747,6 +878,9 @@ export default function CustomerDetail() {
               load();
               const c2 = paymentsPaging.currentPageIndex > 0 ? paymentsPaging.cursorHistory[paymentsPaging.currentPageIndex - 1] ?? null : null;
               fetchPayments({ cursor: c2 });
+              api.get<{ events: CustomerTimelineEvent[] }>(`/customers/${id}/timeline`)
+                .then((res) => setTimeline(res.data.events || []))
+                .catch(() => {});
             }}
           />
         </div>

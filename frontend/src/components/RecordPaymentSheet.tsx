@@ -27,10 +27,13 @@ export default function RecordPaymentSheet({ open, onClose, onRecorded, lockedCu
   const [submitting, setSubmitting] = useState(false);
   const [billingHint, setBillingHint] = useState<{
     outstanding: number;
+    credit: number;
     month_charge?: number | null;
+    monthly_fee?: number | null;
     collection_due_date?: string | null;
     plan_name?: string | null;
     monthly?: boolean;
+    policy_variant?: string | null;
   } | null>(null);
 
   useEffect(() => {
@@ -58,20 +61,34 @@ export default function RecordPaymentSheet({ open, onClose, onRecorded, lockedCu
         const { data } = await api.get(`/customers/${cid}`);
         if (cancelled) return;
         const outstanding = Number(data?.outstanding) || 0;
+        const credit = Math.max(0, -outstanding);
         const monthly = data?.billing?.billing_mode === "monthly_flat";
+        const policyVariant = data?.billing?.policy_variant || null;
+        const monthlyFee = data?.billing?.monthly_fee != null ? Number(data.billing.monthly_fee) : null;
         const monthCharge = data?.current_month_billing?.month_charge_after_tax
           ?? data?.current_month_billing?.month_charge_before_tax
           ?? null;
+        const monthChargeNum = monthCharge != null ? Number(monthCharge) : null;
         setBillingHint({
           outstanding,
+          credit,
           monthly,
-          month_charge: monthCharge != null ? Number(monthCharge) : null,
+          policy_variant: policyVariant,
+          monthly_fee: monthlyFee,
+          month_charge: monthChargeNum,
           collection_due_date: data?.billing?.collection_due_date || data?.current_month_billing?.collection_due_date || null,
           plan_name: data?.billing?.monthly_plan_name || data?.current_month_billing?.plan_name || null,
         });
         setAmount((prev) => {
           if (prev) return prev;
           if (outstanding > 0) return outstanding.toFixed(2);
+          if (monthly && policyVariant === "monthly_fixed" && monthlyFee != null && monthlyFee > 0) {
+            return monthlyFee.toFixed(2);
+          }
+          if (monthly && policyVariant !== "monthly_fixed") {
+            const hint = monthChargeNum != null && monthChargeNum > 0 ? monthChargeNum : monthlyFee;
+            if (hint != null && hint > 0) return Number(hint).toFixed(2);
+          }
           return prev;
         });
       } catch {
@@ -170,10 +187,21 @@ export default function RecordPaymentSheet({ open, onClose, onRecorded, lockedCu
 
       {billingHint ? (
         <div className="mb-4 rounded-xl border border-brand-border bg-white px-4 py-3 text-sm" data-testid="record-payment-billing-hint">
-          <div>Outstanding: <span className="font-semibold text-primary">{fmtCAD(billingHint.outstanding)}</span></div>
+          <div>
+            Outstanding:{" "}
+            <span className={`font-semibold ${billingHint.outstanding > 0 ? "text-primary" : "text-foreground"}`}>
+              {fmtCAD(billingHint.outstanding)}
+            </span>
+          </div>
+          {billingHint.credit > 0 ? (
+            <div className="mt-1" data-testid="record-payment-credit-hint">
+              Credit on file: <span className="font-semibold text-secondary">{fmtCAD(billingHint.credit)}</span>
+            </div>
+          ) : null}
           {billingHint.monthly ? (
             <div className="text-xs text-muted-foreground mt-1">
               {billingHint.plan_name || "Monthly plan"}
+              {billingHint.monthly_fee != null ? ` · fee ${fmtCAD(billingHint.monthly_fee)}` : ""}
               {billingHint.month_charge != null ? ` · month charge ${fmtCAD(billingHint.month_charge)}` : ""}
               {billingHint.collection_due_date ? ` · due ${billingHint.collection_due_date}` : ""}
             </div>

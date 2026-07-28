@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Plus, MagnifyingGlass, PencilSimple, Trash, PauseCircle, PlayCircle, CheckCircle, XCircle, UploadSimple, EnvelopeSimple, DownloadSimple } from "@phosphor-icons/react";
+import { Plus, MagnifyingGlass, PencilSimple, Trash, PauseCircle, PlayCircle, CheckCircle, XCircle, UploadSimple, EnvelopeSimple, DownloadSimple, ClockCounterClockwise, DotsThreeVertical } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canMutateAdmin, canSeePricing } from "@/lib/roles";
@@ -79,6 +79,191 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: "high_balance", label: "High balance" },
 ];
 
+const MENU_ITEM =
+  "w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left hover:bg-brand-surface cursor-pointer border-0 bg-transparent";
+
+function CustomerRowActions({
+  customer,
+  canMutate,
+  paused,
+  open,
+  onToggle,
+  onClose,
+  onHistory,
+  onApprove,
+  onReject,
+  onPause,
+  onResume,
+  onEdit,
+  onDelete,
+}: {
+  customer: { id: string; pending_approval?: boolean };
+  canMutate: boolean;
+  paused: boolean;
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  onHistory: () => void;
+  onApprove: () => void;
+  onReject: () => void;
+  onPause: () => void;
+  onResume: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) onClose();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open, onClose]);
+
+  function run(action: () => void) {
+    onClose();
+    action();
+  }
+
+  return (
+    <div ref={rootRef} className="relative inline-flex">
+      <button
+        type="button"
+        data-testid={`customer-actions-${customer.id}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle();
+        }}
+        className="icon-btn icon-btn-neutral"
+        title="Actions"
+        aria-label="Customer actions"
+        aria-expanded={open}
+        aria-haspopup="menu"
+      >
+        <DotsThreeVertical size={18} weight="bold" />
+      </button>
+      {open ? (
+        <div
+          role="menu"
+          className="absolute right-0 top-full mt-1 z-30 min-w-[11.5rem] rounded-xl border border-brand-border bg-white shadow-lg py-1 overflow-hidden"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            data-testid={`customer-payment-history-${customer.id}`}
+            className={MENU_ITEM}
+            onClick={(e) => {
+              e.stopPropagation();
+              run(onHistory);
+            }}
+          >
+            <ClockCounterClockwise size={16} className="shrink-0 text-muted-foreground" />
+            Payment history
+          </button>
+          {canMutate ? (
+            <>
+              {customer.pending_approval ? (
+                <>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    data-testid={`approve-${customer.id}`}
+                    className={`${MENU_ITEM} text-secondary`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      run(onApprove);
+                    }}
+                  >
+                    <CheckCircle size={16} className="shrink-0" />
+                    Approve
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    data-testid={`reject-${customer.id}`}
+                    className={`${MENU_ITEM} text-destructive`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      run(onReject);
+                    }}
+                  >
+                    <XCircle size={16} className="shrink-0" />
+                    Reject
+                  </button>
+                </>
+              ) : null}
+              {paused ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  data-testid={`resume-${customer.id}`}
+                  className={`${MENU_ITEM} text-secondary`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    run(onResume);
+                  }}
+                >
+                  <PlayCircle size={16} className="shrink-0" />
+                  Resume
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  role="menuitem"
+                  data-testid={`pause-${customer.id}`}
+                  className={MENU_ITEM}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    run(onPause);
+                  }}
+                >
+                  <PauseCircle size={16} className="shrink-0 text-muted-foreground" />
+                  Pause
+                </button>
+              )}
+              <button
+                type="button"
+                role="menuitem"
+                data-testid={`edit-${customer.id}`}
+                className={MENU_ITEM}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  run(onEdit);
+                }}
+              >
+                <PencilSimple size={16} className="shrink-0 text-muted-foreground" />
+                Edit
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                data-testid={`delete-${customer.id}`}
+                className={`${MENU_ITEM} text-destructive`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  run(onDelete);
+                }}
+              >
+                <Trash size={16} className="shrink-0" />
+                Delete
+              </button>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function Customers() {
   const router = useRouter();
   const { session } = useAuth();
@@ -100,6 +285,7 @@ export default function Customers() {
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [rejectTarget, setRejectTarget] = useState<any>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [openActionsId, setOpenActionsId] = useState<string | null>(null);
   const [showInvite, setShowInvite] = useState(false);
   const [extraOpen, setExtraOpen] = useState(false);
   const [inviteForm, setInviteForm] = useState({ name: "", email: "" });
@@ -1006,23 +1192,23 @@ export default function Customers() {
                     <span>Seq <span className="font-mono text-foreground">{c.delivery_sequence != null ? c.delivery_sequence : "—"}</span></span>
                     <span>Driver <span className="text-foreground">{c.driver_name || "—"}</span></span>
                   </div>
-                  {canMutate ? (
-                    <div className="flex items-center gap-0.5 flex-wrap -ml-1" onClick={(e) => e.stopPropagation()}>
-                      {c.pending_approval ? (
-                        <>
-                          <button data-testid={`approve-${c.id}`} onClick={() => approve(c)} className="icon-btn icon-btn-success" title="Approve"><CheckCircle size={18} /></button>
-                          <button data-testid={`reject-${c.id}`} onClick={() => { setRejectTarget(c); setRejectReason(""); }} className="icon-btn icon-btn-danger" title="Reject"><XCircle size={18} /></button>
-                        </>
-                      ) : null}
-                      {isPaused(c) ? (
-                        <button data-testid={`resume-${c.id}`} onClick={() => resume(c)} className="icon-btn icon-btn-success" title="Resume"><PlayCircle size={18} /></button>
-                      ) : (
-                        <button data-testid={`pause-${c.id}`} onClick={() => setPauseTarget(c)} className="icon-btn icon-btn-neutral" title="Pause"><PauseCircle size={18} /></button>
-                      )}
-                      <button data-testid={`edit-${c.id}`} onClick={() => openEdit(c)} className="icon-btn icon-btn-neutral" title="Edit"><PencilSimple size={18} /></button>
-                      <button data-testid={`delete-${c.id}`} onClick={() => setDeleteTarget(c)} className="icon-btn icon-btn-danger" title="Delete"><Trash size={18} /></button>
-                    </div>
-                  ) : null}
+                  <div className="flex items-center justify-end -ml-1" onClick={(e) => e.stopPropagation()}>
+                    <CustomerRowActions
+                      customer={c}
+                      canMutate={canMutate}
+                      paused={isPaused(c)}
+                      open={openActionsId === c.id}
+                      onToggle={() => setOpenActionsId((id) => (id === c.id ? null : c.id))}
+                      onClose={() => setOpenActionsId(null)}
+                      onHistory={() => router.push(`/provider/customers/${c.id}?tab=payments`)}
+                      onApprove={() => approve(c)}
+                      onReject={() => { setRejectTarget(c); setRejectReason(""); }}
+                      onPause={() => setPauseTarget(c)}
+                      onResume={() => resume(c)}
+                      onEdit={() => openEdit(c)}
+                      onDelete={() => setDeleteTarget(c)}
+                    />
+                  </div>
                 </li>
               ))}
             </ul>
@@ -1039,7 +1225,7 @@ export default function Customers() {
                     <th className="px-4 py-3 label-overline">Meals</th>
                     {showMoney ? <th className="px-4 py-3 label-overline">Price</th> : null}
                     {showMoney ? <th className="px-4 py-3 label-overline">Outstanding</th> : null}
-                    {canMutate ? <th className="px-4 py-3 label-overline text-right sticky right-0 bg-brand-surface">Actions</th> : null}
+                    <th className="px-4 py-3 label-overline text-right sticky right-0 bg-brand-surface">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-brand-border">
@@ -1083,25 +1269,25 @@ export default function Customers() {
                       {showMoney ? (
                         <td className={`px-4 py-3 font-semibold ${c.outstanding > 0 ? "text-primary" : "text-muted-foreground"}`}>{fmtCAD(c.outstanding || 0)}</td>
                       ) : null}
-                      {canMutate ? (
-                        <td className="px-4 py-3 whitespace-nowrap sticky right-0 bg-white group-hover:bg-brand-surface/60">
-                          <div className="flex justify-end items-center gap-0.5 shrink-0">
-                            {c.pending_approval ? (
-                              <>
-                                <button data-testid={`approve-${c.id}`} onClick={() => approve(c)} className="icon-btn icon-btn-success" title="Approve"><CheckCircle size={18} /></button>
-                                <button data-testid={`reject-${c.id}`} onClick={() => { setRejectTarget(c); setRejectReason(""); }} className="icon-btn icon-btn-danger" title="Reject"><XCircle size={18} /></button>
-                              </>
-                            ) : null}
-                            {isPaused(c) ? (
-                              <button data-testid={`resume-${c.id}`} onClick={() => resume(c)} className="icon-btn icon-btn-success" title="Resume"><PlayCircle size={18} /></button>
-                            ) : (
-                              <button data-testid={`pause-${c.id}`} onClick={() => setPauseTarget(c)} className="icon-btn icon-btn-neutral" title="Pause"><PauseCircle size={18} /></button>
-                            )}
-                            <button data-testid={`edit-${c.id}`} onClick={() => openEdit(c)} className="icon-btn icon-btn-neutral" title="Edit"><PencilSimple size={18} /></button>
-                            <button data-testid={`delete-${c.id}`} onClick={() => setDeleteTarget(c)} className="icon-btn icon-btn-danger" title="Delete"><Trash size={18} /></button>
-                          </div>
-                        </td>
-                      ) : null}
+                      <td className="px-4 py-3 whitespace-nowrap sticky right-0 bg-white group-hover:bg-brand-surface/60">
+                        <div className="flex justify-end items-center shrink-0">
+                          <CustomerRowActions
+                            customer={c}
+                            canMutate={canMutate}
+                            paused={isPaused(c)}
+                            open={openActionsId === c.id}
+                            onToggle={() => setOpenActionsId((id) => (id === c.id ? null : c.id))}
+                            onClose={() => setOpenActionsId(null)}
+                            onHistory={() => router.push(`/provider/customers/${c.id}?tab=payments`)}
+                            onApprove={() => approve(c)}
+                            onReject={() => { setRejectTarget(c); setRejectReason(""); }}
+                            onPause={() => setPauseTarget(c)}
+                            onResume={() => resume(c)}
+                            onEdit={() => openEdit(c)}
+                            onDelete={() => setDeleteTarget(c)}
+                          />
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

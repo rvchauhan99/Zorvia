@@ -54,7 +54,11 @@ export default function Settings() {
       api.get("/auth/me"),
       fetchWhatsappFeaturesEnabled(),
     ]);
-    setProv(p);
+    setProv({
+      ...p,
+      province: (p?.province || "").trim() || "ON",
+      country: (p?.country || "").trim() || "CA",
+    });
     setStaff(s);
     setHasPassword(!!me?.has_password);
     setWaEnabled(enabled);
@@ -182,7 +186,7 @@ export default function Settings() {
           return;
         }
       }
-      if (!(prov.address || "").trim() || !(prov.city || "").trim() || !(prov.province || "").trim() || !(prov.postal_code || "").trim()) {
+      if (!(prov.address || "").trim() || !(prov.city || "").trim() || !(prov.province || "ON").trim() || !(prov.postal_code || "").trim()) {
         toast.error("Address, city, province, and postal code are required");
         setSaving(false);
         return;
@@ -232,7 +236,11 @@ export default function Settings() {
         return;
       }
       const { data } = await api.patch("/providers/me", payload);
-      setProv(data);
+      setProv({
+        ...data,
+        province: (data?.province || "").trim() || "ON",
+        country: (data?.country || "").trim() || "CA",
+      });
       toast.success("Settings saved successfully");
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || "Failed to save settings");

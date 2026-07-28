@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowClockwise } from "@phosphor-icons/react";
+import { ArrowClockwise, ClockCounterClockwise } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -20,6 +20,9 @@ type DueRow = {
   phone?: string;
   email?: string;
   outstanding: number;
+  credit?: number;
+  prepaid_months?: number;
+  monthly_fee?: number;
   renewal_date?: string | null;
   collection_due_date?: string | null;
   last_due_date?: string | null;
@@ -119,7 +122,7 @@ export default function MonthlyDuesPage() {
           <span className="label-overline">Billing</span>
           <h1 className="font-display font-black text-2xl sm:text-3xl mt-0.5">Customer subscriptions</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            All Fixed Monthly customers with renewal dates. Overdue first, then nearest renewal. Quick Renew records a payment when they owe.
+            All Fixed Monthly customers with renewal dates. Overdue first, then nearest renewal. Quick Renew anytime — early full-fee payments advance next renewal; partial advances stay as credit.
           </p>
         </div>
         <button
@@ -161,7 +164,7 @@ export default function MonthlyDuesPage() {
           <>
             <ul className="md:hidden divide-y divide-brand-border" data-testid="monthly-dues-list-mobile">
               {rows.map((r) => {
-                const owes = Number(r.outstanding) > 0;
+                const credit = Number(r.credit ?? Math.max(0, -Number(r.outstanding || 0)));
                 return (
                   <li
                     key={r.customer_id}
@@ -185,21 +188,35 @@ export default function MonthlyDuesPage() {
                           Renewal {r.renewal_date || r.collection_due_date || "—"}
                           {r.is_overdue && r.days_overdue ? ` · ${r.days_overdue}d overdue` : null}
                         </div>
+                        {showMoney && credit > 0 ? (
+                          <div className="text-xs text-secondary mt-1 font-medium">{fmtCAD(credit)} credit</div>
+                        ) : null}
                       </div>
                       {showMoney ? (
-                        <div className="shrink-0 font-semibold text-primary">{fmtCAD(r.outstanding)}</div>
+                        <div className="shrink-0 font-semibold text-primary">{fmtCAD(r.monthly_fee ?? 0)}</div>
                       ) : null}
                     </div>
-                    {canMutate && showMoney && owes ? (
+                    <div className="flex flex-col gap-2">
                       <button
                         type="button"
-                        data-testid={`monthly-dues-renew-${r.customer_id}`}
-                        onClick={() => setRenewCustomer({ id: r.customer_id, name: r.name })}
-                        className="h-10 rounded-full bg-primary text-primary-foreground text-sm font-semibold cursor-pointer"
+                        data-testid={`monthly-dues-history-${r.customer_id}`}
+                        onClick={() => router.push(`/provider/customers/${r.customer_id}?tab=payments`)}
+                        className="h-10 rounded-full border border-brand-border bg-white text-sm font-semibold cursor-pointer inline-flex items-center justify-center gap-2"
                       >
-                        Quick Renew
+                        <ClockCounterClockwise size={18} />
+                        Payment history
                       </button>
-                    ) : null}
+                      {canMutate && showMoney ? (
+                        <button
+                          type="button"
+                          data-testid={`monthly-dues-renew-${r.customer_id}`}
+                          onClick={() => setRenewCustomer({ id: r.customer_id, name: r.name })}
+                          className="h-10 rounded-full bg-primary text-primary-foreground text-sm font-semibold cursor-pointer"
+                        >
+                          Quick Renew
+                        </button>
+                      ) : null}
+                    </div>
                   </li>
                 );
               })}
@@ -213,12 +230,13 @@ export default function MonthlyDuesPage() {
                     <th className="px-3 py-2 label-overline">Renewal date</th>
                     <th className="px-3 py-2 label-overline">Overdue by</th>
                     {showMoney ? <th className="px-3 py-2 label-overline text-right">Amount</th> : null}
-                    {canMutate && showMoney ? <th className="px-3 py-2 label-overline text-right">Action</th> : null}
+                    {showMoney ? <th className="px-3 py-2 label-overline text-right">Credit</th> : null}
+                    <th className="px-3 py-2 label-overline text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-brand-border">
                   {rows.map((r) => {
-                    const owes = Number(r.outstanding) > 0;
+                    const credit = Number(r.credit ?? Math.max(0, -Number(r.outstanding || 0)));
                     return (
                       <tr
                         key={r.customer_id}
@@ -244,11 +262,26 @@ export default function MonthlyDuesPage() {
                           {r.is_overdue && r.days_overdue ? `${r.days_overdue}d` : "—"}
                         </td>
                         {showMoney ? (
-                          <td className="px-3 py-2 text-right font-semibold text-primary">{fmtCAD(r.outstanding)}</td>
+                          <td className="px-3 py-2 text-right font-semibold text-primary">{fmtCAD(r.monthly_fee ?? 0)}</td>
                         ) : null}
-                        {canMutate && showMoney ? (
-                          <td className="px-3 py-2 text-right">
-                            {owes ? (
+                        {showMoney ? (
+                          <td className="px-3 py-2 text-right text-secondary font-medium">
+                            {credit > 0 ? fmtCAD(credit) : "—"}
+                          </td>
+                        ) : null}
+                        <td className="px-3 py-2 text-right">
+                          <div className="inline-flex items-center justify-end gap-2 flex-wrap">
+                            <button
+                              type="button"
+                              data-testid={`monthly-dues-history-${r.customer_id}`}
+                              onClick={() => router.push(`/provider/customers/${r.customer_id}?tab=payments`)}
+                              className="h-9 px-3 rounded-full border border-brand-border bg-white text-xs font-semibold cursor-pointer inline-flex items-center gap-1.5"
+                              title="Payment history"
+                            >
+                              <ClockCounterClockwise size={16} />
+                              History
+                            </button>
+                            {canMutate && showMoney ? (
                               <button
                                 type="button"
                                 data-testid={`monthly-dues-renew-${r.customer_id}`}
@@ -257,11 +290,9 @@ export default function MonthlyDuesPage() {
                               >
                                 Quick Renew
                               </button>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">—</span>
-                            )}
-                          </td>
-                        ) : null}
+                            ) : null}
+                          </div>
+                        </td>
                       </tr>
                     );
                   })}
