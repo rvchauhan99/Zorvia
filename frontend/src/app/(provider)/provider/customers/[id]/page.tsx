@@ -321,7 +321,12 @@ export default function CustomerDetail() {
           </div>
           <div className="sm:col-span-2">
             <div className="label-overline">Address</div>
-            <div className="text-sm">{c.address}{c.apartment ? `, ${c.apartment}` : ""}{c.postal_code ? ` · ${c.postal_code}` : ""}</div>
+            <div className="text-sm">
+              {[c.address, c.apartment].filter(Boolean).join(", ")}
+              {c.city || c.province || c.postal_code
+                ? ` · ${[c.city, c.province, c.postal_code].filter(Boolean).join(", ")}`
+                : ""}
+            </div>
             {(c.lat != null && c.lng != null) || c.geocode_status ? (
               <div className="text-xs text-muted-foreground mt-1" data-testid="customer-latlng">
                 {c.lat != null && c.lng != null

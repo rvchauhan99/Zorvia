@@ -30,9 +30,10 @@ import {
   normalizeMealSlots,
   unionDaysFromSlotSchedules,
 } from "@/lib/mealSlots";
+import { CA_PROVINCES, formatCaPostal, isValidCaPostal } from "@/lib/ca-provinces";
 
 const empty = {
-  name: "", email: "", phone: "", address: "", apartment: "", postal_code: "",
+  name: "", email: "", phone: "", address: "", apartment: "", city: "", province: "ON", country: "CA", postal_code: "",
   notes: "", delivery_days: [0, 1, 2, 3, 4], meal_type_id: "regular", meal_price: "",
   meal_schedule: scheduleFromDays([0, 1, 2, 3, 4], 1),
   meal_quantity: 1,
@@ -51,10 +52,10 @@ const empty = {
   monthly_plan_id: "",
 };
 
-const SAMPLE_CSV = `name,phone,email,address,apartment,postal_code,lat,lng,delivery_days,meal_price,meal_quantity,meal_slots,lunch_meal_quantity,dinner_meal_quantity,driver_email,delivery_sequence,lunch_driver_email,lunch_delivery_sequence,dinner_driver_email,dinner_delivery_sequence,opening_balance,joining_date,payment_collection_day,monthly_plan_id
-Aarav Sharma,4165551212,aarav@example.com,45 Bloor St W,Unit 302,M5S1M2,,,,"0,1,2,3,4",12,2,uncategorized,,,,1,,,,,45.00,2024-03-01,1,mon_fri
-Priya Patel,6475559898,priya@example.com,100 King St E,,M5C1G6,43.6496,-79.3776,"0,2,4",14,,"lunch,dinner",1,1,,,,,,,-20,2024-06-15,15,
-Neha Gupta,9055553344,neha@example.com,12 Queen St W,Suite 5,M5H2N2,,,,"1,3,5",12,1,uncategorized,,,driver@yourkitchen.ca,,,,,,0,,1,mon_sat
+const SAMPLE_CSV = `name,phone,email,address,apartment,city,province,postal_code,delivery_days,meal_price,meal_quantity,meal_slots,lunch_meal_quantity,dinner_meal_quantity,opening_balance,joining_date,payment_collection_day,monthly_plan_id
+Aarav Sharma,4165551212,aarav@example.com,45 Bloor St W,Unit 302,Toronto,ON,M5S 1M2,"0,1,2,3,4",12,2,uncategorized,,,45.00,2024-03-01,1,mon_fri
+Priya Patel,6475559898,priya@example.com,100 King St E,,Toronto,ON,M5C 1G6,"0,2,4",14,,"lunch,dinner",1,1,-20,2024-06-15,15,
+Neha Gupta,9055553344,neha@example.com,12 Queen St W,Suite 5,Toronto,ON,M5H 2N2,"1,3,5",12,1,uncategorized,,,0,,1,mon_sat
 `;
 
 function downloadSampleCsv() {
@@ -123,6 +124,7 @@ export default function Customers() {
   const [monthlyPlans, setMonthlyPlans] = useState<{ id: string; name: string; monthly_fee_cad?: number }[]>([]);
   const [routePreview, setRoutePreview] = useState<any>(null);
   const [routePreviewLoading, setRoutePreviewLoading] = useState(false);
+  const [formStep, setFormStep] = useState<1 | 2>(1);
 
   const input = "h-11 w-full px-4 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all";
   const drivers = useMemo(() => staff.filter((s) => (s.role || "admin") === "driver"), [staff]);
@@ -132,53 +134,108 @@ export default function Customers() {
     return () => window.clearTimeout(id);
   }, [q]);
 
-  // Debounced route placement preview while the create/edit sheet is open
-  useEffect(() => {
-    if (!showForm || !canMutate) return;
-    const address = (form.address || "").trim();
-    if (!address) {
-      if (!editing) setRoutePreview(null);
-      return;
-    }
+  function previewMealSlot() {
     const slots: string[] = Array.isArray(form.meal_slots) && form.meal_slots.length
       ? form.meal_slots
       : ["uncategorized"];
-    const meal_slot = slots.includes("lunch") && slots.includes("dinner")
+    return slots.includes("lunch") && slots.includes("dinner")
       ? "lunch"
       : slots[0] || "uncategorized";
-    let driver_id = form.driver_id || "";
-    if (meal_slot === "lunch") driver_id = form.slot_assignments?.lunch?.driver_id || driver_id;
-    if (meal_slot === "dinner") driver_id = form.slot_assignments?.dinner?.driver_id || driver_id;
+  }
 
-    const t = window.setTimeout(() => {
-      setRoutePreviewLoading(true);
-      api
-        .post("/route-planning/preview-placement", {
-          address: form.address || "",
-          apartment: form.apartment || "",
-          postal_code: form.postal_code || "",
-          meal_slot,
-          driver_id: driver_id || null,
-        })
-        .then(({ data }) => setRoutePreview(data))
-        .catch(() => {
-          /* non-fatal — keep prior preview */
-        })
-        .finally(() => setRoutePreviewLoading(false));
-    }, 500);
-    return () => window.clearTimeout(t);
-  }, [
-    showForm,
-    canMutate,
-    form.address,
-    form.apartment,
-    form.postal_code,
-    form.driver_id,
-    form.meal_slots,
-    form.slot_assignments?.lunch?.driver_id,
-    form.slot_assignments?.dinner?.driver_id,
-    editing,
-  ]);
+  function hasDriverAssignment() {
+    if (drivers.length === 0) return false;
+    const slots = normalizeMealSlots(form.meal_slots);
+    if (isDualSlots(slots)) {
+      const lunch = (form.slot_assignments?.lunch?.driver_id || "").trim();
+      const dinner = (form.slot_assignments?.dinner?.driver_id || "").trim();
+      return !!lunch && !!dinner;
+    }
+    return !!(form.driver_id || "").trim();
+  }
+
+  async function findLocation() {
+    const address = (form.address || "").trim();
+    if (!address) {
+      toast.error("Enter a street address first");
+      return;
+    }
+    if (!(form.city || "").trim() || !(form.province || "").trim() || !(form.postal_code || "").trim()) {
+      toast.error("City, province, and postal code are required to find location");
+      return;
+    }
+    if (!isValidCaPostal(form.postal_code)) {
+      toast.error("Enter a valid Canadian postal code (e.g. M5H 2M9)");
+      return;
+    }
+    setRoutePreviewLoading(true);
+    try {
+      const { data } = await api.post("/route-planning/preview-placement", {
+        address: form.address || "",
+        apartment: form.apartment || "",
+        city: form.city || "",
+        province: form.province || "",
+        postal_code: formatCaPostal(form.postal_code || ""),
+        meal_slot: previewMealSlot(),
+        driver_id: null,
+      });
+      setRoutePreview(data);
+      if (data?.geocode_status === "ok") {
+        toast.success("Location found");
+      } else {
+        toast.error("Could not find that address — check city, province, and postal code");
+      }
+    } catch (e: any) {
+      setRoutePreview({ geocode_status: "failed" });
+      toast.error(e?.response?.data?.detail || "Location lookup failed");
+    } finally {
+      setRoutePreviewLoading(false);
+    }
+  }
+
+  async function applyDriverPlacement(driverId: string, mealSlot: string) {
+    if (!(form.address || "").trim()) return;
+    setRoutePreviewLoading(true);
+    try {
+      const { data } = await api.post("/route-planning/preview-placement", {
+        address: form.address || "",
+        apartment: form.apartment || "",
+        city: form.city || "",
+        province: form.province || "",
+        postal_code: formatCaPostal(form.postal_code || ""),
+        meal_slot: mealSlot,
+        driver_id: driverId || null,
+        lat: routePreview?.lat ?? null,
+        lng: routePreview?.lng ?? null,
+      });
+      setRoutePreview(data);
+      const seq = data?.delivery_sequence;
+      if (seq == null) return;
+      if (mealSlot === "lunch" || mealSlot === "dinner") {
+        setForm((f: any) => ({
+          ...f,
+          slot_assignments: {
+            ...f.slot_assignments,
+            [mealSlot]: {
+              ...f.slot_assignments?.[mealSlot],
+              driver_id: driverId,
+              delivery_sequence: String(seq),
+            },
+          },
+        }));
+      } else {
+        setForm((f: any) => ({
+          ...f,
+          driver_id: driverId,
+          delivery_sequence: String(seq),
+        }));
+      }
+    } catch {
+      /* non-fatal */
+    } finally {
+      setRoutePreviewLoading(false);
+    }
+  }
 
   async function loadCounts() {
     try {
@@ -278,6 +335,7 @@ export default function Customers() {
   function openCreate() {
     setEditing(null);
     setRoutePreview(null);
+    setFormStep(1);
     const price = priceForMealType("regular");
     setForm({ ...empty, joining_date: todayISO(), meal_type_id: "regular", meal_price: String(price) });
     setScheduleMode("same");
@@ -285,6 +343,7 @@ export default function Customers() {
   }
   function openEdit(c: any) {
     setEditing(c);
+    setFormStep(1);
     setRoutePreview(
       c.lat != null && c.lng != null
         ? {
@@ -333,7 +392,8 @@ export default function Customers() {
       "";
     setForm({
       name: c.name, email: c.email || "", phone: c.phone || "", address: c.address || "",
-      apartment: c.apartment || "", postal_code: c.postal_code || "", notes: c.notes || "",
+      apartment: c.apartment || "", city: c.city || "", province: c.province || "ON", country: c.country || "CA",
+      postal_code: c.postal_code || "", notes: c.notes || "",
       delivery_days: days.length ? days : (c.delivery_days || []),
       meal_type_id: c.meal_type_id || "regular",
       meal_price: c.meal_price ?? "",
@@ -525,8 +585,50 @@ export default function Customers() {
     });
   }
 
+  function goToRouteStep() {
+    if (!(form.name || "").trim()) {
+      toast.error("Name is required");
+      return;
+    }
+    if (!(form.address || "").trim() || !(form.city || "").trim() || !(form.province || "").trim() || !(form.postal_code || "").trim()) {
+      toast.error("Address, city, province, and postal code are required");
+      return;
+    }
+    if (!isValidCaPostal(form.postal_code)) {
+      toast.error("Enter a valid Canadian postal code (e.g. M5H 2M9)");
+      return;
+    }
+    if (routePreview?.geocode_status !== "ok") {
+      toast.error("Tap Find location to confirm the address before continuing");
+      return;
+    }
+    setFormStep(2);
+  }
+
   async function save(e: React.FormEvent) {
     e.preventDefault();
+    if (formStep !== 2) {
+      goToRouteStep();
+      return;
+    }
+    if (!(form.address || "").trim() || !(form.city || "").trim() || !(form.province || "").trim() || !(form.postal_code || "").trim()) {
+      toast.error("Address, city, province, and postal code are required");
+      setFormStep(1);
+      return;
+    }
+    if (!isValidCaPostal(form.postal_code)) {
+      toast.error("Enter a valid Canadian postal code (e.g. M5H 2M9)");
+      setFormStep(1);
+      return;
+    }
+    if (drivers.length === 0) {
+      toast.error("Add a driver in Staff before saving customers");
+      return;
+    }
+    if (!hasDriverAssignment()) {
+      toast.error("Select a driver before saving");
+      return;
+    }
     setSaving(true);
     try {
       const slots = normalizeMealSlots(form.meal_slots);
@@ -536,7 +638,10 @@ export default function Customers() {
         phone: form.phone,
         address: form.address,
         apartment: form.apartment,
-        postal_code: form.postal_code,
+        city: form.city,
+        province: form.province,
+        country: form.country || "CA",
+        postal_code: formatCaPostal(form.postal_code),
         notes: form.notes,
         meal_slots: slots,
       };
@@ -619,6 +724,7 @@ export default function Customers() {
         toast.success("Customer added");
       }
       setShowForm(false);
+      setFormStep(1);
       reloadAll();
     } catch (err: any) {
       toast.error(err?.response?.data?.detail || "Save failed");
@@ -702,6 +808,9 @@ export default function Customers() {
       if (data.geocoded) parts.push(`${data.geocoded} geocoded`);
       if (data.route_placed) parts.push(`${data.route_placed} placed on route`);
       toast.success(parts.join(" · "));
+      if (!data.route_placed) {
+        toast.message("Assign drivers in Customer edit (Route & drivers) or Route planning when ready");
+      }
       if (data.errors?.length) toast.message(`${data.errors.length} row(s) skipped`);
       reloadAll();
     } catch (err: any) {
@@ -1009,11 +1118,63 @@ export default function Customers() {
         onClick={() => load({ cursor: nextCursor, append: true })}
       />
 
-      <AppSheet open={showForm} onClose={() => setShowForm(false)} title={editing ? "Edit customer" : "Add customer"} size="2xl" as="form" onSubmit={save} closeTestId="close-customer-form" footer={(
-        <button data-testid="cf-save" type="submit" disabled={saving} className="pill-btn btn-primary h-12 w-full disabled:opacity-60 cursor-pointer">
-          {saving ? "Saving..." : (editing ? "Save changes" : "Add customer")}
-        </button>
-      )}>
+      <AppSheet
+        open={showForm}
+        onClose={() => { setShowForm(false); setFormStep(1); }}
+        title={editing ? "Edit customer" : "Add customer"}
+        size="2xl"
+        as="form"
+        onSubmit={save}
+        closeTestId="close-customer-form"
+        footer={(
+          <div className="flex flex-col gap-2 w-full">
+            <div className="flex flex-col sm:flex-row gap-2 w-full">
+              {formStep === 2 ? (
+                <button
+                  type="button"
+                  data-testid="cf-back"
+                  onClick={() => setFormStep(1)}
+                  className="pill-btn btn-outline h-12 flex-1 cursor-pointer"
+                >
+                  Back
+                </button>
+              ) : null}
+              {formStep === 1 ? (
+                <button
+                  type="button"
+                  data-testid="cf-next"
+                  onClick={goToRouteStep}
+                  className="pill-btn btn-primary h-12 flex-1 cursor-pointer"
+                >
+                  Next: Route &amp; drivers
+                </button>
+              ) : (
+                <button
+                  data-testid="cf-save"
+                  type="submit"
+                  disabled={saving || !hasDriverAssignment()}
+                  className="pill-btn btn-primary h-12 flex-1 disabled:opacity-60 cursor-pointer"
+                >
+                  {saving ? "Saving..." : (editing ? "Save changes" : "Save customer")}
+                </button>
+              )}
+            </div>
+            {formStep === 2 && !hasDriverAssignment() ? (
+              <p className="text-xs text-muted-foreground text-center sm:text-left" data-testid="cf-save-hint">
+                {drivers.length === 0
+                  ? "Add a driver in Staff before saving customers."
+                  : "Select a driver to enable save."}
+              </p>
+            ) : null}
+          </div>
+        )}
+      >
+        <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3" data-testid="cf-wizard-steps">
+          <span className={formStep === 1 ? "font-semibold text-primary" : ""}>1. Details</span>
+          <span aria-hidden>→</span>
+          <span className={formStep === 2 ? "font-semibold text-primary" : ""}>2. Route &amp; drivers</span>
+        </div>
+        {formStep === 1 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-4">
           <label className="flex flex-col gap-1.5"><span className="label-overline">Name</span><input required data-testid="cf-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={input} /></label>
           <label className="flex flex-col gap-1.5"><span className="label-overline">Phone</span><input data-testid="cf-phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className={input} /></label>
@@ -1113,18 +1274,91 @@ export default function Customers() {
               </label>
             </>
           ) : null}
-          <label className="flex flex-col gap-1.5 sm:col-span-2"><span className="label-overline">Address</span><input data-testid="cf-address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className={input} /></label>
-          <label className="flex flex-col gap-1.5"><span className="label-overline">Apartment</span><input data-testid="cf-apt" value={form.apartment} onChange={(e) => setForm({ ...form, apartment: e.target.value })} className={input} /></label>
-          <label className="flex flex-col gap-1.5"><span className="label-overline">Postal code</span><input data-testid="cf-postal" value={form.postal_code} onChange={(e) => setForm({ ...form, postal_code: e.target.value.toUpperCase() })} className={`${input} uppercase`} /></label>
-          <div
-            className="sm:col-span-2 rounded-xl border border-brand-border bg-brand-surface/50 px-3 py-3 flex flex-col gap-1.5"
-            data-testid="cf-route-preview"
-          >
-            <span className="label-overline">Location &amp; route</span>
-            {routePreviewLoading ? (
-              <p className="text-xs text-muted-foreground">Looking up address…</p>
-            ) : routePreview ? (
-              <>
+          <label className="flex flex-col gap-1.5 sm:col-span-2">
+            <span className="label-overline">Street address</span>
+            <input
+              required
+              data-testid="cf-address"
+              value={form.address}
+              onChange={(e) => {
+                setForm({ ...form, address: e.target.value });
+                setRoutePreview(null);
+              }}
+              className={input}
+            />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="label-overline">Apartment / unit</span>
+            <input
+              data-testid="cf-apt"
+              value={form.apartment}
+              onChange={(e) => {
+                setForm({ ...form, apartment: e.target.value });
+                setRoutePreview(null);
+              }}
+              className={input}
+            />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="label-overline">City</span>
+            <input
+              required
+              data-testid="cf-city"
+              value={form.city}
+              onChange={(e) => {
+                setForm({ ...form, city: e.target.value });
+                setRoutePreview(null);
+              }}
+              className={input}
+            />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="label-overline">Province / territory</span>
+            <select
+              required
+              data-testid="cf-province"
+              value={form.province || "ON"}
+              onChange={(e) => {
+                setForm({ ...form, province: e.target.value });
+                setRoutePreview(null);
+              }}
+              className={input}
+            >
+              {CA_PROVINCES.map((p) => (
+                <option key={p.code} value={p.code}>{p.code} — {p.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="label-overline">Postal code</span>
+            <input
+              required
+              data-testid="cf-postal"
+              value={form.postal_code}
+              onChange={(e) => {
+                setForm({ ...form, postal_code: e.target.value.toUpperCase() });
+                setRoutePreview(null);
+              }}
+              className={`${input} uppercase`}
+              placeholder="M5H 2M9"
+            />
+          </label>
+          <div className="sm:col-span-2 flex flex-col gap-2">
+            <button
+              type="button"
+              data-testid="cf-find-location"
+              onClick={() => void findLocation()}
+              disabled={routePreviewLoading}
+              className="pill-btn btn-outline h-11 w-full sm:w-auto self-start cursor-pointer disabled:opacity-60"
+            >
+              {routePreviewLoading ? "Finding…" : "Find location"}
+            </button>
+            <div
+              className="rounded-xl border border-brand-border bg-brand-surface/50 px-3 py-3 flex flex-col gap-1.5"
+              data-testid="cf-route-preview"
+            >
+              <span className="label-overline">Coordinates</span>
+              {routePreview ? (
                 <p className="text-sm" data-testid="cf-latlng">
                   {routePreview.lat != null && routePreview.lng != null
                     ? `${Number(routePreview.lat).toFixed(5)}, ${Number(routePreview.lng).toFixed(5)}`
@@ -1133,152 +1367,11 @@ export default function Customers() {
                     · {routePreview.geocode_status || "pending"}
                   </span>
                 </p>
-                {routePreview.delivery_sequence != null ? (
-                  <p className="text-xs text-muted-foreground" data-testid="cf-route-summary">
-                    Suggested stop #{routePreview.delivery_sequence}
-                    {routePreview.before?.name ? ` · after ${routePreview.before.name}` : ""}
-                    {routePreview.after?.name ? ` · before ${routePreview.after.name}` : ""}
-                    {!routePreview.before && !routePreview.after ? " · first / only stop in pool" : ""}
-                    {routePreview.from_stored ? " (saved)" : " (auto if sequence left blank)"}
-                  </p>
-                ) : routePreview.geocode_status === "failed" ? (
-                  <p className="text-xs text-amber-800">Address could not be geocoded — fix address or place later in Route planning.</p>
-                ) : routePreview.routing_configured === false ? (
-                  <p className="text-xs text-muted-foreground">Routing key not set — lat/lng preview unavailable; you can still assign driver &amp; sequence manually.</p>
-                ) : (
-                  <p className="text-xs text-muted-foreground">Leave sequence blank to auto-insert into the best gap when you save.</p>
-                )}
-              </>
-            ) : (
-              <p className="text-xs text-muted-foreground">Enter an address to preview coordinates and suggested route position.</p>
-            )}
+              ) : (
+                <p className="text-xs text-muted-foreground">Tap Find location after filling the Canadian address. Lat/lng are not looked up automatically.</p>
+              )}
+            </div>
           </div>
-          {isCategorized(form.meal_slots) && isDualSlots(form.meal_slots) ? (
-            <>
-              <label className="flex flex-col gap-1.5">
-                <span className="label-overline">Lunch driver</span>
-                <select
-                  data-testid="cf-lunch-driver"
-                  value={form.slot_assignments?.lunch?.driver_id || ""}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      slot_assignments: {
-                        ...form.slot_assignments,
-                        lunch: { ...form.slot_assignments.lunch, driver_id: e.target.value },
-                      },
-                    })
-                  }
-                  className={input}
-                >
-                  <option value="">Unassigned</option>
-                  {drivers.map((d) => (
-                    <option key={d.id} value={d.id}>{d.name || d.email}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex flex-col gap-1.5">
-                <span className="label-overline">Lunch sequence</span>
-                <input
-                  type="number"
-                  min={1}
-                  step={1}
-                  data-testid="cf-lunch-sequence"
-                  value={form.slot_assignments?.lunch?.delivery_sequence || ""}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      slot_assignments: {
-                        ...form.slot_assignments,
-                        lunch: { ...form.slot_assignments.lunch, delivery_sequence: e.target.value },
-                      },
-                    })
-                  }
-                  className={input}
-                  placeholder="e.g. 1"
-                />
-              </label>
-              <label className="flex flex-col gap-1.5">
-                <span className="label-overline">Dinner driver</span>
-                <select
-                  data-testid="cf-dinner-driver"
-                  value={form.slot_assignments?.dinner?.driver_id || ""}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      slot_assignments: {
-                        ...form.slot_assignments,
-                        dinner: { ...form.slot_assignments.dinner, driver_id: e.target.value },
-                      },
-                    })
-                  }
-                  className={input}
-                >
-                  <option value="">Unassigned</option>
-                  {drivers.map((d) => (
-                    <option key={d.id} value={d.id}>{d.name || d.email}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex flex-col gap-1.5">
-                <span className="label-overline">Dinner sequence</span>
-                <input
-                  type="number"
-                  min={1}
-                  step={1}
-                  data-testid="cf-dinner-sequence"
-                  value={form.slot_assignments?.dinner?.delivery_sequence || ""}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      slot_assignments: {
-                        ...form.slot_assignments,
-                        dinner: { ...form.slot_assignments.dinner, delivery_sequence: e.target.value },
-                      },
-                    })
-                  }
-                  className={input}
-                  placeholder="e.g. 1"
-                />
-              </label>
-            </>
-          ) : (
-            <>
-              <label className="flex flex-col gap-1.5">
-                <span className="label-overline">Assigned driver</span>
-                <select
-                  data-testid="cf-driver"
-                  value={form.driver_id}
-                  onChange={(e) => setForm({ ...form, driver_id: e.target.value })}
-                  className={input}
-                >
-                  <option value="">Unassigned</option>
-                  {drivers.map((d) => (
-                    <option key={d.id} value={d.id}>{d.name || d.email}</option>
-                  ))}
-                </select>
-                {drivers.length === 0 ? (
-                  <span className="text-xs text-muted-foreground">Add staff with role Driver in Settings to assign routes.</span>
-                ) : null}
-              </label>
-              <label className="flex flex-col gap-1.5">
-                <span className="label-overline">Delivery sequence</span>
-                <input
-                  type="number"
-                  min={1}
-                  step={1}
-                  data-testid="cf-sequence"
-                  value={form.delivery_sequence}
-                  onChange={(e) => setForm({ ...form, delivery_sequence: e.target.value })}
-                  className={input}
-                  placeholder="e.g. 1 (earlier stop)"
-                />
-                <span className="text-xs text-muted-foreground">
-                  Leave blank to auto-place in the best gap (for the selected driver, or unassigned pool). Setting a number inserts and shifts later stops.
-                </span>
-              </label>
-            </>
-          )}
           <label className="flex flex-col gap-1.5 sm:col-span-2"><span className="label-overline">Notes</span><textarea data-testid="cf-notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="min-h-[80px] w-full px-4 py-3 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all" /></label>
           <div className="flex flex-col gap-2 sm:col-span-2">
             <span className="label-overline">Meal schedule</span>
@@ -1304,6 +1397,156 @@ export default function Customers() {
             />
           </div>
         </div>
+        ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-4" data-testid="cf-route-step">
+          <p className="sm:col-span-2 text-sm text-muted-foreground">
+            Assign a driver for each meal slot — required before saving. Stop sequence is suggested automatically; you can edit it before save.
+          </p>
+          {isCategorized(form.meal_slots) && isDualSlots(form.meal_slots) ? (
+            <>
+              <label className="flex flex-col gap-1.5">
+                <span className="label-overline">Lunch driver</span>
+                <select
+                  data-testid="cf-lunch-driver"
+                  value={form.slot_assignments?.lunch?.driver_id || ""}
+                  onChange={(e) => {
+                    const driver_id = e.target.value;
+                    setForm({
+                      ...form,
+                      slot_assignments: {
+                        ...form.slot_assignments,
+                        lunch: { ...form.slot_assignments.lunch, driver_id },
+                      },
+                    });
+                    void applyDriverPlacement(driver_id, "lunch");
+                  }}
+                  className={input}
+                >
+                  <option value="">Select driver…</option>
+                  {drivers.map((d) => (
+                    <option key={d.id} value={d.id}>{d.name || d.email}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="label-overline">Lunch sequence</span>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  data-testid="cf-lunch-sequence"
+                  value={form.slot_assignments?.lunch?.delivery_sequence || ""}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      slot_assignments: {
+                        ...form.slot_assignments,
+                        lunch: { ...form.slot_assignments.lunch, delivery_sequence: e.target.value },
+                      },
+                    })
+                  }
+                  className={input}
+                  placeholder="Auto on driver select"
+                />
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="label-overline">Dinner driver</span>
+                <select
+                  data-testid="cf-dinner-driver"
+                  value={form.slot_assignments?.dinner?.driver_id || ""}
+                  onChange={(e) => {
+                    const driver_id = e.target.value;
+                    setForm({
+                      ...form,
+                      slot_assignments: {
+                        ...form.slot_assignments,
+                        dinner: { ...form.slot_assignments.dinner, driver_id },
+                      },
+                    });
+                    void applyDriverPlacement(driver_id, "dinner");
+                  }}
+                  className={input}
+                >
+                  <option value="">Select driver…</option>
+                  {drivers.map((d) => (
+                    <option key={d.id} value={d.id}>{d.name || d.email}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="label-overline">Dinner sequence</span>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  data-testid="cf-dinner-sequence"
+                  value={form.slot_assignments?.dinner?.delivery_sequence || ""}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      slot_assignments: {
+                        ...form.slot_assignments,
+                        dinner: { ...form.slot_assignments.dinner, delivery_sequence: e.target.value },
+                      },
+                    })
+                  }
+                  className={input}
+                  placeholder="Auto on driver select"
+                />
+              </label>
+            </>
+          ) : (
+            <>
+              <label className="flex flex-col gap-1.5">
+                <span className="label-overline">Assigned driver</span>
+                <select
+                  data-testid="cf-driver"
+                  value={form.driver_id}
+                  onChange={(e) => {
+                    const driver_id = e.target.value;
+                    setForm({ ...form, driver_id });
+                    void applyDriverPlacement(driver_id, previewMealSlot());
+                  }}
+                  className={input}
+                >
+                  <option value="">Select driver…</option>
+                  {drivers.map((d) => (
+                    <option key={d.id} value={d.id}>{d.name || d.email}</option>
+                  ))}
+                </select>
+                {drivers.length === 0 ? (
+                  <span className="text-xs text-muted-foreground">Add staff with role Driver in Settings to assign routes.</span>
+                ) : null}
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="label-overline">Delivery sequence</span>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  data-testid="cf-sequence"
+                  value={form.delivery_sequence}
+                  onChange={(e) => setForm({ ...form, delivery_sequence: e.target.value })}
+                  className={input}
+                  placeholder="Auto on driver select"
+                />
+                <span className="text-xs text-muted-foreground">
+                  Set automatically when you pick a driver.
+                </span>
+              </label>
+            </>
+          )}
+          {routePreviewLoading ? (
+            <p className="sm:col-span-2 text-xs text-muted-foreground">Updating suggested sequence…</p>
+          ) : routePreview?.delivery_sequence != null ? (
+            <p className="sm:col-span-2 text-xs text-muted-foreground" data-testid="cf-route-summary">
+              Suggested stop #{routePreview.delivery_sequence}
+              {routePreview.before?.name ? ` · after ${routePreview.before.name}` : ""}
+              {routePreview.after?.name ? ` · before ${routePreview.after.name}` : ""}
+            </p>
+          ) : null}
+        </div>
+        )}
       </AppSheet>
 
       <AppSheet open={showInvite} onClose={() => setShowInvite(false)} title="Invite customer" size="md" as="form" onSubmit={submitInvite} footer={(

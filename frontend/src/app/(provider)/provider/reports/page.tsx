@@ -64,6 +64,7 @@ export default function Reports() {
   const canExport = showMoney || !moneyTab;
   const rows = data?.rows ?? [];
   const balanceListTab = tab === "outstanding" || tab === "customer-credit";
+  const fixedOutstanding = tab === "outstanding" && data?.billing_mode === "monthly_fixed";
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(listQ.trim()), 300);
@@ -188,7 +189,17 @@ export default function Reports() {
                 email: r.email,
                 credit: r.credit ?? Math.abs(Number(r.outstanding) || 0),
               }))
-            : rows;
+            : tab === "outstanding" && data?.billing_mode === "monthly_fixed"
+              ? rows.map((r: any) => ({
+                  customer_id: r.customer_id,
+                  name: r.name,
+                  phone: r.phone,
+                  email: r.email,
+                  renewal_date: r.renewal_date || r.collection_due_date || r.last_due_date || "",
+                  days_overdue: r.days_overdue ?? 0,
+                  outstanding: r.outstanding,
+                }))
+              : rows;
     downloadCSV(`tiffin-${tab}-${todayISO()}`, exportRows.length ? exportRows : [data.totals || data]);
     toast.success("CSV downloaded");
   }
@@ -419,38 +430,99 @@ export default function Reports() {
             <div className="mb-3 text-sm">
               Total outstanding:{" "}
               <span className="font-display font-bold text-2xl text-primary">{fmtCAD(data.total)}</span>
+              {fixedOutstanding ? (
+                <span className="text-muted-foreground ml-2 text-xs sm:text-sm">
+                  (past collection day only · {data.overdue_count ?? rows.length} overdue)
+                </span>
+              ) : null}
             </div>
             {rows.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground">No outstanding balances</div>
+              <div className="p-8 text-center text-muted-foreground">
+                {fixedOutstanding
+                  ? "No overdue balances — customers only appear after their collection day if they still owe"
+                  : "No outstanding balances"}
+              </div>
             ) : (
               <>
-                <ul className="md:hidden divide-y divide-brand-border -mx-4 sm:-mx-5">
+                <ul className="md:hidden divide-y divide-brand-border -mx-4 sm:-mx-5" data-testid="outstanding-list-mobile">
                   {rows.map((r: any, i: number) => (
-                    <li key={r.customer_id || `outstanding-${r.email || r.name || i}`} className="px-4 sm:px-5 py-4 flex items-start justify-between gap-3">
+                    <li
+                      key={r.customer_id || `outstanding-${r.email || r.name || i}`}
+                      className={`px-4 sm:px-5 py-4 flex items-start justify-between gap-3 ${
+                        fixedOutstanding ? "bg-destructive/5" : ""
+                      }`}
+                    >
                       <div className="min-w-0">
-                        <div className="font-medium truncate">{r.name}</div>
-                        <div className="text-xs text-muted-foreground mt-0.5 truncate">{[r.phone, r.email].filter(Boolean).join(" · ")}</div>
+                        <div className="font-medium truncate flex items-center gap-2 flex-wrap">
+                          <span>{r.name}</span>
+                          {fixedOutstanding ? (
+                            <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-destructive/15 text-destructive">
+                              Overdue
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-0.5 truncate">
+                          {[r.phone, r.email].filter(Boolean).join(" · ")}
+                        </div>
+                        {fixedOutstanding ? (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            Renewal {r.renewal_date || r.collection_due_date || r.last_due_date || "—"}
+                            {r.days_overdue ? ` · ${r.days_overdue}d overdue` : null}
+                          </div>
+                        ) : null}
                       </div>
                       <div className="shrink-0 font-semibold text-primary">{fmtCAD(r.outstanding)}</div>
                     </li>
                   ))}
                 </ul>
                 <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-sm min-w-[560px]">
+              <table className="w-full text-sm min-w-[560px]" data-testid="outstanding-table">
                   <thead className="text-left bg-brand-surface">
                     <tr>
                       <th className="px-3 py-2 label-overline">Customer</th>
                       <th className="px-3 py-2 label-overline">Phone</th>
-                      <th className="px-3 py-2 label-overline">Email</th>
+                      {fixedOutstanding ? (
+                        <>
+                          <th className="px-3 py-2 label-overline">Renewal date</th>
+                          <th className="px-3 py-2 label-overline">Overdue by</th>
+                        </>
+                      ) : (
+                        <th className="px-3 py-2 label-overline">Email</th>
+                      )}
                       <th className="px-3 py-2 label-overline text-right">Outstanding</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-brand-border">
                     {rows.map((r: any, i: number) => (
-                      <tr key={r.customer_id || `outstanding-${r.email || r.name || i}`} className="hover:bg-brand-surface/60 transition-colors">
-                        <td className="px-3 py-2 font-medium">{r.name}</td>
+                      <tr
+                        key={r.customer_id || `outstanding-${r.email || r.name || i}`}
+                        className={`hover:bg-brand-surface/60 transition-colors ${
+                          fixedOutstanding ? "bg-destructive/5" : ""
+                        }`}
+                      >
+                        <td className="px-3 py-2 font-medium">
+                          <span className="inline-flex items-center gap-2 flex-wrap">
+                            {r.name}
+                            {fixedOutstanding ? (
+                              <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-destructive/15 text-destructive">
+                                Overdue
+                              </span>
+                            ) : null}
+                          </span>
+                        </td>
                         <td className="px-3 py-2 text-muted-foreground">{r.phone}</td>
-                        <td className="px-3 py-2 text-muted-foreground">{r.email}</td>
+                        {fixedOutstanding ? (
+                          <>
+                            <td className="px-3 py-2 text-muted-foreground">
+                              {r.renewal_date || r.collection_due_date || r.last_due_date || "—"}
+                            </td>
+                            <td className="px-3 py-2 text-muted-foreground">
+                              {r.days_overdue ? `${r.days_overdue}d` : "—"}
+                            </td>
+                          </>
+                        ) : (
+                          <td className="px-3 py-2 text-muted-foreground">{r.email}</td>
+                        )}
                         <td className="px-3 py-2 text-right font-semibold text-primary">{fmtCAD(r.outstanding)}</td>
                       </tr>
                     ))}

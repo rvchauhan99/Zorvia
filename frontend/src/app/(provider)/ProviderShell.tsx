@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { House, Users, Truck, Receipt, DotsThree, SignOut, ChartLine, Sparkle, Warning, CreditCard, ForkKnife, CookingPot, Path } from "@phosphor-icons/react";
+import { House, Users, Truck, Receipt, DotsThree, SignOut, ChartLine, Sparkle, Warning, CreditCard, ForkKnife, CookingPot, Path, CalendarBlank } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
 import { isAdmin, isDriver as roleIsDriver, canMutateAdmin, staffRole } from "@/lib/roles";
@@ -59,6 +59,7 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
   const [sub, setSub] = useState<any>(null);
   const [badges, setBadges] = useState({ pendingPayments: 0, pendingCustomers: 0 });
   const [isDesktop, setIsDesktop] = useState(false);
+  const [fixedMonthly, setFixedMonthly] = useState(false);
 
   const role = staffRole(session);
   const isDriver = roleIsDriver(session);
@@ -129,6 +130,16 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
       .catch(() => {});
   }, [session, isDriver]);
 
+  const loadBillingNav = useCallback(() => {
+    if (session?.user_type !== "provider" || isDriver) return;
+    api.get("/providers/me")
+      .then(({ data }) => {
+        const mb = data?.settings?.monthly_billing;
+        setFixedMonthly(!!mb?.enabled && mb?.policy_variant === "monthly_fixed");
+      })
+      .catch(() => setFixedMonthly(false));
+  }, [session, isDriver]);
+
   useEffect(() => {
     loadSub();
     const id = setInterval(loadSub, 60000);
@@ -145,6 +156,10 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
     const id = setInterval(loadBadges, 45000);
     return () => clearInterval(id);
   }, [loadBadges]);
+
+  useEffect(() => {
+    loadBillingNav();
+  }, [loadBillingNav]);
 
   if (!ready && !session) {
     return <PageLoader testid="provider-shell-loading" className="min-h-screen bg-brand-cream" />;
@@ -278,6 +293,17 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
               >
                 <ChartLine size={20} /> Reports
               </Link>
+              {fixedMonthly ? (
+                <Link
+                  href="/provider/monthly-dues"
+                  data-testid="side-nav-monthly-dues"
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors duration-150 ${
+                    pathname.startsWith("/provider/monthly-dues") ? "bg-brand-surface text-primary" : "text-foreground hover:bg-brand-surface"
+                  }`}
+                >
+                  <CalendarBlank size={20} /> Customer subscriptions
+                </Link>
+              ) : null}
               {canMutate ? (
                 <Link
                   href="/provider/subscription"

@@ -26,6 +26,8 @@ function ConsumerSignupForm() {
     phone: "",
     address: "",
     apartment: "",
+    city: "",
+    province: "ON",
     postal_code: "",
     delivery_days: [0, 1, 2, 3, 4],
   });
@@ -137,12 +139,29 @@ function ConsumerSignupForm() {
               />
             </div>
             <label className={`${label} sm:col-span-2`}>
-              <span className="label-overline">Address</span>
+              <span className="label-overline">Street address</span>
               <input data-testid="csignup-address" className={input} value={form.address} onChange={upd("address")} placeholder="45 Bloor St W" />
             </label>
             <label className={label}>
               <span className="label-overline">Apartment / unit</span>
               <input data-testid="csignup-apt" className={input} value={form.apartment} onChange={upd("apartment")} placeholder="Unit 302" />
+            </label>
+            <label className={label}>
+              <span className="label-overline">City</span>
+              <input data-testid="csignup-city" className={input} value={form.city} onChange={upd("city")} placeholder="Toronto" />
+            </label>
+            <label className={label}>
+              <span className="label-overline">Province</span>
+              <select
+                data-testid="csignup-province"
+                className={input}
+                value={form.province}
+                onChange={(e) => setForm({ ...form, province: e.target.value })}
+              >
+                {["AB","BC","MB","NB","NL","NS","NT","NU","ON","PE","QC","SK","YT"].map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
             </label>
             <label className={label}>
               <span className="label-overline">Postal code</span>

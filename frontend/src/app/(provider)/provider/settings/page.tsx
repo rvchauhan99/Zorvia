@@ -211,7 +211,7 @@ export default function Settings() {
         },
       };
       if (mb.enabled && (!mb.default_collection_day || Number(mb.default_collection_day) < 1)) {
-        toast.error("Default collection day (1–31) is required when monthly billing is enabled");
+        toast.error("Default collection day (1–31) is required when the monthly subscription policy is enabled");
         setSaving(false);
         return;
       }
@@ -296,7 +296,7 @@ export default function Settings() {
   const navItems = [
     { id: "general", label: "General Profile", icon: Storefront, description: "Kitchen info, logo & signup code" },
     { id: "operations", label: "Operations & Menu", icon: ListDashes, description: "Meal types, taxes & closed dates" },
-    { id: "billing", label: "Monthly Billing", icon: CreditCard, description: "Flat-rate monthly plan options" },
+    { id: "billing", label: "Subscription Policy", icon: CreditCard, description: "Monthly flat-rate billing rules for customers" },
     { id: "notifications", label: "Notifications", icon: BellRinging, description: "SMS & WhatsApp preferences" },
     { id: "team", label: "Team & Security", icon: ShieldCheck, description: "Passwords & staff access" },
   ] as const;
@@ -603,15 +603,15 @@ export default function Settings() {
             <div className="flex flex-col gap-6" data-testid="monthly-billing-section">
               <div className="card-tinted p-5 sm:p-6 flex flex-col gap-5">
                 <div>
-                  <h2 className="font-display font-bold text-xl">Monthly Subscription Policy</h2>
+                  <h2 className="font-display font-bold text-xl">Subscription Policy</h2>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Enable fixed or adjustable flat-rate monthly subscriptions instead of daily per-meal billing.
+                    Choose how this kitchen bills customers: per-meal (default) or a flat monthly subscription policy.
                   </p>
                 </div>
 
                 {/* Explanation Box */}
                 <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-xs text-foreground/80 flex flex-col gap-2.5" data-testid="monthly-billing-guide">
-                  <p className="font-semibold text-primary">How Monthly Billing Works</p>
+                  <p className="font-semibold text-primary">How this policy works</p>
                   <ul className="list-disc pl-4 space-y-1 text-muted-foreground">
                     <li><strong className="text-foreground">Adjustable monthly:</strong> Flat rate fee with skip recalculations & free skip allowances.</li>
                     <li><strong className="text-foreground">Fixed monthly:</strong> Constant fee each month regardless of skips or extra delivery days.</li>
@@ -627,8 +627,8 @@ export default function Settings() {
                     className="h-5 w-5 rounded accent-primary border-brand-border cursor-pointer"
                   />
                   <div>
-                    <span className="font-bold text-sm text-foreground">Enable Flat Monthly Subscriptions</span>
-                    <span className="block text-xs text-muted-foreground">Replaces per-meal daily accrual for all customers</span>
+                    <span className="font-bold text-sm text-foreground">Enable monthly subscription policy</span>
+                    <span className="block text-xs text-muted-foreground">Turns on flat monthly billing for all customers (replaces per-meal accrual)</span>
                   </div>
                 </label>
 
@@ -636,7 +636,7 @@ export default function Settings() {
                   <div className="flex flex-col gap-5 pt-2">
                     {/* Policy Variant Selection */}
                     <div className="flex flex-col gap-2" data-testid="monthly-billing-variant">
-                      <span className="label-overline">Subscription Variant</span>
+                      <span className="label-overline">Policy variant</span>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <label
                           className={`flex flex-col p-3.5 rounded-xl border cursor-pointer transition-all ${
@@ -699,7 +699,7 @@ export default function Settings() {
 
                     {/* Plan Templates */}
                     <div className="flex flex-col gap-3" data-testid="monthly-billing-plans">
-                      <span className="label-overline">Subscription Plans</span>
+                      <span className="label-overline">Plan templates</span>
                       {(mb.plans || []).map((plan: any, idx: number) => (
                         <div key={plan.id || idx} className="border border-brand-border rounded-xl p-4 bg-white flex flex-col gap-3">
                           <div className="font-bold text-sm text-primary flex items-center gap-2">

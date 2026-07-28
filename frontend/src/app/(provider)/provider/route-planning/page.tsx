@@ -12,6 +12,15 @@ import {
   UserCircle,
   Plus,
   Trash,
+  CarSimple,
+  CheckCircle,
+  WarningCircle,
+  NavigationArrow,
+  Funnel,
+  ListNumbers,
+  CaretRight,
+  Package,
+  Warning,
 } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -134,6 +143,8 @@ export default function RoutePlanningPage() {
   const [bulkRows, setBulkRows] = useState<BulkRangeRow[]>([newBulkRow()]);
   const [evenSplitDriverIds, setEvenSplitDriverIds] = useState<string[]>([]);
   const [expandedPools, setExpandedPools] = useState<Set<string>>(new Set());
+  const [assignTab, setAssignTab] = useState<"quick" | "sequence">("quick");
+  const [activePoolKey, setActivePoolKey] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -433,6 +444,20 @@ export default function RoutePlanningPage() {
   const configured = !!plan?.routing_configured;
   const autoCollapse = stops.length > COLLAPSE_THRESHOLD;
 
+  // Derived stats for summary bar
+  const totalStops = stops.length;
+  const assignedStops = stops.filter((s) => !!s.driver_id).length;
+  const unassignedStops = totalStops - assignedStops;
+  const geocodeFailed = (plan?.geocode_failed || []).length;
+  const needPlace = (plan?.unplaced || []).length;
+  const issueCount = geocodeFailed + needPlace;
+
+  // Active pool for the "Review Routes" expanded view
+  const activeSection = useMemo(() => {
+    if (activePoolKey == null) return null;
+    return sections.find((s) => s.key === activePoolKey) || null;
+  }, [sections, activePoolKey]);
+
   if (!admin) {
     return (
       <div className="animate-fade-in-up p-4">
@@ -442,38 +467,26 @@ export default function RoutePlanningPage() {
   }
 
   return (
-    <div className="flex flex-col gap-3 sm:gap-4 animate-fade-in-up" data-testid="route-planning-page">
-      <div className="flex flex-col sm:flex-row sm:items-end gap-2 sm:justify-between">
+    <div className="flex flex-col gap-3 sm:gap-4 animate-fade-in-up pb-20" data-testid="route-planning-page">
+      {/* ── HEADER ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:justify-between">
         <div>
           <span className="label-overline">Operations</span>
-          <h1 className="font-display font-black text-2xl sm:text-3xl mt-0.5">Route planning</h1>
-          <p className="text-sm text-muted-foreground mt-1 max-w-xl">
-            Optimize the unassigned pool, then assign stops to drivers by sequence ranges or selection.
-            Assignments append to each driver&apos;s route.
-          </p>
+          <h1 className="font-display font-black text-xl sm:text-2xl mt-0.5">Route planning</h1>
         </div>
-        <Link href="/provider/settings" className="text-sm text-brand-teal underline-offset-2 hover:underline">
+        <Link href="/provider/settings" className="text-xs text-brand-teal underline-offset-2 hover:underline">
           Kitchen address in Settings
         </Link>
       </div>
 
-      {!configured && (
-        <div
-          className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
-          data-testid="route-planning-unconfigured"
-        >
-          Route optimization needs a free OpenRouteService API key (
-          <code className="text-xs">OPENROUTESERVICE_API_KEY</code>). Manual sequences still work.
-        </div>
-      )}
-
-      <div className="flex flex-wrap gap-2" data-testid="route-slot-tabs">
+      {/* ── MEAL SLOT TABS ── */}
+      <div className="flex flex-wrap gap-1.5" data-testid="route-slot-tabs">
         {(["uncategorized", "lunch", "dinner"] as MealSlot[]).map((s) => (
           <button
             key={s}
             type="button"
             data-testid={`route-slot-${s}`}
-            className={`pill-btn h-9 text-xs ${slot === s ? "btn-primary" : "btn-outline"}`}
+            className={`pill-btn h-8 text-[11px] px-3.5 ${slot === s ? "btn-primary" : "btn-outline"}`}
             onClick={() => setSlot(s)}
           >
             {mealSlotBadgeLabel(s)}
@@ -481,424 +494,671 @@ export default function RoutePlanningPage() {
         ))}
       </div>
 
-      <div className="card-tinted p-4 sm:p-5 flex flex-col gap-3" data-testid="route-kitchen-card">
-        <div className="flex items-start gap-2">
-          <MapPin size={20} className="mt-0.5 shrink-0" />
-          <div className="min-w-0">
-            <p className="font-medium text-sm">Kitchen start</p>
-            <p className="text-sm text-muted-foreground truncate">
-              {kitchen.address || "No address set — add one in Settings"}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Geocode: {kitchen.geocode_status || "—"}
-              {kitchen.lat != null && kitchen.lng != null
-                ? ` · ${Number(kitchen.lat).toFixed(4)}, ${Number(kitchen.lng).toFixed(4)}`
-                : ""}
-            </p>
+      {/* ── SUMMARY STATS ── */}
+      {!loading && (
+        <div className="grid grid-cols-4 gap-2" data-testid="route-stats-bar">
+          <div className="stat-card !p-2.5 !gap-0.5 !rounded-xl">
+            <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Total</span>
+            <span className="text-lg font-display font-black leading-tight">{totalStops}</span>
           </div>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-2 items-center">
-        <button
-          type="button"
-          data-testid="route-geocode-missing"
-          disabled={busy || !configured}
-          onClick={() => void runGeocode()}
-          className="pill-btn btn-outline h-10 text-xs gap-1.5 disabled:opacity-50"
-        >
-          <ArrowsClockwise size={16} /> Geocode missing
-        </button>
-        <button
-          type="button"
-          data-testid="route-optimize"
-          disabled={busy || !configured}
-          onClick={() => void runOptimize()}
-          className="pill-btn btn-primary h-10 text-xs gap-1.5 disabled:opacity-50"
-        >
-          <Path size={16} /> Optimize all
-        </button>
-        <select
-          data-testid="route-maps-pool"
-          className="h-10 rounded-xl border border-brand-border bg-white px-3 text-sm"
-          value={mapsPoolKey}
-          onChange={(e) => setMapsPoolKey(e.target.value)}
-        >
-          {sections.map((sec) => (
-            <option key={sec.key} value={sec.key}>
-              Maps: {sec.title} ({sec.stops.length})
-            </option>
-          ))}
-        </select>
-        <a
-          data-testid="route-open-maps"
-          className="pill-btn btn-outline h-10 text-xs gap-1.5 inline-flex items-center"
-          href={mapsUrlForStops(kitchen.address || "", mapsStops)}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <MapPin size={16} /> Open in Maps
-        </a>
-      </div>
-
-      <div className="card-tinted p-4 sm:p-5 flex flex-col gap-3" data-testid="route-bulk-assign">
-        <div>
-          <p className="font-medium text-sm flex items-center gap-2">
-            <UserCircle size={18} /> Assign by sequence
-          </p>
-          <p className="text-xs text-muted-foreground mt-1">
-            Split or amend large pools (e.g. #1–100 → Driver A). Ranges use stop numbers in the source
-            pool; assignments append to the target route.
-          </p>
-        </div>
-
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-          <label className="text-xs text-muted-foreground shrink-0" htmlFor="route-bulk-source">
-            Source pool
-          </label>
-          <select
-            id="route-bulk-source"
-            data-testid="route-bulk-source"
-            className="h-10 rounded-xl border border-brand-border bg-white px-3 text-sm flex-1 min-w-0"
-            value={bulkSourceKey}
-            onChange={(e) => setBulkSourceKey(e.target.value)}
-          >
-            {sections.map((sec) => {
-              const span = seqSpan(sec.stops);
-              const hint = span
-                ? `#${span.min}–#${span.max} (${span.counted})`
-                : `${sec.stops.length} stops`;
-              return (
-                <option key={sec.key} value={sec.key}>
-                  {sec.title} · {hint}
-                </option>
-              );
-            })}
-          </select>
-        </div>
-
-        <div className="flex flex-col gap-2" data-testid="route-bulk-ranges">
-          {bulkRows.map((row, idx) => {
-            const preview = bulkPreviews[idx];
-            return (
-              <div
-                key={row.id}
-                className="flex flex-wrap items-center gap-2"
-                data-testid={`route-bulk-row-${idx}`}
-              >
-                <span className="text-xs text-muted-foreground w-10 shrink-0">From</span>
-                <input
-                  type="number"
-                  min={1}
-                  data-testid={`route-bulk-from-${idx}`}
-                  className="h-10 w-20 rounded-xl border border-brand-border bg-white px-2 text-sm font-mono"
-                  value={row.from}
-                  placeholder="1"
-                  onChange={(e) =>
-                    setBulkRows((rows) =>
-                      rows.map((r) => (r.id === row.id ? { ...r, from: e.target.value } : r))
-                    )
-                  }
-                />
-                <span className="text-xs text-muted-foreground">To</span>
-                <input
-                  type="number"
-                  min={1}
-                  data-testid={`route-bulk-to-${idx}`}
-                  className="h-10 w-20 rounded-xl border border-brand-border bg-white px-2 text-sm font-mono"
-                  value={row.to}
-                  placeholder="100"
-                  onChange={(e) =>
-                    setBulkRows((rows) =>
-                      rows.map((r) => (r.id === row.id ? { ...r, to: e.target.value } : r))
-                    )
-                  }
-                />
-                <span className="text-xs text-muted-foreground">→</span>
-                <select
-                  data-testid={`route-bulk-target-${idx}`}
-                  className="h-10 rounded-xl border border-brand-border bg-white px-3 text-sm min-w-36 flex-1"
-                  value={row.driverId}
-                  onChange={(e) =>
-                    setBulkRows((rows) =>
-                      rows.map((r) => (r.id === row.id ? { ...r, driverId: e.target.value } : r))
-                    )
-                  }
-                >
-                  <option value="">Unassigned pool</option>
-                  {drivers.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
-                    </option>
-                  ))}
-                </select>
-                <span
-                  className="text-[11px] text-muted-foreground min-w-18"
-                  data-testid={`route-bulk-preview-${idx}`}
-                >
-                  {preview?.valid ? `${preview.count} stops` : "—"}
-                </span>
-                <button
-                  type="button"
-                  aria-label="Remove range"
-                  data-testid={`route-bulk-remove-${idx}`}
-                  disabled={bulkRows.length <= 1}
-                  className="p-2 disabled:opacity-30"
-                  onClick={() => setBulkRows((rows) => rows.filter((r) => r.id !== row.id))}
-                >
-                  <Trash size={16} />
-                </button>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="flex flex-wrap gap-2 items-center">
-          <button
-            type="button"
-            data-testid="route-bulk-add-range"
-            className="pill-btn btn-outline h-9 text-xs gap-1"
-            onClick={() => setBulkRows((rows) => [...rows, newBulkRow()])}
-          >
-            <Plus size={14} /> Add range
-          </button>
-          <button
-            type="button"
-            data-testid="route-bulk-apply"
-            disabled={busy || bulkTotalPreview === 0}
-            onClick={() => void applyBulkBySequence()}
-            className="pill-btn btn-primary h-9 text-xs disabled:opacity-50"
-          >
-            Apply ranges ({bulkTotalPreview})
-          </button>
-        </div>
-
-        {drivers.length > 0 && (
-          <div
-            className="border-t border-brand-border pt-3 flex flex-col gap-2"
-            data-testid="route-bulk-even-split"
-          >
-            <p className="text-xs font-medium">Even split helper</p>
-            <p className="text-[11px] text-muted-foreground">
-              Divide source sequences{" "}
-              {bulkSourceSpan ? `#${bulkSourceSpan.min}–#${bulkSourceSpan.max}` : "(none)"}{" "}
-              evenly across selected drivers, then review ranges above.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {drivers.map((d) => {
-                const on = evenSplitDriverIds.includes(d.id);
-                return (
-                  <button
-                    key={d.id}
-                    type="button"
-                    data-testid={`route-bulk-even-driver-${d.id}`}
-                    className={`pill-btn h-8 text-[11px] ${on ? "btn-primary" : "btn-outline"}`}
-                    onClick={() =>
-                      setEvenSplitDriverIds((ids) =>
-                        on ? ids.filter((x) => x !== d.id) : [...ids, d.id]
-                      )
-                    }
-                  >
-                    {d.name}
-                  </button>
-                );
-              })}
-            </div>
-            <button
-              type="button"
-              data-testid="route-bulk-even-apply"
-              disabled={!bulkSourceSpan || evenSplitDriverIds.length === 0}
-              onClick={applyEvenSplit}
-              className="pill-btn btn-outline h-9 text-xs self-start disabled:opacity-50"
-            >
-              Fill even ranges
-            </button>
+          <div className="stat-card !p-2.5 !gap-0.5 !rounded-xl">
+            <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Assigned</span>
+            <span className="text-lg font-display font-black text-secondary leading-tight">{assignedStops}
+              <span className="text-[10px] font-normal text-muted-foreground ml-0.5">{totalStops > 0 ? `${Math.round((assignedStops / totalStops) * 100)}%` : ""}</span>
+            </span>
           </div>
-        )}
-
-        {drivers.length === 0 ? (
-          <span className="text-xs text-amber-800" data-testid="route-no-drivers-hint">
-            No drivers yet — add staff with role Driver in Settings.
-          </span>
-        ) : null}
-      </div>
-
-      {selected.size > 0 && (
-        <div
-          className="card-tinted p-3 sm:p-4 flex flex-wrap items-center gap-2 sticky top-14 z-20"
-          data-testid="route-assign-bar"
-        >
-          <UserCircle size={18} />
-          <span className="text-sm font-medium">{selected.size} selected</span>
-          <span className="text-xs text-muted-foreground">Assign to</span>
-          <select
-            data-testid="route-assign-driver"
-            className="h-10 rounded-xl border border-brand-border bg-white px-3 text-sm min-w-40"
-            value={assignDriverId}
-            onChange={(e) => setAssignDriverId(e.target.value)}
-          >
-            <option value="">Unassigned pool</option>
-            {drivers.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            data-testid="route-assign-submit"
-            disabled={busy}
-            onClick={() => void assignDriver()}
-            className="pill-btn btn-primary h-10 text-xs disabled:opacity-50"
-          >
-            Assign
-          </button>
+          <div className="stat-card !p-2.5 !gap-0.5 !rounded-xl">
+            <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Unassigned</span>
+            <span className="text-lg font-display font-black text-amber-600 leading-tight">{unassignedStops}</span>
+          </div>
+          <div className="stat-card !p-2.5 !gap-0.5 !rounded-xl">
+            <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Issues</span>
+            <span className={`text-lg font-display font-black leading-tight ${issueCount > 0 ? "text-red-600" : "text-secondary"}`}>
+              {issueCount}
+            </span>
+          </div>
         </div>
       )}
 
       {loading ? (
         <InlineLoader label="Loading route…" />
       ) : (
-        <div className="flex flex-col gap-3" data-testid="route-stops-list">
-          <div className="text-xs text-muted-foreground px-1">
-            {stops.length} stops · {(plan?.geocode_failed || []).length} geocode failed ·{" "}
-            {(plan?.unplaced || []).length} need place
-          </div>
-          {stops.length === 0 ? (
-            <p className="card-tinted p-4 text-sm text-muted-foreground">No customers on this meal slot.</p>
-          ) : (
-            sections.map((section) => {
-              const ids = section.stops.map((s) => s.id);
-              const allSelected = ids.length > 0 && ids.every((id) => selected.has(id));
-              const span = seqSpan(section.stops);
-              const showList =
-                section.stops.length === 0 ||
-                !autoCollapse ||
-                expandedPools.has(section.key) ||
-                section.stops.length <= COLLAPSE_THRESHOLD;
-              return (
-                <div
-                  key={section.key}
-                  className="card-tinted overflow-hidden"
-                  data-testid={`route-pool-${section.key}`}
-                >
-                  <div className="px-3 sm:px-4 py-2.5 border-b border-brand-border flex flex-wrap items-center gap-2 text-sm bg-brand-surface/40">
-                    <input
-                      type="checkbox"
-                      data-testid={`route-select-pool-${section.key}`}
-                      checked={allSelected}
-                      disabled={section.stops.length === 0}
-                      onChange={() => toggleSection(section.stops)}
-                      className="rounded border-brand-border"
-                    />
-                    <span className="font-medium">
-                      {section.title}{" "}
-                      <span className="text-muted-foreground font-normal">({section.stops.length})</span>
+        <>
+          {/* ══════════════════════════════════════════════════════ */}
+          {/* STEPS 1 & 2 — PREPARE + ASSIGN (side by side)          */}
+          {/* ══════════════════════════════════════════════════════ */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+
+          {/* ── Step 1: Prepare ── */}
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-1.5">
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary text-white text-[10px] font-bold shrink-0">1</span>
+              <h2 className="font-display font-bold text-sm">Prepare</h2>
+            </div>
+
+            <div className="card-tinted p-3 sm:p-3.5 flex flex-col gap-2.5" data-testid="route-kitchen-card">
+              <div className="flex items-start gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <MapPin size={16} className="text-primary" weight="fill" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-xs">Kitchen start</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {kitchen.address || "No address set — add one in Settings"}
+                  </p>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    {kitchen.geocode_status === "ok" ? (
+                      <CheckCircle size={14} weight="fill" className="text-secondary shrink-0" />
+                    ) : (
+                      <WarningCircle size={14} weight="fill" className="text-amber-500 shrink-0" />
+                    )}
+                    <span className="text-xs text-muted-foreground">
+                      {kitchen.geocode_status === "ok" ? "Location verified" : kitchen.geocode_status || "Not geocoded"}
                     </span>
-                    {span ? (
-                      <span
-                        className="font-mono text-[11px] text-muted-foreground"
-                        data-testid={`route-pool-span-${section.key}`}
-                      >
-                        #{span.min}–#{span.max}
+                  </div>
+                </div>
+              </div>
+
+              {!configured && (
+                <div
+                  className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950"
+                  data-testid="route-planning-unconfigured"
+                >
+                  Address geocoding needs a free OpenRouteService API key (
+                  <code className="text-[11px]">OPENROUTESERVICE_API_KEY</code>). Optimize still works when
+                  kitchen and customers already have lat/lng. Manual sequences always work.
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-1.5 items-center">
+                <button
+                  type="button"
+                  data-testid="route-geocode-missing"
+                  disabled={busy || !configured}
+                  onClick={() => void runGeocode()}
+                  className="pill-btn btn-outline h-8 text-[11px] px-3.5 gap-1 disabled:opacity-50"
+                >
+                  <ArrowsClockwise size={14} /> Geocode missing
+                </button>
+                <button
+                  type="button"
+                  data-testid="route-optimize"
+                  disabled={busy}
+                  onClick={() => void runOptimize()}
+                  className="pill-btn btn-primary h-8 text-[11px] px-3.5 gap-1 disabled:opacity-50"
+                >
+                  <Path size={14} /> Optimize all
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Step 2: Assign drivers ── */}
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-1.5">
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary text-white text-[10px] font-bold shrink-0">2</span>
+              <h2 className="font-display font-bold text-sm">Assign drivers</h2>
+              {drivers.length === 0 && (
+                <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5" data-testid="route-no-drivers-hint">
+                  No drivers — add in Settings
+                </span>
+              )}
+            </div>
+
+            <div className="card-tinted overflow-hidden" data-testid="route-bulk-assign">
+              {/* Tab bar */}
+              <div className="flex border-b border-brand-border">
+                <button
+                  type="button"
+                  className={`flex-1 sm:flex-none px-4 py-2 text-xs font-medium transition-colors duration-150 border-b-2 ${
+                    assignTab === "quick"
+                      ? "border-primary text-primary"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
+                  }`}
+                  onClick={() => setAssignTab("quick")}
+                  data-testid="route-assign-tab-quick"
+                >
+                  <span className="flex items-center gap-1">
+                    <Funnel size={14} /> Quick assign
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className={`flex-1 sm:flex-none px-4 py-2 text-xs font-medium transition-colors duration-150 border-b-2 ${
+                    assignTab === "sequence"
+                      ? "border-primary text-primary"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
+                  }`}
+                  onClick={() => setAssignTab("sequence")}
+                  data-testid="route-assign-tab-sequence"
+                >
+                  <span className="flex items-center gap-1">
+                    <ListNumbers size={14} /> Sequence ranges
+                  </span>
+                </button>
+              </div>
+
+              <div className="p-3 sm:p-3.5">
+                {assignTab === "quick" ? (
+                  /* ── Quick Assign Tab ── */
+                  <div className="flex flex-col gap-2">
+                    <p className="text-xs text-muted-foreground">
+                      Select stops below, then assign to a driver.
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        {selected.size > 0 ? `${selected.size} stop${selected.size > 1 ? "s" : ""} selected` : "No stops selected"}
                       </span>
-                    ) : null}
-                    {section.driverId === null ? (
-                      <span className="text-[11px] text-amber-800">Master pool · Optimize writes here</span>
-                    ) : null}
-                    {autoCollapse && section.stops.length > COLLAPSE_THRESHOLD ? (
+                      <span className="text-muted-foreground">→</span>
+                      <select
+                        data-testid="route-assign-driver"
+                        className="h-8 rounded-lg border border-brand-border bg-white px-2.5 text-xs min-w-36"
+                        value={assignDriverId}
+                        onChange={(e) => setAssignDriverId(e.target.value)}
+                      >
+                        <option value="">Unassigned pool</option>
+                        {drivers.map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {d.name}
+                          </option>
+                        ))}
+                      </select>
                       <button
                         type="button"
-                        data-testid={`route-pool-toggle-${section.key}`}
-                        className="text-xs text-brand-teal underline-offset-2 hover:underline ml-auto"
-                        onClick={() => togglePoolExpanded(section.key)}
+                        data-testid="route-assign-submit"
+                        disabled={busy || selected.size === 0}
+                        onClick={() => void assignDriver()}
+                        className="pill-btn btn-primary h-8 text-[11px] px-3.5 disabled:opacity-50"
                       >
-                        {showList ? "Hide stops" : "Show stops"}
+                        Assign
                       </button>
-                    ) : null}
+                    </div>
                   </div>
-                  {section.stops.length === 0 ? (
-                    <p className="p-4 text-sm text-muted-foreground">No stops in this pool.</p>
-                  ) : !showList ? (
-                    <p className="p-4 text-sm text-muted-foreground" data-testid={`route-pool-collapsed-${section.key}`}>
-                      {section.stops.length} stops collapsed — use Assign by sequence, or Show stops.
-                    </p>
-                  ) : (
-                    <ul className="divide-y divide-brand-border">
-                      {section.stops.map((s, idx) => {
-                        const geoOk = s.geocode_status === "ok";
-                        const needsPlace = s.delivery_sequence == null || !geoOk;
+                ) : (
+                  /* ── Sequence Ranges Tab ── */
+                  <div className="flex flex-col gap-2.5">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                      <label className="text-xs text-muted-foreground shrink-0 font-medium" htmlFor="route-bulk-source">
+                        Source pool
+                      </label>
+                      <select
+                        id="route-bulk-source"
+                        data-testid="route-bulk-source"
+                        className="h-8 rounded-lg border border-brand-border bg-white px-2.5 text-xs flex-1 min-w-0"
+                        value={bulkSourceKey}
+                        onChange={(e) => setBulkSourceKey(e.target.value)}
+                      >
+                        {sections.map((sec) => {
+                          const span = seqSpan(sec.stops);
+                          const hint = span
+                            ? `#${span.min}–#${span.max} (${span.counted})`
+                            : `${sec.stops.length} stops`;
+                          return (
+                            <option key={sec.key} value={sec.key}>
+                              {sec.title} · {hint}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-2" data-testid="route-bulk-ranges">
+                      {bulkRows.map((row, idx) => {
+                        const preview = bulkPreviews[idx];
                         return (
-                          <li
-                            key={s.id}
-                            className="flex items-stretch gap-2 p-3 sm:px-4 hover:bg-brand-surface/60"
-                            data-testid={`route-stop-${s.id}`}
+                          <div
+                            key={row.id}
+                            className="flex flex-wrap items-center gap-1.5 p-2 rounded-lg bg-brand-surface/40"
+                            data-testid={`route-bulk-row-${idx}`}
                           >
+                            <span className="text-xs text-muted-foreground w-10 shrink-0">From</span>
                             <input
-                              type="checkbox"
-                              checked={selected.has(s.id)}
-                              onChange={() => toggle(s.id)}
-                              className="mt-1 rounded border-brand-border shrink-0"
-                              data-testid={`route-check-${s.id}`}
+                              type="number"
+                              min={1}
+                              data-testid={`route-bulk-from-${idx}`}
+                              className="h-8 w-16 rounded-lg border border-brand-border bg-white px-1.5 text-xs font-mono"
+                              value={row.from}
+                              placeholder="1"
+                              onChange={(e) =>
+                                setBulkRows((rows) =>
+                                  rows.map((r) => (r.id === row.id ? { ...r, from: e.target.value } : r))
+                                )
+                              }
                             />
-                            <div className="flex flex-col gap-0.5 shrink-0">
-                              <button
-                                type="button"
-                                aria-label="Move up"
-                                disabled={busy || idx === 0}
-                                className="p-0.5 disabled:opacity-30"
-                                onClick={() => void moveStopInPool(section, idx, -1)}
-                              >
-                                <CaretUp size={16} />
-                              </button>
-                              <button
-                                type="button"
-                                aria-label="Move down"
-                                disabled={busy || idx === section.stops.length - 1}
-                                className="p-0.5 disabled:opacity-30"
-                                onClick={() => void moveStopInPool(section, idx, 1)}
-                              >
-                                <CaretDown size={16} />
-                              </button>
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                                <span className="font-mono text-xs text-muted-foreground">
-                                  #{s.delivery_sequence ?? "—"}
-                                </span>
-                                <span className="font-medium text-sm truncate">{s.name}</span>
-                              </div>
-                              <p className="text-xs text-muted-foreground truncate">{stopAddress(s) || "No address"}</p>
-                              <p className="text-[11px] text-muted-foreground mt-0.5">
-                                {geoOk
-                                  ? s.lat != null && s.lng != null
-                                    ? `Geocoded · ${Number(s.lat).toFixed(4)}, ${Number(s.lng).toFixed(4)}`
-                                    : "Geocoded"
-                                  : s.geocode_status === "failed"
-                                    ? "Geocode failed"
-                                    : "Not geocoded"}
-                              </p>
-                            </div>
-                            {needsPlace && configured && (
-                              <button
-                                type="button"
-                                data-testid={`route-place-${s.id}`}
-                                disabled={busy}
-                                className="pill-btn btn-outline h-8 text-[11px] self-center shrink-0 disabled:opacity-50"
-                                onClick={() => void placeOne(s.id, section.driverId)}
-                              >
-                                Place
-                              </button>
-                            )}
-                          </li>
+                            <span className="text-xs text-muted-foreground">To</span>
+                            <input
+                              type="number"
+                              min={1}
+                              data-testid={`route-bulk-to-${idx}`}
+                              className="h-8 w-16 rounded-lg border border-brand-border bg-white px-1.5 text-xs font-mono"
+                              value={row.to}
+                              placeholder="100"
+                              onChange={(e) =>
+                                setBulkRows((rows) =>
+                                  rows.map((r) => (r.id === row.id ? { ...r, to: e.target.value } : r))
+                                )
+                              }
+                            />
+                            <span className="text-xs text-muted-foreground">→</span>
+                            <select
+                              data-testid={`route-bulk-target-${idx}`}
+                              className="h-8 rounded-lg border border-brand-border bg-white px-2.5 text-xs min-w-32 flex-1"
+                              value={row.driverId}
+                              onChange={(e) =>
+                                setBulkRows((rows) =>
+                                  rows.map((r) => (r.id === row.id ? { ...r, driverId: e.target.value } : r))
+                                )
+                              }
+                            >
+                              <option value="">Unassigned pool</option>
+                              {drivers.map((d) => (
+                                <option key={d.id} value={d.id}>
+                                  {d.name}
+                                </option>
+                              ))}
+                            </select>
+                            <span
+                              className="text-[11px] text-muted-foreground min-w-18"
+                              data-testid={`route-bulk-preview-${idx}`}
+                            >
+                              {preview?.valid ? `${preview.count} stops` : "—"}
+                            </span>
+                            <button
+                              type="button"
+                              aria-label="Remove range"
+                              data-testid={`route-bulk-remove-${idx}`}
+                              disabled={bulkRows.length <= 1}
+                              className="p-2 disabled:opacity-30 rounded-lg hover:bg-brand-surface transition-colors duration-150"
+                              onClick={() => setBulkRows((rows) => rows.filter((r) => r.id !== row.id))}
+                            >
+                              <Trash size={16} />
+                            </button>
+                          </div>
                         );
                       })}
-                    </ul>
-                  )}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 items-center">
+                      <button
+                        type="button"
+                        data-testid="route-bulk-add-range"
+                        className="pill-btn btn-outline h-9 text-xs gap-1"
+                        onClick={() => setBulkRows((rows) => [...rows, newBulkRow()])}
+                      >
+                        <Plus size={14} /> Add range
+                      </button>
+                      <button
+                        type="button"
+                        data-testid="route-bulk-apply"
+                        disabled={busy || bulkTotalPreview === 0}
+                        onClick={() => void applyBulkBySequence()}
+                        className="pill-btn btn-primary h-9 text-xs disabled:opacity-50"
+                      >
+                        Apply ranges ({bulkTotalPreview})
+                      </button>
+                    </div>
+
+                    {drivers.length > 0 && (
+                      <div
+                        className="border-t border-brand-border pt-4 flex flex-col gap-2.5"
+                        data-testid="route-bulk-even-split"
+                      >
+                        <p className="text-xs font-medium">Even split helper</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Divide source sequences{" "}
+                          {bulkSourceSpan ? `#${bulkSourceSpan.min}–#${bulkSourceSpan.max}` : "(none)"}{" "}
+                          evenly across selected drivers, then review ranges above.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {drivers.map((d) => {
+                            const on = evenSplitDriverIds.includes(d.id);
+                            return (
+                              <button
+                                key={d.id}
+                                type="button"
+                                data-testid={`route-bulk-even-driver-${d.id}`}
+                                className={`pill-btn h-8 text-[11px] ${on ? "btn-primary" : "btn-outline"}`}
+                                onClick={() =>
+                                  setEvenSplitDriverIds((ids) =>
+                                    on ? ids.filter((x) => x !== d.id) : [...ids, d.id]
+                                  )
+                                }
+                              >
+                                {d.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <button
+                          type="button"
+                          data-testid="route-bulk-even-apply"
+                          disabled={!bulkSourceSpan || evenSplitDriverIds.length === 0}
+                          onClick={applyEvenSplit}
+                          className="pill-btn btn-outline h-9 text-xs self-start disabled:opacity-50"
+                        >
+                          Fill even ranges
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* end grid */}
+          </div>
+
+          {/* ══════════════════════════════════════════════════════ */}
+          {/* STEP 3 — REVIEW ROUTES                                */}
+          {/* ══════════════════════════════════════════════════════ */}
+          <div className="flex flex-col gap-2" data-testid="route-stops-list">
+            <div className="flex items-center gap-1.5">
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary text-white text-[10px] font-bold shrink-0">3</span>
+              <h2 className="font-display font-bold text-sm">Review routes</h2>
+            </div>
+
+            {stops.length === 0 ? (
+              <p className="card-tinted p-6 text-sm text-muted-foreground text-center">
+                No customers on this meal slot.
+              </p>
+            ) : (
+              <>
+                {/* Pool summary cards */}
+                <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 snap-x snap-mandatory" data-testid="route-pool-cards">
+                  {sections.map((section) => {
+                    const span = seqSpan(section.stops);
+                    const isUnassigned = section.driverId === null;
+                    const isActive = activePoolKey === section.key;
+                    return (
+                      <button
+                        key={section.key}
+                        type="button"
+                        data-testid={`route-pool-card-${section.key}`}
+                        className={`snap-start shrink-0 w-36 sm:w-44 rounded-xl border-2 p-2.5 flex flex-col gap-1 text-left transition-all duration-200 ${
+                          isActive
+                            ? "border-primary bg-primary/5 shadow-md"
+                            : isUnassigned && section.stops.length > 0
+                              ? "border-amber-300 bg-amber-50 hover:shadow-md hover:-translate-y-0.5"
+                              : "border-brand-border bg-white hover:shadow-md hover:-translate-y-0.5"
+                        }`}
+                        onClick={() => setActivePoolKey(isActive ? null : section.key)}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          {isUnassigned ? (
+                            <Package size={14} className="text-amber-600 shrink-0" weight="fill" />
+                          ) : (
+                            <CarSimple size={14} className="text-primary shrink-0" weight="fill" />
+                          )}
+                          <span className="font-medium text-xs truncate">{section.title}</span>
+                        </div>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-lg font-display font-black leading-tight">{section.stops.length}</span>
+                          <span className="text-[10px] text-muted-foreground">stops</span>
+                        </div>
+                        {span ? (
+                          <span
+                            className="font-mono text-[11px] text-muted-foreground"
+                            data-testid={`route-pool-span-${section.key}`}
+                          >
+                            #{span.min}–#{span.max}
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-muted-foreground">No sequence</span>
+                        )}
+                        {isUnassigned && section.stops.length > 0 && (
+                          <span className="text-[10px] text-amber-700 font-medium leading-tight">
+                            Master pool
+                          </span>
+                        )}
+                        {/* Maps link per pool */}
+                        <a
+                          data-testid={`route-pool-maps-${section.key}`}
+                          className="text-[10px] text-brand-teal flex items-center gap-0.5 hover:underline underline-offset-2"
+                          href={mapsUrlForStops(kitchen.address || "", section.stops.filter((s) => s.delivery_sequence != null))}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <NavigationArrow size={10} /> Maps
+                        </a>
+                      </button>
+                    );
+                  })}
                 </div>
-              );
-            })
-          )}
+
+                {/* Hidden Maps pool selector for backward compat */}
+                <select
+                  data-testid="route-maps-pool"
+                  className="sr-only"
+                  value={mapsPoolKey}
+                  onChange={(e) => setMapsPoolKey(e.target.value)}
+                >
+                  {sections.map((sec) => (
+                    <option key={sec.key} value={sec.key}>
+                      Maps: {sec.title} ({sec.stops.length})
+                    </option>
+                  ))}
+                </select>
+                <a
+                  data-testid="route-open-maps"
+                  className="sr-only"
+                  href={mapsUrlForStops(kitchen.address || "", mapsStops)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Open in Maps
+                </a>
+
+                {/* Expanded pool stop list */}
+                {activeSection ? (
+                  <div
+                    className="card-tinted overflow-hidden"
+                    data-testid={`route-pool-${activeSection.key}`}
+                  >
+                    {/* Pool header */}
+                    <div className="px-3 py-2 border-b border-brand-border flex flex-wrap items-center gap-1.5 text-xs bg-brand-surface/40">
+                      <input
+                        type="checkbox"
+                        data-testid={`route-select-pool-${activeSection.key}`}
+                        checked={
+                          activeSection.stops.length > 0 &&
+                          activeSection.stops.every((s) => selected.has(s.id))
+                        }
+                        disabled={activeSection.stops.length === 0}
+                        onChange={() => toggleSection(activeSection.stops)}
+                        className="rounded border-brand-border"
+                      />
+                      <span className="font-medium text-xs">
+                        {activeSection.title}{" "}
+                        <span className="text-muted-foreground font-normal">({activeSection.stops.length})</span>
+                      </span>
+                      {(() => {
+                        const span = seqSpan(activeSection.stops);
+                        return span ? (
+                          <span className="font-mono text-[11px] text-muted-foreground">
+                            #{span.min}–#{span.max}
+                          </span>
+                        ) : null;
+                      })()}
+                      {autoCollapse && activeSection.stops.length > COLLAPSE_THRESHOLD ? (
+                        <button
+                          type="button"
+                          data-testid={`route-pool-toggle-${activeSection.key}`}
+                          className="text-xs text-brand-teal underline-offset-2 hover:underline ml-auto"
+                          onClick={() => togglePoolExpanded(activeSection.key)}
+                        >
+                          {expandedPools.has(activeSection.key) || activeSection.stops.length <= COLLAPSE_THRESHOLD
+                            ? "Hide stops"
+                            : "Show stops"}
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="ml-auto text-[10px] text-muted-foreground hover:text-foreground transition-colors duration-150"
+                        onClick={() => setActivePoolKey(null)}
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    {/* Pool stops */}
+                    {activeSection.stops.length === 0 ? (
+                      <p className="p-3 text-xs text-muted-foreground">No stops in this pool.</p>
+                    ) : autoCollapse &&
+                      activeSection.stops.length > COLLAPSE_THRESHOLD &&
+                      !expandedPools.has(activeSection.key) ? (
+                      <p
+                        className="p-3 text-xs text-muted-foreground"
+                        data-testid={`route-pool-collapsed-${activeSection.key}`}
+                      >
+                        {activeSection.stops.length} stops collapsed — use Assign by sequence, or Show stops.
+                      </p>
+                    ) : (
+                      <ul className="divide-y divide-brand-border/60">
+                        {activeSection.stops.map((s, idx) => {
+                          const geoOk = s.geocode_status === "ok";
+                          const geoFail = s.geocode_status === "failed";
+                          const needsPlace = s.delivery_sequence == null || !geoOk;
+                          return (
+                            <li
+                              key={s.id}
+                              className="flex items-center gap-2 px-3 py-1.5 hover:bg-brand-surface/50 transition-colors duration-150"
+                              data-testid={`route-stop-${s.id}`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selected.has(s.id)}
+                                onChange={() => toggle(s.id)}
+                                className="rounded border-brand-border shrink-0"
+                                data-testid={`route-check-${s.id}`}
+                              />
+
+                              {/* Sequence number */}
+                              <span className="font-mono text-[11px] text-muted-foreground w-7 text-right shrink-0">
+                                #{s.delivery_sequence ?? "—"}
+                              </span>
+
+                              {/* Geocode status dot */}
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                  geoOk ? "bg-secondary" : geoFail ? "bg-red-500" : "bg-amber-400"
+                                }`}
+                                title={geoOk ? "Geocoded" : geoFail ? "Geocode failed" : "Not geocoded"}
+                              />
+
+                              {/* Name + address */}
+                              <div className="min-w-0 flex-1 flex flex-col sm:flex-row sm:items-baseline sm:gap-1.5">
+                                <span className="font-medium text-xs truncate">{s.name}</span>
+                                <span className="text-[11px] text-muted-foreground truncate">{stopAddress(s) || "No address"}</span>
+                              </div>
+
+                              {/* Place button */}
+                              {needsPlace && configured && (
+                                <button
+                                  type="button"
+                                  data-testid={`route-place-${s.id}`}
+                                  disabled={busy}
+                                  className="pill-btn btn-outline h-6 text-[10px] px-2 shrink-0 disabled:opacity-50"
+                                  onClick={() => void placeOne(s.id, activeSection.driverId)}
+                                >
+                                  Place
+                                </button>
+                              )}
+
+                              {/* Reorder buttons */}
+                              <div className="flex flex-col shrink-0">
+                                <button
+                                  type="button"
+                                  aria-label="Move up"
+                                  disabled={busy || idx === 0}
+                                  className="p-0.5 disabled:opacity-30 hover:text-primary transition-colors duration-150"
+                                  onClick={() => void moveStopInPool(activeSection, idx, -1)}
+                                >
+                                  <CaretUp size={12} />
+                                </button>
+                                <button
+                                  type="button"
+                                  aria-label="Move down"
+                                  disabled={busy || idx === activeSection.stops.length - 1}
+                                  className="p-0.5 disabled:opacity-30 hover:text-primary transition-colors duration-150"
+                                  onClick={() => void moveStopInPool(activeSection, idx, 1)}
+                                >
+                                  <CaretDown size={12} />
+                                </button>
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                ) : (
+                  /* Hint when no pool is expanded */
+                  <div className="text-center py-4 text-xs text-muted-foreground">
+                    <CaretRight size={14} className="inline mr-0.5 -mt-0.5" />
+                    Click a driver card above to view stops
+                  </div>
+                )}
+
+                {/* Render hidden pool containers for other data-testid compat */}
+                {sections.map((section) => {
+                  if (section.key === activeSection?.key) return null;
+                  return (
+                    <div key={section.key} className="sr-only" data-testid={`route-pool-${section.key}`}>
+                      <input
+                        type="checkbox"
+                        data-testid={`route-select-pool-${section.key}`}
+                        readOnly
+                        checked={
+                          section.stops.length > 0 &&
+                          section.stops.every((s) => selected.has(s.id))
+                        }
+                      />
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ══════════════════════════════════════════════════════ */}
+      {/* FLOATING BOTTOM ASSIGN BAR                            */}
+      {/* ══════════════════════════════════════════════════════ */}
+      {selected.size > 0 && (
+        <div
+          className="fixed bottom-0 left-0 right-0 z-50 glass-nav border-t border-brand-border/60 px-3 py-2 flex items-center justify-center gap-2 animate-fade-in-up"
+          data-testid="route-assign-bar"
+        >
+          <div className="flex flex-wrap items-center gap-2 max-w-2xl w-full justify-center">
+            <UserCircle size={16} className="text-primary shrink-0" />
+            <span className="text-xs font-medium">{selected.size} selected</span>
+            <span className="text-xs text-muted-foreground">→</span>
+            <select
+              data-testid="route-assign-driver"
+              className="h-8 rounded-lg border border-brand-border bg-white px-2.5 text-xs min-w-36"
+              value={assignDriverId}
+              onChange={(e) => setAssignDriverId(e.target.value)}
+            >
+              <option value="">Unassigned pool</option>
+              {drivers.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              data-testid="route-assign-submit"
+              disabled={busy}
+              onClick={() => void assignDriver()}
+              className="pill-btn btn-primary h-8 text-[11px] px-3.5 disabled:opacity-50"
+            >
+              Assign
+            </button>
+          </div>
         </div>
       )}
     </div>

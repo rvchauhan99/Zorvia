@@ -8,7 +8,7 @@ You are working in the **MealHQ** product monorepo (user-facing brand and API ti
 2. [`docs/FUNCTIONAL.md`](docs/FUNCTIONAL.md) — product behavior and journeys  
 3. [`docs/TECHNICAL.md`](docs/TECHNICAL.md) — APIs, data model, env, runbook  
 4. [`docs/MONTHLY_BILLING.md`](docs/MONTHLY_BILLING.md) — optional tenant monthly billing (providers)  
-5. [`docs/ROUTE_PLANNING.md`](docs/ROUTE_PLANNING.md) — free ORS route planning (geocode + optimize)  
+5. [`docs/ROUTE_PLANNING.md`](docs/ROUTE_PLANNING.md) — local lat/lng route order + optional ORS geocode  
 6. [`memory/INDEX.md`](memory/INDEX.md) — short memory map  
 7. [`design_guidelines.json`](design_guidelines.json) — when touching UI
 

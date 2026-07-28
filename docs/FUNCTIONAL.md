@@ -133,8 +133,9 @@ When enabled, **all customers** on that tenant switch to monthly-period billing;
 | Policy variant | **`monthly_adjustable`**: flat fee, extra days free, 2-tier cancellation (≤ N deduct daily rate; > N recalc at penalty daily rate). **`monthly_fixed`**: always charge flat monthly plan fee regardless of skips/extras. See [`MONTHLY_BILLING.md`](MONTHLY_BILLING.md). |
 | Plan templates | Editable Mon–Fri / Mon–Sat defaults (fee, standard days, weekdays); auto-matched from customer schedule; optional `monthly_plan_id` override on customer. |
 | Collection day | Provider `default_collection_day` (1–31, required when enabled); per-customer `payment_collection_day` override in CRM when monthly billing on. |
-| Outstanding | `opening_balance` + Σ calendar-month charges (after tax) − verified payments |
-| Reports | `GET /reports/payment-due` — amounts due by collection due date; Collections tab **Amounts due** sub-view |
+| Outstanding | Balance = `opening_balance` + Σ calendar-month charges (after tax) − verified payments. **Listing:** per-meal and Adjustable = all balances `> 0`. **Fixed Monthly** = overdue only (past collection day). |
+| Reports | `GET /reports/payment-due` — amounts due by collection due date; Collections tab **Amounts due** sub-view. Fixed: `GET /reports/monthly-dues` + Outstanding renewal/overdue columns. |
+| Monthly dues UI | `/provider/monthly-dues` — Fixed Monthly **Customer subscriptions** roster (all active + renewal dates); Quick Renew when owed |
 | Statement | Monthly statement rows include plan, tier, collection due date when monthly billing active |
 
 ### 4.6 Reports (provider)
@@ -145,11 +146,12 @@ When enabled, **all customers** on that tenant switch to monthly-period billing;
 - Analysis (`/provider/analysis`) is the period business-health report: presets **7d / 30d / 90d / MTD / Last month / YTD** plus **custom From–To** (max 366 days); optional **meal slot** filter scopes period delivery KPIs/series only. Outstanding receivables and Customer credit stay as-of today. Charts, receivables aging, top outstanding, top collectors, area concentration, rule-based highlights. Top customer rows deep-link to `/provider/customers/{id}?tab=analysis`.
 - Analysis and customer Analysis use shared KPI/section skeletons on first load; period changes keep previous KPIs visible (stale-while-revalidate) with a small spinner on the period toggle, then staggered reveal of charts/lists.
 - Per-customer Analysis (customer detail tab) reuses the same analytics kit (including custom dates + meal slot) via `GET /customers/{id}/insights` plus the activity timeline.
-- Outstanding balances (**owed only**, `outstanding > 0`; highest amount first; search / min amount / Load more). Default Reports tab.  
+- Outstanding balances (**owed only**, `outstanding > 0`; highest amount first; search / min amount / Load more). Default Reports tab. Under **Fixed Monthly**, Outstanding shows **overdue only** (past collection day) with renewal date + overdue-by columns; per-meal and Adjustable unchanged.  
 - Customer credit (advance balances, `outstanding < 0`; largest credit first; same search / min / pagination)  
 - Daily deliveries  
 - Collections (payments received by submission date)  
 - **Payment due** (`GET /reports/payment-due`) — monthly kitchens: who owes what by collection due date  
+- **Customer subscriptions** (`GET /reports/monthly-dues`, Fixed Monthly only) — all active customers, overdue-first then nearest renewal; Quick Renew when owed  
 - Active customers  
 - Area summary (optional FSA prefix)  
 - Dashboard summary  
@@ -161,7 +163,7 @@ When enabled, **all customers** on that tenant switch to monthly-period billing;
 
 ### 4.6b Consumer profile
 
-- `PATCH /consumer/me/profile` — phone, address, apartment, postal_code, delivery_days  
+- `PATCH /consumer/me/profile` — phone, address, apartment, city, province, postal_code, delivery_days  
 - Statement CSV download from payments/profile  
 
 ### 4.6c Onboarding
@@ -348,9 +350,9 @@ WhatsApp menu shares are **not** included in the SaaS subscription.
 | Delivery filters | Compact status chips + search; route reorder on `sm+` only |
 | Bulk confirms | Mark all delivered + Verify selected require AppSheet confirmation before applying |
 | Action button colors | `btn-danger` for delete/reject/cancel-delivery; `btn-secondary` for deliver/verify; `btn-outline` for dismiss Cancel |
-| CSV import + invites | Sample CSV download on Customers; `POST /customers/import` (driver_email + delivery_sequence; `opening_balance` / `current_outstanding`, `joining_date`); invite HTML → `/consumer-signup?code=` |
+| CSV import + invites | Sample CSV download on Customers (CA `city`/`province`; no driver/lat in sample); `POST /customers/import` still accepts optional driver_email / lat/lng; CRM add is a 2-step wizard (details → **Find location required** → Route & drivers with **driver required before Save**); invite HTML → `/consumer-signup?code=` |
 | Customer route master | Optional `driver_id` + `delivery_sequence`; unique per driver pool; insert/move at N auto-shifts later stops; new deliveries inherit `route_order` + driver |
-| Route planning | `/provider/route-planning`; OpenRouteService geocode + optimize (free API key); unassigned → driver pools via **assign by sequence** (ranges / even-split) or checkbox append; create/import auto-insert + lat/lng preview — [`ROUTE_PLANNING.md`](ROUTE_PLANNING.md) |
+| Route planning | `/provider/route-planning`; ORS geocode (optional) + local lat/lng optimize; unassigned → driver pools via **assign by sequence** (ranges / even-split) or checkbox append; create/import auto-insert + lat/lng preview — [`ROUTE_PLANNING.md`](ROUTE_PLANNING.md) |
 | SMS stub | `send_sms` + `sms_notifications` setting; cancel confirmation |
 | Menu | Upload image anytime; history kept; consumer sees current (latest); email notify (Resend); WhatsApp share (Meta Cloud API) — see `docs/WHATSAPP_SETUP.md` |
 | WhatsApp credit | Prepaid wallet separate from SaaS plan; packages CAD 25/50/100 via Interac; admin approve adds credit; share deducts `WHATSAPP_COST_PER_MSG_CAD` per successful send; one successful share per menu; share disabled when balance &lt; blast estimate. Product gated by `WHATSAPP_FEATURES_ENABLED` (default off). |

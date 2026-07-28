@@ -24,7 +24,7 @@ function toCSV(rows: any[]) {
 export default function ConsumerProfile() {
   const [me, setMe] = useState<any>(null);
   const [form, setForm] = useState({
-    phone: "", address: "", apartment: "", postal_code: "", delivery_days: [] as number[],
+    phone: "", address: "", apartment: "", city: "", province: "ON", postal_code: "", delivery_days: [] as number[],
   });
   const [saving, setSaving] = useState(false);
   const [avatarBusy, setAvatarBusy] = useState(false);
@@ -47,6 +47,8 @@ export default function ConsumerProfile() {
       phone: c.phone || "",
       address: c.address || "",
       apartment: c.apartment || "",
+      city: c.city || "",
+      province: c.province || "ON",
       postal_code: c.postal_code || "",
       delivery_days: c.delivery_days || [],
     });
@@ -71,6 +73,8 @@ export default function ConsumerProfile() {
         phone: form.phone,
         address: form.address,
         apartment: form.apartment,
+        city: form.city,
+        province: form.province,
         postal_code: form.postal_code,
         delivery_days: form.delivery_days,
       });
@@ -206,13 +210,30 @@ export default function ConsumerProfile() {
           <input data-testid="profile-phone" className={input} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
         </label>
         <label className="flex flex-col gap-1.5">
-          <span className="label-overline">Address</span>
+          <span className="label-overline">Street address</span>
           <input data-testid="profile-address" className={input} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
         </label>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="flex flex-col gap-1.5">
             <span className="label-overline">Apartment</span>
             <input data-testid="profile-apt" className={input} value={form.apartment} onChange={(e) => setForm({ ...form, apartment: e.target.value })} />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="label-overline">City</span>
+            <input data-testid="profile-city" className={input} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="label-overline">Province</span>
+            <select
+              data-testid="profile-province"
+              className={input}
+              value={form.province || "ON"}
+              onChange={(e) => setForm({ ...form, province: e.target.value })}
+            >
+              {["AB","BC","MB","NB","NL","NS","NT","NU","ON","PE","QC","SK","YT"].map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
           </label>
           <label className="flex flex-col gap-1.5">
             <span className="label-overline">Postal code</span>
