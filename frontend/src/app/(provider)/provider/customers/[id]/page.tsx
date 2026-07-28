@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useTransition } from "react";
+import React, { useCallback, useEffect, useState, useTransition } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -12,6 +12,7 @@ import { fmtCAD, fmtDate, WEEKDAYS, todayISO, fmtMealCount, fmtExtraBadge } from
 import StatusPill from "@/components/StatusPill";
 import RecordPaymentSheet from "@/components/RecordPaymentSheet";
 import ExtraMealsSheet from "@/components/ExtraMealsSheet";
+import { DeliveryProofThumbButton, DeliveryProofSheet, type DeliveryProofTarget } from "@/components/DeliveryProofViewer";
 import { insightsParams, type CustomerInsights, type CustomerTimelineEvent, type MealSlotFilter, type PeriodKey } from "@/lib/analytics";
 import { KpiCard } from "@/components/analytics/KpiCard";
 import { PeriodToggle } from "@/components/analytics/PeriodToggle";
@@ -19,9 +20,12 @@ import { HighlightsPanel } from "@/components/analytics/HighlightsPanel";
 import { DeliveryTrendChart } from "@/components/analytics/DeliveryTrendChart";
 import { CollectionsChart } from "@/components/analytics/CollectionsChart";
 import { AgingChart } from "@/components/analytics/AgingChart";
-import { KpiSkeleton, PageLoader, SectionSkeleton } from "@/components/loaders";
+import { InlineLoader, KpiSkeleton, PageLoader, SectionSkeleton } from "@/components/loaders";
 import { customerSlotSummary } from "@/lib/mealSlots";
 import { fetchWhatsappFeaturesEnabled } from "@/lib/whatsapp-features";
+import CursorPaginationBar from "@/components/CursorPaginationBar";
+import { asPageEnvelope, DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
+import { useCursorPagination } from "@/hooks/useCursorPagination";
 
 type Tab = "overview" | "analysis" | "deliveries" | "payments" | "pauses" | "notes";
 
@@ -105,6 +109,13 @@ export default function CustomerDetail() {
   const [extraBusy, setExtraBusy] = useState(false);
   const [waEnabled, setWaEnabled] = useState(false);
   const [mealTypes, setMealTypes] = useState<{ id: string; name: string; price: number }[]>([]);
+  const [viewingProof, setViewingProof] = useState<DeliveryProofTarget | null>(null);
+  const [customerDeliveries, setCustomerDeliveries] = useState<any[]>([]);
+  const [deliveriesLoading, setDeliveriesLoading] = useState(false);
+  const deliveriesPaging = useCursorPagination({ initialPageSize: DEFAULT_PAGE_SIZE });
+  const [customerPayments, setCustomerPayments] = useState<any[]>([]);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
+  const paymentsPaging = useCursorPagination({ initialPageSize: DEFAULT_PAGE_SIZE });
 
   async function load() {
     try {
@@ -150,6 +161,10 @@ export default function CustomerDetail() {
       });
       toast.success("Meal adjusted");
       load();
+      if (tab === "deliveries") {
+        const c2 = deliveriesPaging.currentPageIndex > 0 ? deliveriesPaging.cursorHistory[deliveriesPaging.currentPageIndex - 1] ?? null : null;
+        fetchDeliveries({ cursor: c2 });
+      }
       return data;
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || "Failed to adjust meal");
@@ -190,6 +205,42 @@ export default function CustomerDetail() {
     }
   }
 
+  const fetchDeliveries = useCallback(async (opts: { cursor?: string | null } = {}) => {
+    if (!id) return;
+    setDeliveriesLoading(true);
+    try {
+      const params = new URLSearchParams({ page_size: String(deliveriesPaging.pageSize) });
+      if (opts.cursor) params.set("cursor", opts.cursor);
+      const { data } = await api.get(`/customers/${id}/deliveries?${params.toString()}`);
+      const page = asPageEnvelope<any>(data);
+      setCustomerDeliveries(page.items);
+      deliveriesPaging.applyPageResult(page);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || "Failed to load deliveries");
+    } finally {
+      setDeliveriesLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliveriesPaging.applyPageResult is stable
+  }, [id, deliveriesPaging.pageSize]);
+
+  const fetchPayments = useCallback(async (opts: { cursor?: string | null } = {}) => {
+    if (!id) return;
+    setPaymentsLoading(true);
+    try {
+      const params = new URLSearchParams({ page_size: String(paymentsPaging.pageSize) });
+      if (opts.cursor) params.set("cursor", opts.cursor);
+      const { data } = await api.get(`/customers/${id}/payments?${params.toString()}`);
+      const page = asPageEnvelope<any>(data);
+      setCustomerPayments(page.items);
+      paymentsPaging.applyPageResult(page);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || "Failed to load payments");
+    } finally {
+      setPaymentsLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- paymentsPaging.applyPageResult is stable
+  }, [id, paymentsPaging.pageSize]);
+
   useEffect(() => {
     if (id) load();
   }, [id]);
@@ -202,6 +253,22 @@ export default function CustomerDetail() {
   useEffect(() => {
     if (tab === "analysis" && id) loadAnalysis({ period });
   }, [tab, id]);
+
+  useEffect(() => {
+    if (tab === "deliveries" && id) {
+      deliveriesPaging.resetToFirstPage();
+      fetchDeliveries({ cursor: null });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset+fetch when tab opens or page size changes
+  }, [tab, id, deliveriesPaging.pageSize]);
+
+  useEffect(() => {
+    if (tab === "payments" && id) {
+      paymentsPaging.resetToFirstPage();
+      fetchPayments({ cursor: null });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset+fetch when tab opens or page size changes
+  }, [tab, id, paymentsPaging.pageSize]);
 
   function selectTab(next: Tab) {
     setTab(next);
@@ -559,32 +626,61 @@ export default function CustomerDetail() {
             </div>
           ) : null}
           <div className="card-tinted overflow-hidden">
-            <ul className="divide-y divide-brand-border">
-              {(c.deliveries || []).length === 0 ? (
-                <li className="p-6 text-center text-sm text-muted-foreground">No deliveries yet.</li>
-              ) : (
-                (c.deliveries || []).map((d: any) => {
-                  const badge = fmtExtraBadge(d);
-                  return (
-                    <li key={d.id} className="p-4 flex items-center gap-3">
-                      <div className="flex-1">
-                        <div className="font-medium">{fmtDate(d.delivery_date)}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {fmtMealCount(d)}
-                          {badge ? (
-                            <span className="ml-1.5 text-primary font-medium" data-testid={`cust-extra-badge-${d.id}`}>
-                              {badge}
-                            </span>
-                          ) : null}
+            {deliveriesLoading && customerDeliveries.length === 0 ? (
+              <InlineLoader testid="customer-deliveries-loading" />
+            ) : (
+              <ul className="divide-y divide-brand-border">
+                {customerDeliveries.length === 0 ? (
+                  <li className="p-6 text-center text-sm text-muted-foreground">No deliveries yet.</li>
+                ) : (
+                  customerDeliveries.map((d: any) => {
+                    const badge = fmtExtraBadge(d);
+                    return (
+                      <li key={d.id} className="p-4 flex items-center gap-3">
+                        <div className="flex-1">
+                          <div className="font-medium">{fmtDate(d.delivery_date)}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {fmtMealCount(d)}
+                            {badge ? (
+                              <span className="ml-1.5 text-primary font-medium" data-testid={`cust-extra-badge-${d.id}`}>
+                                {badge}
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
-                      </div>
-                      <StatusPill status={d.status} />
-                    </li>
-                  );
-                })
-              )}
-            </ul>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {d.delivery_image_url ? (
+                            <DeliveryProofThumbButton delivery={d} onView={setViewingProof} compact />
+                          ) : null}
+                          <StatusPill status={d.status} />
+                        </div>
+                      </li>
+                    );
+                  })
+                )}
+              </ul>
+            )}
           </div>
+          <CursorPaginationBar
+            currentPage={deliveriesPaging.currentPage}
+            totalPages={deliveriesPaging.totalPages}
+            from={deliveriesPaging.from}
+            to={deliveriesPaging.to}
+            total={deliveriesPaging.total}
+            pageSize={deliveriesPaging.pageSize}
+            hasMore={deliveriesPaging.hasMore}
+            loading={deliveriesLoading}
+            onPrev={() => {
+              const c = deliveriesPaging.goPrev();
+              if (c !== undefined) fetchDeliveries({ cursor: c });
+            }}
+            onNext={() => {
+              const c = deliveriesPaging.goNext();
+              if (c !== undefined) fetchDeliveries({ cursor: c });
+            }}
+            onPageSizeChange={(size: AllowedPageSize) => deliveriesPaging.setPageSize(size)}
+            testidPrefix="customer-deliveries-pagination"
+          />
         </div>
       ) : null}
 
@@ -603,27 +699,55 @@ export default function CustomerDetail() {
             </div>
           ) : null}
           <div className="card-tinted overflow-hidden">
-            <ul className="divide-y divide-brand-border">
-              {(c.payments || []).length === 0 ? (
-                <li className="p-6 text-center text-sm text-muted-foreground">No payments yet.</li>
-              ) : (
-                (c.payments || []).map((p: any) => (
-                  <li key={p.id} className="p-4 flex items-center gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium">{showMoney ? fmtCAD(p.amount) : (p.reference || "Payment")}</div>
-                      <div className="text-xs text-muted-foreground font-mono truncate">{showMoney ? p.reference : fmtDate(p.submitted_at || p.verified_at)}</div>
-                    </div>
-                    <StatusPill status={p.status} />
-                  </li>
-                ))
-              )}
-            </ul>
+            {paymentsLoading && customerPayments.length === 0 ? (
+              <InlineLoader testid="customer-payments-loading" />
+            ) : (
+              <ul className="divide-y divide-brand-border">
+                {customerPayments.length === 0 ? (
+                  <li className="p-6 text-center text-sm text-muted-foreground">No payments yet.</li>
+                ) : (
+                  customerPayments.map((p: any) => (
+                    <li key={p.id} className="p-4 flex items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium">{showMoney ? fmtCAD(p.amount) : (p.reference || "Payment")}</div>
+                        <div className="text-xs text-muted-foreground font-mono truncate">{showMoney ? p.reference : fmtDate(p.submitted_at || p.verified_at)}</div>
+                      </div>
+                      <StatusPill status={p.status} />
+                    </li>
+                  ))
+                )}
+              </ul>
+            )}
           </div>
+          <CursorPaginationBar
+            currentPage={paymentsPaging.currentPage}
+            totalPages={paymentsPaging.totalPages}
+            from={paymentsPaging.from}
+            to={paymentsPaging.to}
+            total={paymentsPaging.total}
+            pageSize={paymentsPaging.pageSize}
+            hasMore={paymentsPaging.hasMore}
+            loading={paymentsLoading}
+            onPrev={() => {
+              const c = paymentsPaging.goPrev();
+              if (c !== undefined) fetchPayments({ cursor: c });
+            }}
+            onNext={() => {
+              const c = paymentsPaging.goNext();
+              if (c !== undefined) fetchPayments({ cursor: c });
+            }}
+            onPageSizeChange={(size: AllowedPageSize) => paymentsPaging.setPageSize(size)}
+            testidPrefix="customer-payments-pagination"
+          />
           <RecordPaymentSheet
             open={recordOpen}
             onClose={() => setRecordOpen(false)}
             lockedCustomer={c ? { id: c.id, name: c.name } : null}
-            onRecorded={() => load()}
+            onRecorded={() => {
+              load();
+              const c2 = paymentsPaging.currentPageIndex > 0 ? paymentsPaging.cursorHistory[paymentsPaging.currentPageIndex - 1] ?? null : null;
+              fetchPayments({ cursor: c2 });
+            }}
           />
         </div>
       ) : null}
@@ -677,6 +801,8 @@ export default function CustomerDetail() {
           ) : null}
         </div>
       ) : null}
+
+      <DeliveryProofSheet delivery={viewingProof} onClose={() => setViewingProof(null)} />
 
       <ExtraMealsSheet
         open={extraOpen}

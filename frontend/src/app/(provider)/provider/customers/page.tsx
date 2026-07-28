@@ -9,10 +9,11 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canMutateAdmin, canSeePricing } from "@/lib/roles";
 import { fmtCAD, WEEKDAYS, todayISO } from "@/lib/format";
-import { asPageEnvelope, DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { asPageEnvelope, DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
+import { useCursorPagination } from "@/hooks/useCursorPagination";
 import AppSheet from "@/components/AppSheet";
 import AddExtraMealSheet from "@/components/AddExtraMealSheet";
-import LoadMoreButton from "@/components/LoadMoreButton";
+import CursorPaginationBar from "@/components/CursorPaginationBar";
 import { StatusFilterCards } from "@/components/StatusFilterCards";
 import { InlineLoader } from "@/components/loaders";
 import MealScheduleFields, {
@@ -111,10 +112,7 @@ export default function Customers() {
     { id: "fasting", name: "Fasting", price: 12 },
   ]);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [debouncedQ, setDebouncedQ] = useState("");
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(false);
   const [filterDriverId, setFilterDriverId] = useState("");
   const [filterMealTypeId, setFilterMealTypeId] = useState("");
   const [filterCounts, setFilterCounts] = useState({
@@ -125,6 +123,7 @@ export default function Customers() {
   const [routePreview, setRoutePreview] = useState<any>(null);
   const [routePreviewLoading, setRoutePreviewLoading] = useState(false);
   const [formStep, setFormStep] = useState<1 | 2>(1);
+  const paging = useCursorPagination({ initialPageSize: DEFAULT_PAGE_SIZE });
 
   const input = "h-11 w-full px-4 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all";
   const drivers = useMemo(() => staff.filter((s) => (s.role || "admin") === "driver"), [staff]);
@@ -252,13 +251,11 @@ export default function Customers() {
     }
   }
 
-  async function load(opts?: { cursor?: string | null; append?: boolean }) {
-    const append = Boolean(opts?.append);
-    if (append) setLoadingMore(true);
-    else setLoading(true);
+  async function load(opts?: { cursor?: string | null }) {
+    setLoading(true);
     try {
       const params = new URLSearchParams();
-      params.set("page_size", String(DEFAULT_PAGE_SIZE));
+      params.set("page_size", String(paging.pageSize));
       if (filter !== "all") params.set("status", filter);
       if (debouncedQ) params.set("q", debouncedQ);
       if (filterDriverId) params.set("driver_id", filterDriverId);
@@ -266,14 +263,12 @@ export default function Customers() {
       if (opts?.cursor) params.set("cursor", opts.cursor);
       const { data } = await api.get(`/customers?${params.toString()}`);
       const page = asPageEnvelope<any>(data);
-      setItems((prev) => (append ? [...prev, ...page.items] : page.items));
-      setNextCursor(page.next_cursor);
-      setHasMore(page.has_more);
+      setItems(page.items);
+      paging.applyPageResult(page);
     } catch {
       toast.error("Failed to load customers");
     } finally {
       setLoading(false);
-      setLoadingMore(false);
     }
   }
 
@@ -314,7 +309,11 @@ export default function Customers() {
     }
   }
 
-  useEffect(() => { load(); }, [debouncedQ, filter, filterDriverId, filterMealTypeId]);
+  useEffect(() => {
+    paging.resetToFirstPage();
+    load({ cursor: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset+fetch on filter identity
+  }, [debouncedQ, filter, filterDriverId, filterMealTypeId, paging.pageSize]);
   useEffect(() => { loadCounts(); }, []);
   useEffect(() => { loadStaff(); }, []);
 
@@ -324,7 +323,8 @@ export default function Customers() {
   }
 
   function reloadAll() {
-    load();
+    const c = paging.currentPageIndex > 0 ? paging.cursorHistory[paging.currentPageIndex - 1] ?? null : null;
+    load({ cursor: c });
     loadCounts();
   }
 
@@ -1111,11 +1111,27 @@ export default function Customers() {
         )}
       </div>
 
-      <LoadMoreButton
-        hasMore={hasMore}
-        loading={loadingMore}
-        testid="customers-load-more"
-        onClick={() => load({ cursor: nextCursor, append: true })}
+      <CursorPaginationBar
+        currentPage={paging.currentPage}
+        totalPages={paging.totalPages}
+        from={paging.from}
+        to={paging.to}
+        total={paging.total}
+        pageSize={paging.pageSize}
+        hasMore={paging.hasMore}
+        loading={loading}
+        onPrev={() => {
+          const c = paging.goPrev();
+          if (c !== undefined) load({ cursor: c });
+        }}
+        onNext={() => {
+          const c = paging.goNext();
+          if (c !== undefined) load({ cursor: c });
+        }}
+        onPageSizeChange={(size: AllowedPageSize) => {
+          paging.setPageSize(size);
+        }}
+        testidPrefix="customers-pagination"
       />
 
       <AppSheet

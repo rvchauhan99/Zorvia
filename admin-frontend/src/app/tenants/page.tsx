@@ -4,7 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import AdminShell from "@/components/AdminShell";
+import CursorPaginationBar from "@/components/CursorPaginationBar";
 import { api, downloadCsv } from "@/lib/api";
+import { asPageEnvelope, DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { useCursorPagination } from "@/hooks/useCursorPagination";
 
 type StatusFilter = "" | "trialing" | "active" | "expired";
 
@@ -12,39 +15,37 @@ export default function TenantsPage() {
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<StatusFilter>("");
   const [rows, setRows] = useState<any[]>([]);
-  const [total, setTotal] = useState(0);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const paging = useCursorPagination({ initialPageSize: DEFAULT_PAGE_SIZE });
 
   const load = useCallback(
-    async (reset = true) => {
+    async (opts: { cursor?: string | null } = {}) => {
       setLoading(true);
       try {
         const params = new URLSearchParams();
-        params.set("limit", "50");
+        params.set("limit", String(paging.pageSize));
         if (q.trim()) params.set("q", q.trim());
         if (status) params.set("status", status);
-        if (!reset && cursor) params.set("cursor", cursor);
+        if (opts.cursor) params.set("cursor", opts.cursor);
         const { data } = await api.get(`/platform/tenants?${params}`);
-        const page = data.rows || [];
-        setRows((prev) => (reset ? page : [...prev, ...page]));
-        setTotal(data.total || 0);
-        setNextCursor(data.next_cursor || null);
-        if (reset) setCursor(null);
+        const page = asPageEnvelope<any>(data);
+        setRows(page.items);
+        paging.applyPageResult(page);
       } catch (e: any) {
         toast.error(e?.response?.data?.detail || "Failed to load tenants");
       } finally {
         setLoading(false);
       }
     },
-    [q, status, cursor],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [q, status, paging.pageSize],
   );
 
   useEffect(() => {
-    load(true);
+    paging.resetToFirstPage();
+    load({ cursor: null });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
+  }, [status, paging.pageSize]);
 
   return (
     <AdminShell title="Tenants">
@@ -53,8 +54,8 @@ export default function TenantsPage() {
           className="flex flex-col sm:flex-row gap-2"
           onSubmit={(e) => {
             e.preventDefault();
-            setCursor(null);
-            load(true);
+            paging.resetToFirstPage();
+            load({ cursor: null });
           }}
         >
           <input
@@ -87,7 +88,6 @@ export default function TenantsPage() {
               data-testid={`tenant-filter-${v || "all"}`}
               onClick={() => {
                 setStatus(v);
-                setCursor(null);
               }}
               className={`h-10 px-4 rounded-full text-sm font-medium border cursor-pointer ${
                 status === v
@@ -102,7 +102,7 @@ export default function TenantsPage() {
 
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="text-sm text-neutral-500" data-testid="tenant-total">
-            {total} kitchen{total === 1 ? "" : "s"}
+            {paging.total} kitchen{paging.total === 1 ? "" : "s"}
           </div>
           <button
             type="button"
@@ -167,37 +167,28 @@ export default function TenantsPage() {
           )}
         </div>
 
-        {nextCursor ? (
-          <button
-            type="button"
-            data-testid="tenants-load-more"
-            disabled={loading}
-            onClick={() => {
-              setCursor(nextCursor);
-              // load more with explicit cursor
-              (async () => {
-                setLoading(true);
-                try {
-                  const params = new URLSearchParams();
-                  params.set("limit", "50");
-                  params.set("cursor", nextCursor);
-                  if (q.trim()) params.set("q", q.trim());
-                  if (status) params.set("status", status);
-                  const { data } = await api.get(`/platform/tenants?${params}`);
-                  setRows((prev) => [...prev, ...(data.rows || [])]);
-                  setNextCursor(data.next_cursor || null);
-                } catch (e: any) {
-                  toast.error(e?.response?.data?.detail || "Failed to load more");
-                } finally {
-                  setLoading(false);
-                }
-              })();
+        {rows.length > 0 && (
+          <CursorPaginationBar
+            currentPage={paging.currentPage}
+            totalPages={paging.totalPages}
+            from={paging.from}
+            to={paging.to}
+            total={paging.total}
+            pageSize={paging.pageSize}
+            hasMore={paging.hasMore}
+            loading={loading}
+            onPrev={() => {
+              const c = paging.goPrev();
+              if (c !== undefined) load({ cursor: c });
             }}
-            className="h-11 rounded-full border border-neutral-200 text-sm font-medium cursor-pointer hover:bg-white"
-          >
-            Load more
-          </button>
-        ) : null}
+            onNext={() => {
+              const c = paging.goNext();
+              if (c !== undefined) load({ cursor: c });
+            }}
+            onPageSizeChange={(size) => paging.setPageSize(size)}
+            testidPrefix="tenants"
+          />
+        )}
       </div>
     </AdminShell>
   );

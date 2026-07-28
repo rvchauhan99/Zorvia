@@ -10,6 +10,9 @@ import { fmtDate, todayISO } from "@/lib/format";
 import { mealSlotBadgeLabel } from "@/lib/mealSlots";
 import { StatusFilterCards } from "@/components/StatusFilterCards";
 import { InlineLoader } from "@/components/loaders";
+import CursorPaginationBar from "@/components/CursorPaginationBar";
+import { OPS_DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
+import { useCursorPagination } from "@/hooks/useCursorPagination";
 
 type SlotFilter = "all" | "lunch" | "dinner" | "uncategorized";
 
@@ -24,32 +27,42 @@ export default function KitchenPage() {
   const [drivers, setDrivers] = useState<{ id: string; name: string }[]>([]);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const paging = useCursorPagination({ initialPageSize: OPS_DEFAULT_PAGE_SIZE });
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q.trim()), 300);
     return () => clearTimeout(t);
   }, [q]);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts: { cursor?: string | null } = {}) => {
     setLoading(true);
     try {
-      const params: Record<string, string> = { date };
+      const params: Record<string, string> = { date, page_size: String(paging.pageSize) };
       if (debouncedQ) params.q = debouncedQ;
       if (!isDriver && driverId) params.driver_id = driverId;
       if (slotFilter !== "all") params.meal_slot = slotFilter;
+      if (opts.cursor) params.cursor = opts.cursor;
       const { data: summary } = await api.get(`/reports/kitchen-summary`, { params });
       setData(summary);
+      paging.applyPageResult({
+        next_cursor: summary?.next_cursor ?? null,
+        has_more: Boolean(summary?.has_more),
+        total: summary?.total,
+      });
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || "Failed to load kitchen plan");
       setData(null);
     } finally {
       setLoading(false);
     }
-  }, [date, debouncedQ, driverId, slotFilter, isDriver]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- paging.applyPageResult is stable
+  }, [date, debouncedQ, driverId, slotFilter, isDriver, paging.pageSize]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    paging.resetToFirstPage();
+    load({ cursor: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset+fetch on filter identity
+  }, [date, debouncedQ, driverId, slotFilter, isDriver, paging.pageSize]);
 
   useEffect(() => {
     if (isDriver) return;
@@ -270,6 +283,29 @@ export default function KitchenPage() {
                 ))}
               </ul>
             )}
+          </div>
+
+          <div className="print:hidden">
+            <CursorPaginationBar
+              currentPage={paging.currentPage}
+              totalPages={paging.totalPages}
+              from={paging.from}
+              to={paging.to}
+              total={paging.total}
+              pageSize={paging.pageSize}
+              hasMore={paging.hasMore}
+              loading={loading}
+              onPrev={() => {
+                const c = paging.goPrev();
+                if (c !== undefined) load({ cursor: c });
+              }}
+              onNext={() => {
+                const c = paging.goNext();
+                if (c !== undefined) load({ cursor: c });
+              }}
+              onPageSizeChange={(size: AllowedPageSize) => paging.setPageSize(size)}
+              testidPrefix="kitchen-pack-pagination"
+            />
           </div>
         </>
       )}

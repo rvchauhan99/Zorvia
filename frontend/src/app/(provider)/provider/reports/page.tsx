@@ -9,8 +9,9 @@ import { toast } from "sonner";
 import { DownloadSimple } from "@phosphor-icons/react";
 import { InlineLoader } from "@/components/loaders";
 import { AreaChart } from "@/components/analytics/AreaChart";
-import LoadMoreButton from "@/components/LoadMoreButton";
-import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import CursorPaginationBar from "@/components/CursorPaginationBar";
+import { DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
+import { useCursorPagination } from "@/hooks/useCursorPagination";
 
 function tabButton(active: boolean, label: string, onClick: () => void, testid: string) {
   return (
@@ -57,13 +58,13 @@ export default function Reports() {
   const [dueCollectionDay, setDueCollectionDay] = useState("");
   const [dueMonth, setDueMonth] = useState(todayISO().slice(0, 7));
   const [areaPrefix, setAreaPrefix] = useState("");
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const paging = useCursorPagination({ initialPageSize: DEFAULT_PAGE_SIZE });
   const moneyTab = tab === "outstanding" || tab === "customer-credit" || tab === "collections" || tab === "statement";
   const canExport = showMoney || !moneyTab;
   const rows = data?.rows ?? [];
   const balanceListTab = tab === "outstanding" || tab === "customer-credit";
+  const pagedTab = tab === "outstanding" || tab === "customer-credit" || tab === "statement" || tab === "area";
   const fixedOutstanding = tab === "outstanding" && data?.billing_mode === "monthly_fixed";
 
   useEffect(() => {
@@ -77,8 +78,6 @@ export default function Reports() {
     setListQ("");
     setDebouncedQ("");
     setMinAmount("");
-    setNextCursor(null);
-    setHasMore(false);
     setAreaPrefix("");
     setStatementActivityOnly(false);
     setCollectionsView("received");
@@ -87,7 +86,7 @@ export default function Reports() {
   function outstandingParams(balance: "owed" | "credit", cursor?: string | null) {
     const params = new URLSearchParams({
       balance,
-      page_size: String(DEFAULT_PAGE_SIZE),
+      page_size: String(paging.pageSize),
     });
     if (debouncedQ) params.set("q", debouncedQ);
     if (minAmount.trim() !== "" && !Number.isNaN(Number(minAmount))) {
@@ -97,16 +96,17 @@ export default function Reports() {
     return params.toString();
   }
 
-  async function load(append = false) {
+  async function load(opts: { cursor?: string | null } = {}) {
     if (!showMoney && moneyTab) {
       setData({});
       return;
     }
+    setLoading(true);
     try {
       let url;
       if (tab === "daily") url = `/reports/daily-deliveries${range.start ? `?start=${range.start}&end=${range.end}` : ""}`;
-      else if (tab === "outstanding") url = `/reports/outstanding?${outstandingParams("owed")}`;
-      else if (tab === "customer-credit") url = `/reports/outstanding?${outstandingParams("credit")}`;
+      else if (tab === "outstanding") url = `/reports/outstanding?${outstandingParams("owed", opts.cursor)}`;
+      else if (tab === "customer-credit") url = `/reports/outstanding?${outstandingParams("credit", opts.cursor)}`;
       else if (tab === "collections") {
         if (collectionsView === "due") {
           const params = new URLSearchParams({ month: dueMonth, due_date: dueDate });
@@ -118,60 +118,70 @@ export default function Reports() {
       }
       else if (tab === "active") url = "/reports/active-customers";
       else if (tab === "statement") {
-        const params = new URLSearchParams({ month: statementMonth });
+        const params = new URLSearchParams({ month: statementMonth, page_size: String(paging.pageSize) });
         if (debouncedQ) params.set("q", debouncedQ);
         if (statementActivityOnly) params.set("activity_only", "true");
+        if (opts.cursor) params.set("cursor", opts.cursor);
         url = `/reports/statement?${params.toString()}`;
       } else {
-        const params = new URLSearchParams();
+        const params = new URLSearchParams({ page_size: String(paging.pageSize) });
         if (areaPrefix.trim()) params.set("area", areaPrefix.trim());
-        url = `/reports/area-summary${params.toString() ? `?${params}` : ""}`;
+        if (opts.cursor) params.set("cursor", opts.cursor);
+        url = `/reports/area-summary?${params.toString()}`;
       }
       const { data: payload } = await api.get(url);
-      if (append && balanceListTab && data?.rows) {
-        setData({
-          ...payload,
-          rows: [...(data.rows || []), ...(payload.rows || [])],
+      setData(payload);
+      if (tab === "outstanding" || tab === "customer-credit") {
+        paging.applyPageResult({
+          next_cursor: payload.next_cursor ?? null,
+          has_more: Boolean(payload.has_more),
+          total: payload.row_count,
         });
-      } else {
-        setData(payload);
-      }
-      if (balanceListTab) {
-        setNextCursor(payload.next_cursor ?? null);
-        setHasMore(Boolean(payload.has_more));
-      } else {
-        setNextCursor(null);
-        setHasMore(false);
+      } else if (tab === "statement" || tab === "area") {
+        paging.applyPageResult({
+          next_cursor: payload.next_cursor ?? null,
+          has_more: Boolean(payload.has_more),
+          total: payload.total,
+        });
       }
     } catch {
       toast.error("Failed to load report");
-      if (!append) setData(null);
-    }
-  }
-
-  async function loadMore() {
-    if (!nextCursor || !balanceListTab) return;
-    setLoadingMore(true);
-    try {
-      const balance = tab === "customer-credit" ? "credit" : "owed";
-      const { data: payload } = await api.get(`/reports/outstanding?${outstandingParams(balance, nextCursor)}`);
-      setData((prev: any) => ({
-        ...payload,
-        rows: [...(prev?.rows || []), ...(payload.rows || [])],
-        total: prev?.total ?? payload.total,
-      }));
-      setNextCursor(payload.next_cursor ?? null);
-      setHasMore(Boolean(payload.has_more));
-    } catch {
-      toast.error("Failed to load more");
+      setData(null);
     } finally {
-      setLoadingMore(false);
+      setLoading(false);
     }
   }
 
   useEffect(() => {
-    load();
-  }, [tab, range.start, range.end, statementMonth, showMoney, debouncedQ, minAmount, statementActivityOnly, areaPrefix, collectionsView, dueDate, dueCollectionDay, dueMonth]);
+    paging.resetToFirstPage();
+    load({ cursor: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset+fetch on filter identity
+  }, [tab, range.start, range.end, statementMonth, showMoney, debouncedQ, minAmount, statementActivityOnly, areaPrefix, collectionsView, dueDate, dueCollectionDay, dueMonth, paging.pageSize]);
+
+  function pagingBar(testidPrefix: string) {
+    return (
+      <CursorPaginationBar
+        currentPage={paging.currentPage}
+        totalPages={paging.totalPages}
+        from={paging.from}
+        to={paging.to}
+        total={paging.total}
+        pageSize={paging.pageSize}
+        hasMore={paging.hasMore}
+        loading={loading}
+        onPrev={() => {
+          const c = paging.goPrev();
+          if (c !== undefined) load({ cursor: c });
+        }}
+        onNext={() => {
+          const c = paging.goNext();
+          if (c !== undefined) load({ cursor: c });
+        }}
+        onPageSizeChange={(size: AllowedPageSize) => paging.setPageSize(size)}
+        testidPrefix={testidPrefix}
+      />
+    );
+  }
 
   function exportCSV() {
     if (!data || !canExport) return;
@@ -531,7 +541,7 @@ export default function Reports() {
                 </div>
               </>
             )}
-            <LoadMoreButton hasMore={hasMore} loading={loadingMore} onClick={loadMore} testid="outstanding-load-more" />
+            {pagingBar("reports-outstanding-pagination")}
           </>
         ) : tab === "customer-credit" ? (
           <>
@@ -590,7 +600,7 @@ export default function Reports() {
                 </div>
               </>
             )}
-            <LoadMoreButton hasMore={hasMore} loading={loadingMore} onClick={loadMore} testid="credit-load-more" />
+            {pagingBar("reports-customer-credit-pagination")}
           </>
         ) : tab === "collections" ? (
           <>
@@ -815,6 +825,7 @@ export default function Reports() {
                 </div>
               </>
             )}
+            {pagingBar("reports-statement-pagination")}
           </>
         ) : (
           rows.length === 0 ? (
@@ -866,6 +877,7 @@ export default function Reports() {
             </div>
           )
         )}
+        {tab === "area" ? pagingBar("reports-area-pagination") : null}
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { fmtCAD, fmtDate, todayISO, fmtDeliveryLine, fmtExtraBadge } from "@/lib/format";
 import { toast } from "sonner";
@@ -8,6 +8,9 @@ import StatusPill from "@/components/StatusPill";
 import AppSheet from "@/components/AppSheet";
 import ExtraMealsSheet from "@/components/ExtraMealsSheet";
 import MenuImageLightbox from "@/components/MenuImageLightbox";
+import CursorPaginationBar from "@/components/CursorPaginationBar";
+import { asPageEnvelope, DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
+import { useCursorPagination } from "@/hooks/useCursorPagination";
 import { CurrencyDollar, Truck, XCircle, Clock, CheckCircle, ForkKnife, Plus } from "@phosphor-icons/react";
 import Link from "next/link";
 
@@ -20,18 +23,33 @@ export default function ConsumerHome() {
   const [extraBusy, setExtraBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [menuViewing, setMenuViewing] = useState(false);
+  const deliveriesPaging = useCursorPagination({ initialPageSize: DEFAULT_PAGE_SIZE });
+
+  const loadDeliveries = useCallback(async (opts: { cursor?: string | null } = {}) => {
+    try {
+      const params = new URLSearchParams({ page_size: String(deliveriesPaging.pageSize) });
+      if (opts.cursor) params.set("cursor", opts.cursor);
+      const { data } = await api.get(`/consumer/deliveries?${params.toString()}`);
+      const page = asPageEnvelope<any>(data);
+      setDeliveries(page.items);
+      deliveriesPaging.applyPageResult(page);
+    } catch {
+      toast.error("Failed to load deliveries");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliveriesPaging.applyPageResult is stable
+  }, [deliveriesPaging.pageSize]);
 
   async function load() {
     setLoading(true);
     try {
-      const [{ data: m }, { data: d }, menuRes] = await Promise.all([
+      const [{ data: m }, menuRes] = await Promise.all([
         api.get("/consumer/me"),
-        api.get("/consumer/deliveries"),
         api.get("/consumer/menus/current").catch(() => ({ data: null })),
       ]);
       setMe(m);
-      setDeliveries(d);
       setMenu(menuRes?.data || null);
+      deliveriesPaging.resetToFirstPage();
+      await loadDeliveries({ cursor: null });
     } catch (e) {
       toast.error("Failed to load");
     } finally {
@@ -39,6 +57,11 @@ export default function ConsumerHome() {
     }
   }
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    if (!loading) loadDeliveries({ cursor: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refetch current filter on page-size change only
+  }, [deliveriesPaging.pageSize]);
 
   async function confirmCancel() {
     if (!cancelTarget) return;
@@ -233,7 +256,7 @@ export default function ConsumerHome() {
         <ul className="card-tinted divide-y divide-brand-border overflow-hidden">
           {upcoming.length === 0 ? (
             <li className="p-6 text-center text-muted-foreground text-sm">No upcoming deliveries.</li>
-          ) : upcoming.slice(0, 8).map((d) => {
+          ) : upcoming.map((d) => {
             const extraBadge = fmtExtraBadge(d);
             return (
               <li key={d.id} data-testid={`c-up-${d.id}`} className="p-4 flex flex-col gap-3 sm:flex-row sm:items-center hover:bg-brand-surface/60 transition-colors">
@@ -282,7 +305,7 @@ export default function ConsumerHome() {
         <ul className="card-tinted divide-y divide-brand-border overflow-hidden">
           {history.length === 0 ? (
             <li className="p-6 text-center text-muted-foreground text-sm">No history yet.</li>
-          ) : history.slice(0, 12).map((d) => (
+          ) : history.map((d) => (
             <li key={d.id} className="p-4 flex items-center gap-3 hover:bg-brand-surface/60 transition-colors">
               <div className="flex-1">
                 <div className="font-medium">{fmtDate(d.delivery_date)}</div>
@@ -295,6 +318,27 @@ export default function ConsumerHome() {
             </li>
           ))}
         </ul>
+        <div className="mt-2">
+          <CursorPaginationBar
+            currentPage={deliveriesPaging.currentPage}
+            totalPages={deliveriesPaging.totalPages}
+            from={deliveriesPaging.from}
+            to={deliveriesPaging.to}
+            total={deliveriesPaging.total}
+            pageSize={deliveriesPaging.pageSize}
+            hasMore={deliveriesPaging.hasMore}
+            onPrev={() => {
+              const c = deliveriesPaging.goPrev();
+              if (c !== undefined) loadDeliveries({ cursor: c });
+            }}
+            onNext={() => {
+              const c = deliveriesPaging.goNext();
+              if (c !== undefined) loadDeliveries({ cursor: c });
+            }}
+            onPageSizeChange={(size: AllowedPageSize) => deliveriesPaging.setPageSize(size)}
+            testidPrefix="consumer-deliveries-pagination"
+          />
+        </div>
       </section>
 
       <AppSheet

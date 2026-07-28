@@ -10,6 +10,9 @@ import { canMutateAdmin, canSeePricing, isDriver } from "@/lib/roles";
 import { fmtCAD } from "@/lib/format";
 import { InlineLoader, PageLoader } from "@/components/loaders";
 import RecordPaymentSheet from "@/components/RecordPaymentSheet";
+import CursorPaginationBar from "@/components/CursorPaginationBar";
+import { DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
+import { useCursorPagination } from "@/hooks/useCursorPagination";
 
 type DueRow = {
   customer_id: string;
@@ -35,8 +38,9 @@ export default function MonthlyDuesPage() {
   const [rows, setRows] = useState<DueRow[]>([]);
   const [totals, setTotals] = useState<{ due_amount?: number; overdue_amount?: number; overdue_count?: number; customer_count?: number } | null>(null);
   const [renewCustomer, setRenewCustomer] = useState<{ id: string; name: string } | null>(null);
+  const paging = useCursorPagination({ initialPageSize: DEFAULT_PAGE_SIZE });
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts: { cursor?: string | null } = {}) => {
     setLoading(true);
     try {
       const { data: prov } = await api.get("/providers/me");
@@ -49,9 +53,16 @@ export default function MonthlyDuesPage() {
         return;
       }
       setAllowed(true);
-      const { data } = await api.get("/reports/monthly-dues");
+      const params = new URLSearchParams({ page_size: String(paging.pageSize) });
+      if (opts.cursor) params.set("cursor", opts.cursor);
+      const { data } = await api.get(`/reports/monthly-dues?${params.toString()}`);
       setRows(Array.isArray(data?.rows) ? data.rows : []);
       setTotals(data?.totals || null);
+      paging.applyPageResult({
+        next_cursor: data?.next_cursor ?? null,
+        has_more: Boolean(data?.has_more),
+        total: data?.total,
+      });
     } catch (e: any) {
       const detail = e?.response?.data?.detail;
       if (e?.response?.status === 400) {
@@ -63,15 +74,23 @@ export default function MonthlyDuesPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- paging.applyPageResult is stable
+  }, [paging.pageSize]);
 
   useEffect(() => {
     if (isDriver(session)) {
       router.replace("/provider/deliveries");
       return;
     }
-    void load();
+    paging.resetToFirstPage();
+    void load({ cursor: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset+fetch on filter identity
   }, [session, router, load]);
+
+  const reloadCurrentPage = useCallback(() => {
+    const c = paging.currentPageIndex > 0 ? paging.cursorHistory[paging.currentPageIndex - 1] ?? null : null;
+    void load({ cursor: c });
+  }, [paging.currentPageIndex, paging.cursorHistory, load]);
 
   if (loading && !rows.length && !totals) {
     return <PageLoader testid="monthly-dues-loading" label="Loading customer subscriptions…" />;
@@ -106,7 +125,7 @@ export default function MonthlyDuesPage() {
         <button
           type="button"
           data-testid="monthly-dues-refresh"
-          onClick={() => void load()}
+          onClick={reloadCurrentPage}
           className="h-10 px-4 rounded-full border border-brand-border bg-white text-sm font-medium inline-flex items-center gap-1.5 cursor-pointer hover:bg-brand-surface"
         >
           <ArrowClockwise size={16} /> Refresh
@@ -253,13 +272,34 @@ export default function MonthlyDuesPage() {
         )}
       </div>
 
+      <CursorPaginationBar
+        currentPage={paging.currentPage}
+        totalPages={paging.totalPages}
+        from={paging.from}
+        to={paging.to}
+        total={paging.total}
+        pageSize={paging.pageSize}
+        hasMore={paging.hasMore}
+        loading={loading}
+        onPrev={() => {
+          const c = paging.goPrev();
+          if (c !== undefined) load({ cursor: c });
+        }}
+        onNext={() => {
+          const c = paging.goNext();
+          if (c !== undefined) load({ cursor: c });
+        }}
+        onPageSizeChange={(size: AllowedPageSize) => paging.setPageSize(size)}
+        testidPrefix="monthly-dues-pagination"
+      />
+
       <RecordPaymentSheet
         open={!!renewCustomer}
         onClose={() => setRenewCustomer(null)}
         lockedCustomer={renewCustomer}
         onRecorded={() => {
           setRenewCustomer(null);
-          void load();
+          reloadCurrentPage();
         }}
       />
     </div>

@@ -103,6 +103,8 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 | Statuses | `pending`, `delivered`, `missed`, `cancelled`, `paused` |
 | Status filter UI | Compact horizontal chips with counts (mobile scroll); **default filter = Pending** |
 | Provider mark | One-tap delivered / missed / cancelled (**today or past only**; not future) |
+| Delivery proof photo | Optional camera/gallery on **single** mark delivered (`/provider/deliveries` + dashboard quick Deliver); stored as `delivery_image_url` (R2 `deliveries/` prefix or base64 fallback); **Mark all delivered** skips photo |
+| Delivery proof view | Thumbnail + **View** on deliveries list (Delivered/All tabs), customer 360 Deliveries tab, and dashboard delivered rows; in-app sheet with full image + open in new tab |
 | Consumer cancel | Upcoming `pending` only; blocked for past dates; within `cutoff_hours` before assumed **local noon** (provider timezone) |
 | Adjust meal | Consumer or provider admin sets **absolute** tiffin count (1–20) and/or **meal type** on a pending stop for a date; `extra_quantity = max(0, quantity − schedule base)`; one stop per customer×date×slot; consumer uses same cutoff as cancel; type change refreshes `meal_price` from provider meal types (provider may override price); UI is **preview-then-save** (Show summary projects kitchen/own-day plan without writing; Save calls adjust); adjust response still includes day summary. Legacy `POST …/extra` remains as additive wrapper. |
 | Kitchen cook plan | `/provider/kitchen` for admin/driver/viewer; `GET /reports/kitchen-summary` (shared helper also returned from adjust); counts by meal type × slot for pending+delivered; pack list with CRM notes; delivery snapshots `meal_type_id`/`meal_type_name` at generate/adjust |
@@ -113,14 +115,14 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 |---------|----------|
 | Consumer submit | Multipart: `amount`, `reference` (unique per tenant), optional `screenshot` (jpeg/png/webp ≤5MB) |
 | Provider record | Admin multipart `POST /payments`: `customer_id`, `amount`, `reference`, optional screenshot — saved as **verified** immediately (`source=provider_recorded`) for offline Interac |
-| Screenshot / images UI | **Camera** (mobile rear camera via `capture`) or **Upload** (gallery/files) on payment screenshots, avatars, and kitchen logo |
+| Screenshot / images UI | **Camera** (mobile rear camera via `capture`) or **Upload** (gallery/files) on payment screenshots, avatars, kitchen logo, and optional delivery proof photos |
 | Screenshot storage | Cloudflare R2 when configured; else **base64 data URL** fallback |
 | Provider verify | Sets verified; notifies consumer (DB + email if Resend set) |
 | Provider reject | Requires reason; notifies consumer |
 | Status filter UI | Compact horizontal chips (Pending / Verified / Rejected / All); **default = Pending**; label-only (no page-local counts) |
 | Outstanding | `opening_balance` + Σ `meal_price × quantity` for `delivered` − Σ `amount` for `verified` payments (quantity defaults to 1; opening_balance signed) |
 | Meal schedule | Customer `meal_slots` (uncategorized default, or lunch and/or dinner) + `slot_schedules` qty per slot; Same every day / Custom per day; dual slots = two stops/day with allocated qty (not duplicated); optional per-slot drivers |
-| List pagination | Provider payments + customers CRM use cursor pages (Load more, page size 25); statement report uses batched aggregations |
+| List pagination | Cursor Prev/Next + per-page **10/20/50/100/200** via `CursorPaginationBar`. CRM/payments/reports/consumer default **20**; deliveries / kitchen pack / route stops ops default **200**. Envelope: `{items\|rows, next_cursor, has_more, total\|row_count, page_size}` |
 
 ### 4.5b Monthly flat billing (opt-in, tenant-wide)
 
@@ -146,7 +148,7 @@ When enabled, **all customers** on that tenant switch to monthly-period billing;
 - Analysis (`/provider/analysis`) is the period business-health report: presets **7d / 30d / 90d / MTD / Last month / YTD** plus **custom From–To** (max 366 days); optional **meal slot** filter scopes period delivery KPIs/series only. Outstanding receivables and Customer credit stay as-of today. Charts, receivables aging, top outstanding, top collectors, area concentration, rule-based highlights. Top customer rows deep-link to `/provider/customers/{id}?tab=analysis`.
 - Analysis and customer Analysis use shared KPI/section skeletons on first load; period changes keep previous KPIs visible (stale-while-revalidate) with a small spinner on the period toggle, then staggered reveal of charts/lists.
 - Per-customer Analysis (customer detail tab) reuses the same analytics kit (including custom dates + meal slot) via `GET /customers/{id}/insights` plus the activity timeline.
-- Outstanding balances (**owed only**, `outstanding > 0`; highest amount first; search / min amount / Load more). Default Reports tab. Under **Fixed Monthly**, Outstanding shows **overdue only** (past collection day) with renewal date + overdue-by columns; per-meal and Adjustable unchanged.  
+- Outstanding balances (**owed only**, `outstanding > 0`; highest amount first; search / min amount / cursor Prev–Next + page size). Default Reports tab. Under **Fixed Monthly**, Outstanding shows **overdue only** (past collection day) with renewal date + overdue-by columns; per-meal and Adjustable unchanged.  
 - Customer credit (advance balances, `outstanding < 0`; largest credit first; same search / min / pagination)  
 - Daily deliveries  
 - Collections (payments received by submission date)  

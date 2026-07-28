@@ -27,6 +27,9 @@ import { useAuth } from "@/lib/auth";
 import { canMutateAdmin } from "@/lib/roles";
 import { mealSlotBadgeLabel } from "@/lib/mealSlots";
 import { InlineLoader } from "@/components/loaders";
+import CursorPaginationBar from "@/components/CursorPaginationBar";
+import { OPS_DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
+import { useCursorPagination } from "@/hooks/useCursorPagination";
 
 type MealSlot = "uncategorized" | "lunch" | "dinner";
 
@@ -145,6 +148,8 @@ export default function RoutePlanningPage() {
   const [expandedPools, setExpandedPools] = useState<Set<string>>(new Set());
   const [assignTab, setAssignTab] = useState<"quick" | "sequence">("quick");
   const [activePoolKey, setActivePoolKey] = useState<string | null>(null);
+  const [showOptimizeWarning, setShowOptimizeWarning] = useState(false);
+  const stopsPaging = useCursorPagination({ initialPageSize: OPS_DEFAULT_PAGE_SIZE });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -458,6 +463,36 @@ export default function RoutePlanningPage() {
     return sections.find((s) => s.key === activePoolKey) || null;
   }, [sections, activePoolKey]);
 
+  // Reset to page 1 whenever the expanded pool changes
+  useEffect(() => {
+    stopsPaging.resetToFirstPage();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset on pool switch only
+  }, [activePoolKey]);
+
+  // Client-side pagination over the active pool's stops (no API cursor involved)
+  useEffect(() => {
+    if (!activeSection) return;
+    const total = activeSection.stops.length;
+    const start = (stopsPaging.currentPage - 1) * stopsPaging.pageSize;
+    if (total > 0 && start >= total) {
+      stopsPaging.resetToFirstPage();
+      return;
+    }
+    const hasMore = stopsPaging.currentPage * stopsPaging.pageSize < total;
+    stopsPaging.applyPageResult({
+      total,
+      has_more: hasMore,
+      next_cursor: hasMore ? `p${stopsPaging.currentPage}` : null,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- applyPageResult/resetToFirstPage are stable
+  }, [activeSection, stopsPaging.currentPage, stopsPaging.pageSize]);
+
+  const pagedStops = useMemo(() => {
+    if (!activeSection) return [];
+    const start = (stopsPaging.currentPage - 1) * stopsPaging.pageSize;
+    return activeSection.stops.slice(start, start + stopsPaging.pageSize);
+  }, [activeSection, stopsPaging.currentPage, stopsPaging.pageSize]);
+
   if (!admin) {
     return (
       <div className="animate-fade-in-up p-4">
@@ -584,7 +619,7 @@ export default function RoutePlanningPage() {
                   type="button"
                   data-testid="route-optimize"
                   disabled={busy}
-                  onClick={() => void runOptimize()}
+                  onClick={() => setShowOptimizeWarning(true)}
                   className="pill-btn btn-primary h-8 text-[11px] px-3.5 gap-1 disabled:opacity-50"
                 >
                   <Path size={14} /> Optimize all
@@ -1016,7 +1051,8 @@ export default function RoutePlanningPage() {
                       </p>
                     ) : (
                       <ul className="divide-y divide-brand-border/60">
-                        {activeSection.stops.map((s, idx) => {
+                        {pagedStops.map((s, localIdx) => {
+                          const idx = (stopsPaging.currentPage - 1) * stopsPaging.pageSize + localIdx;
                           const geoOk = s.geocode_status === "ok";
                           const geoFail = s.geocode_status === "failed";
                           const needsPlace = s.delivery_sequence == null || !geoOk;
@@ -1092,6 +1128,23 @@ export default function RoutePlanningPage() {
                         })}
                       </ul>
                     )}
+                    {activeSection.stops.length > 0 ? (
+                      <div className="px-3 py-2 border-t border-brand-border">
+                        <CursorPaginationBar
+                          currentPage={stopsPaging.currentPage}
+                          totalPages={stopsPaging.totalPages}
+                          from={stopsPaging.from}
+                          to={stopsPaging.to}
+                          total={stopsPaging.total}
+                          pageSize={stopsPaging.pageSize}
+                          hasMore={stopsPaging.hasMore}
+                          onPrev={() => stopsPaging.goPrev()}
+                          onNext={() => stopsPaging.goNext()}
+                          onPageSizeChange={(size: AllowedPageSize) => stopsPaging.setPageSize(size)}
+                          testidPrefix={`route-pool-${activeSection.key}-pagination`}
+                        />
+                      </div>
+                    ) : null}
                   </div>
                 ) : (
                   /* Hint when no pool is expanded */
@@ -1158,6 +1211,49 @@ export default function RoutePlanningPage() {
             >
               Assign
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════ */}
+      {/* OPTIMIZE WARNING MODAL                                */}
+      {/* ══════════════════════════════════════════════════════ */}
+      {showOptimizeWarning && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl p-5 sm:p-6 max-w-sm w-full shadow-xl flex flex-col gap-4">
+            <div className="flex items-center gap-2 text-amber-600">
+              <WarningCircle size={24} weight="fill" />
+              <h3 className="font-bold text-lg text-foreground">Optimize Routes</h3>
+            </div>
+            <div className="text-sm text-muted-foreground flex flex-col gap-2">
+              <p>
+                All routes will be marked as unassigned. All driver linkage will be reset.
+              </p>
+              <p>
+                You will need to assign all routes to a driver again. Are you sure you want to proceed?
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 mt-2">
+              <button
+                type="button"
+                className="pill-btn btn-outline h-9 text-xs px-4"
+                onClick={() => setShowOptimizeWarning(false)}
+                disabled={busy}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="pill-btn bg-amber-600 text-white hover:bg-amber-700 h-9 text-xs px-4 disabled:opacity-50"
+                onClick={() => {
+                  setShowOptimizeWarning(false);
+                  void runOptimize();
+                }}
+                disabled={busy}
+              >
+                Yes, optimize all
+              </button>
+            </div>
           </div>
         </div>
       )}

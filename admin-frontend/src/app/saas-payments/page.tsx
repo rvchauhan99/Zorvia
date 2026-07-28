@@ -4,7 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import AdminShell from "@/components/AdminShell";
+import CursorPaginationBar from "@/components/CursorPaginationBar";
 import { api } from "@/lib/api";
+import { asPageEnvelope, DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { useCursorPagination } from "@/hooks/useCursorPagination";
 
 type StatusFilter = "pending" | "approved" | "rejected";
 
@@ -12,22 +15,35 @@ export default function SaasPaymentsPage() {
   const [status, setStatus] = useState<StatusFilter>("pending");
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const paging = useCursorPagination({ initialPageSize: DEFAULT_PAGE_SIZE });
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { data } = await api.get(`/platform/saas-payments?status=${status}`);
-      setRows(data.rows || []);
-    } catch (e: any) {
-      toast.error(e?.response?.data?.detail || "Failed to load");
-    } finally {
-      setLoading(false);
-    }
-  }, [status]);
+  const load = useCallback(
+    async (opts: { cursor?: string | null } = {}) => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams();
+        params.set("status", status);
+        params.set("page_size", String(paging.pageSize));
+        if (opts.cursor) params.set("cursor", opts.cursor);
+        const { data } = await api.get(`/platform/saas-payments?${params}`);
+        const page = asPageEnvelope<any>(data);
+        setRows(page.items);
+        paging.applyPageResult(page);
+      } catch (e: any) {
+        toast.error(e?.response?.data?.detail || "Failed to load");
+      } finally {
+        setLoading(false);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [status, paging.pageSize],
+  );
 
   useEffect(() => {
-    load();
-  }, [load]);
+    paging.resetToFirstPage();
+    load({ cursor: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, paging.pageSize]);
 
   return (
     <AdminShell title="SaaS payments">
@@ -82,6 +98,29 @@ export default function SaasPaymentsPage() {
             </ul>
           )}
         </div>
+
+        {rows.length > 0 && (
+          <CursorPaginationBar
+            currentPage={paging.currentPage}
+            totalPages={paging.totalPages}
+            from={paging.from}
+            to={paging.to}
+            total={paging.total}
+            pageSize={paging.pageSize}
+            hasMore={paging.hasMore}
+            loading={loading}
+            onPrev={() => {
+              const c = paging.goPrev();
+              if (c !== undefined) load({ cursor: c });
+            }}
+            onNext={() => {
+              const c = paging.goNext();
+              if (c !== undefined) load({ cursor: c });
+            }}
+            onPageSizeChange={(size) => paging.setPageSize(size)}
+            testidPrefix="saas-payments"
+          />
+        )}
       </div>
     </AdminShell>
   );

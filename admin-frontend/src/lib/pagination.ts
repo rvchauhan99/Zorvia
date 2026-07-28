@@ -10,7 +10,6 @@ export type PageEnvelope<T> = {
 };
 
 export const DEFAULT_PAGE_SIZE = 20;
-export const OPS_DEFAULT_PAGE_SIZE = 200;
 export const MAX_PAGE_SIZE = 200;
 export const ALLOWED_PAGE_SIZES = [10, 20, 50, 100, 200] as const;
 export type AllowedPageSize = (typeof ALLOWED_PAGE_SIZES)[number];

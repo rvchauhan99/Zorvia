@@ -1,11 +1,14 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { fmtCAD, fmtDateTime, todayISO } from "@/lib/format";
 import { toast } from "sonner";
 import StatusPill from "@/components/StatusPill";
 import ImageSourceField from "@/components/ImageSourceField";
+import CursorPaginationBar from "@/components/CursorPaginationBar";
+import { asPageEnvelope, DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
+import { useCursorPagination } from "@/hooks/useCursorPagination";
 import { DownloadSimple } from "@phosphor-icons/react";
 
 function toCSV(rows: any[]) {
@@ -24,19 +27,44 @@ export default function ConsumerPayments() {
   const [form, setForm] = useState<{amount: string; reference: string; file: File | null}>({ amount: "", reference: "", file: null });
   const [submitting, setSubmitting] = useState(false);
   const input = "h-11 px-4 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all";
+  const paging = useCursorPagination({ initialPageSize: DEFAULT_PAGE_SIZE });
+
+  const loadPayments = useCallback(async (opts: { cursor?: string | null } = {}) => {
+    try {
+      const params = new URLSearchParams({ page_size: String(paging.pageSize) });
+      if (opts.cursor) params.set("cursor", opts.cursor);
+      const { data } = await api.get(`/consumer/payments?${params.toString()}`);
+      const page = asPageEnvelope<any>(data);
+      setPayments(page.items);
+      paging.applyPageResult(page);
+    } catch {
+      toast.error("Failed to load payments");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- paging.applyPageResult is stable
+  }, [paging.pageSize]);
 
   async function load() {
-    const [{ data: m }, { data: p }] = await Promise.all([
-      api.get("/consumer/me"), api.get("/consumer/payments"),
-    ]);
+    const { data: m } = await api.get("/consumer/me");
     setMe(m);
-    setPayments(p);
     const suggested = Number(m?.suggested_payment_cad);
     if (suggested > 0) {
       setForm((f) => (f.amount ? f : { ...f, amount: suggested.toFixed(2) }));
     }
+    paging.resetToFirstPage();
+    await loadPayments({ cursor: null });
   }
+  const didMount = useRef(false);
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    if (!didMount.current) {
+      didMount.current = true;
+      return;
+    }
+    paging.resetToFirstPage();
+    loadPayments({ cursor: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refetch current filter on page-size change only
+  }, [paging.pageSize]);
 
   async function downloadStatement() {
     try {
@@ -152,6 +180,27 @@ export default function ConsumerPayments() {
             </li>
           ))}
         </ul>
+        <div className="mt-2">
+          <CursorPaginationBar
+            currentPage={paging.currentPage}
+            totalPages={paging.totalPages}
+            from={paging.from}
+            to={paging.to}
+            total={paging.total}
+            pageSize={paging.pageSize}
+            hasMore={paging.hasMore}
+            onPrev={() => {
+              const c = paging.goPrev();
+              if (c !== undefined) loadPayments({ cursor: c });
+            }}
+            onNext={() => {
+              const c = paging.goNext();
+              if (c !== undefined) loadPayments({ cursor: c });
+            }}
+            onPageSizeChange={(size: AllowedPageSize) => paging.setPageSize(size)}
+            testidPrefix="consumer-payments-pagination"
+          />
+        </div>
       </section>
     </div>
   );

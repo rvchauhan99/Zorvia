@@ -11,7 +11,11 @@ import { Truck, Receipt, CurrencyDollar, Users, ArrowRight, Copy, CheckCircle, C
 import { toast } from "sonner";
 import StatusPill from "@/components/StatusPill";
 import AddExtraMealSheet from "@/components/AddExtraMealSheet";
+import MarkDeliveredSheet from "@/components/MarkDeliveredSheet";
+import { DeliveryProofThumbButton, DeliveryProofSheet, type DeliveryProofTarget } from "@/components/DeliveryProofViewer";
 import { InlineLoader, KpiSkeleton } from "@/components/loaders";
+import { markDeliveryWithProof } from "@/lib/deliveries";
+import { asPageEnvelope } from "@/lib/pagination";
 
 const ONBOARD_KEY = "zorvia_provider_onboarded";
 
@@ -57,6 +61,8 @@ export default function ProviderDashboard() {
   const [dismissedOnboard, setDismissedOnboard] = useState(false);
   const [extraOpen, setExtraOpen] = useState(false);
   const [extraLocked, setExtraLocked] = useState<{ id: string; name: string } | null>(null);
+  const [deliverTarget, setDeliverTarget] = useState<any | null>(null);
+  const [viewingProof, setViewingProof] = useState<DeliveryProofTarget | null>(null);
 
   async function loadSummary() {
     setSummaryLoading(true);
@@ -85,8 +91,11 @@ export default function ProviderDashboard() {
   async function loadDeliveries() {
     setDeliveriesLoading(true);
     try {
-      const { data: dels } = await api.get(`/deliveries?date=${todayISO()}`);
-      setTodayDeliveries(sortDeliveries(dels));
+      const { data } = await api.get("/deliveries", {
+        params: { date: todayISO(), page_size: 10, status: "pending" },
+      });
+      const page = asPageEnvelope<any>(data);
+      setTodayDeliveries(sortDeliveries(page.items));
     } catch {
       toast.error("Failed to load today's deliveries");
     } finally {
@@ -134,6 +143,18 @@ export default function ProviderDashboard() {
       void loadSummary();
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || "Failed");
+    }
+  }
+
+  async function markDeliveredWithProof(id: string, file: File | null) {
+    try {
+      await markDeliveryWithProof(id, file);
+      toast.success("Marked delivered");
+      void loadDeliveries();
+      void loadSummary();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || "Failed to mark delivered");
+      throw e;
     }
   }
 
@@ -290,7 +311,7 @@ export default function ProviderDashboard() {
             <div className="p-6 text-center text-sm text-muted-foreground">No deliveries today. Add customers with delivery days that include today.</div>
           ) : (
             <ul className="flex flex-col divide-y divide-brand-border animate-fade-in-up">
-              {todayDeliveries.slice(0, 6).map((d) => (
+              {todayDeliveries.map((d) => (
                 <li key={d.id} data-testid={`dashboard-del-${d.id}`} className="py-3 flex flex-col gap-2 sm:flex-row sm:items-center">
                   <div className="flex-1 min-w-0">
                     {d.customer_id ? (
@@ -317,17 +338,31 @@ export default function ProviderDashboard() {
                         >
                           <Plus size={14} /> Adjust
                         </button>
-                        <button data-testid={`quick-delivered-${d.id}`} onClick={() => markDelivery(d.id, "delivered")} className="h-11 min-h-[44px] px-4 rounded-full bg-secondary text-secondary-foreground text-sm font-medium active:scale-95 transition-transform cursor-pointer hover:bg-brand-sageDark">Deliver</button>
+                        <button data-testid={`quick-delivered-${d.id}`} onClick={() => setDeliverTarget(d)} className="h-11 min-h-[44px] px-4 rounded-full bg-secondary text-secondary-foreground text-sm font-medium active:scale-95 transition-transform cursor-pointer hover:bg-brand-sageDark">Deliver</button>
                         <button data-testid={`quick-missed-${d.id}`} onClick={() => markDelivery(d.id, "missed")} className="h-11 min-h-[44px] px-4 rounded-full border border-destructive/40 bg-white text-destructive text-sm font-medium cursor-pointer hover:bg-destructive/10">Miss</button>
                       </div>
                     ) : (
-                      <StatusPill status={d.status} />
+                      <div className="flex items-center gap-2">
+                        {d.delivery_image_url ? (
+                          <DeliveryProofThumbButton delivery={d} onView={setViewingProof} compact />
+                        ) : null}
+                        <StatusPill status={d.status} />
+                      </div>
                     )}
                   </div>
                 </li>
               ))}
             </ul>
           )}
+          {!deliveriesLoading && todayDeliveries.length > 0 ? (
+            <Link
+              href="/provider/deliveries"
+              data-testid="dashboard-view-all-deliveries"
+              className="mt-3 inline-flex items-center gap-1 text-sm text-primary hover:underline"
+            >
+              View all deliveries <ArrowRight size={14} />
+            </Link>
+          ) : null}
         </div>
 
         <div className={`card-tinted p-4 sm:p-5 ${summaryLoading && !summary ? "opacity-70" : ""}`}>
@@ -364,6 +399,15 @@ export default function ProviderDashboard() {
           <button data-testid="dashboard-open-reports" onClick={() => router.push("/provider/reports")} className="mt-5 w-full pill-btn btn-outline cursor-pointer">Open reports</button>
         </div>
       </div>
+
+      <MarkDeliveredSheet
+        open={!!deliverTarget}
+        onClose={() => setDeliverTarget(null)}
+        delivery={deliverTarget ? { id: deliverTarget.id, customer_name: deliverTarget.customer_name } : null}
+        onMark={markDeliveredWithProof}
+      />
+
+      <DeliveryProofSheet delivery={viewingProof} onClose={() => setViewingProof(null)} />
 
       <AddExtraMealSheet
         open={extraOpen}

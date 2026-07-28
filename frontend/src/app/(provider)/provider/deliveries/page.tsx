@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -13,6 +13,12 @@ import ExtraMealsSheet from "@/components/ExtraMealsSheet";
 import AddExtraMealSheet from "@/components/AddExtraMealSheet";
 import { StatusFilterCards } from "@/components/StatusFilterCards";
 import { InlineLoader } from "@/components/loaders";
+import MarkDeliveredSheet from "@/components/MarkDeliveredSheet";
+import { DeliveryProofThumbButton, DeliveryProofSheet, type DeliveryProofTarget } from "@/components/DeliveryProofViewer";
+import CursorPaginationBar from "@/components/CursorPaginationBar";
+import { markDeliveryWithProof } from "@/lib/deliveries";
+import { asPageEnvelope, OPS_DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
+import { useCursorPagination } from "@/hooks/useCursorPagination";
 import { ArrowLeft, ArrowRight, CheckCircle, XCircle, Prohibit, CaretUp, CaretDown, MapPin, Plus } from "@phosphor-icons/react";
 
 const OFFLINE_QUEUE_KEY = "tiffin_delivery_status_queue";
@@ -73,30 +79,71 @@ export default function Deliveries() {
   const [extraBusy, setExtraBusy] = useState(false);
   const [quickExtraOpen, setQuickExtraOpen] = useState(false);
   const [mealTypes, setMealTypes] = useState<{ id: string; name: string; price: number }[]>([]);
+  const [deliverTarget, setDeliverTarget] = useState<any | null>(null);
+  const [viewingProof, setViewingProof] = useState<DeliveryProofTarget | null>(null);
+  const [summary, setSummary] = useState<Record<string, number>>({
+    pending: 0, delivered: 0, missed: 0, cancelled: 0, paused: 0, total: 0, meals: 0,
+  });
+  const paging = useCursorPagination({ initialPageSize: OPS_DEFAULT_PAGE_SIZE });
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q.trim()), 300);
     return () => clearTimeout(t);
   }, [q]);
 
-  const load = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
+  const fetchPage = useCallback(async (opts: { cursor?: string | null; silent?: boolean; pageSize?: number } = {}) => {
+    if (!opts.silent) setLoading(true);
     try {
-      const params: Record<string, string> = { date };
+      const params: Record<string, string> = {
+        date,
+        page_size: String(opts.pageSize ?? paging.pageSize),
+      };
       if (debouncedQ) params.q = debouncedQ;
       if (!isDriver && driverId) params.driver_id = driverId;
       if (mealSlot && mealSlot !== "all") params.meal_slot = mealSlot;
-      // Status stays client-side so chip counts stay accurate for the filtered day slice.
-      const { data } = await api.get(`/deliveries`, { params });
-      setItems(sortDeliveries(Array.isArray(data) ? data : []));
-    } catch {
-      if (!silent) toast.error("Failed to load deliveries");
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  }, [date, debouncedQ, driverId, mealSlot, isDriver]);
+      if (filter && filter !== "all") params.status = filter;
+      if (opts.cursor) params.cursor = opts.cursor;
+      const sumParams: Record<string, string> = { date };
+      if (debouncedQ) sumParams.q = debouncedQ;
+      if (!isDriver && driverId) sumParams.driver_id = driverId;
+      if (mealSlot && mealSlot !== "all") sumParams.meal_slot = mealSlot;
 
-  useEffect(() => { load(); }, [load]);
+      const [{ data }, sumRes] = await Promise.all([
+        api.get(`/deliveries`, { params }),
+        api.get(`/deliveries/summary`, { params: sumParams }).catch(() => ({ data: null })),
+      ]);
+      const page = asPageEnvelope<any>(data);
+      setItems(page.items);
+      paging.applyPageResult(page);
+      if (sumRes?.data) {
+        setSummary({
+          pending: Number(sumRes.data.pending) || 0,
+          delivered: Number(sumRes.data.delivered) || 0,
+          missed: Number(sumRes.data.missed) || 0,
+          cancelled: Number(sumRes.data.cancelled) || 0,
+          paused: Number(sumRes.data.paused) || 0,
+          total: Number(sumRes.data.total) || 0,
+          meals: Number(sumRes.data.meals) || 0,
+        });
+      }
+    } catch {
+      if (!opts.silent) toast.error("Failed to load deliveries");
+    } finally {
+      if (!opts.silent) setLoading(false);
+    }
+  }, [date, debouncedQ, driverId, mealSlot, isDriver, filter, paging.pageSize, paging.applyPageResult]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    paging.resetToFirstPage();
+    fetchPage({ cursor: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset+fetch on filter identity
+  }, [date, debouncedQ, driverId, mealSlot, filter, paging.pageSize]);
+
+  const load = useCallback(async (silent = false) => {
+    const c = paging.currentPageIndex > 0 ? paging.cursorHistory[paging.currentPageIndex - 1] ?? null : null;
+    await fetchPage({ cursor: c, silent });
+  }, [fetchPage, paging.currentPageIndex, paging.cursorHistory]);
 
   useEffect(() => {
     let cancelled = false;
@@ -171,12 +218,46 @@ export default function Deliveries() {
     return () => window.removeEventListener("online", onOnline);
   }, [flushQueue]);
 
+  async function markDelivered(id: string, file: File | null) {
+    if (!canMutate) return;
+    setItems((it) => it.map((d) => (d.id === id ? { ...d, status: "delivered" } : d)));
+    try {
+      const data = await markDeliveryWithProof(id, file);
+      setItems((it) =>
+        it.map((d) =>
+          d.id === id ? { ...d, ...data, status: "delivered" } : d,
+        ),
+      );
+      toast.success("Marked delivered");
+      void load(true);
+    } catch (e: any) {
+      if (!file && (!navigator.onLine || !e?.response)) {
+        const q = readQueue().filter((x) => x.id !== id);
+        q.push({ id, status: "delivered" });
+        writeQueue(q);
+        setQueueLen(q.length);
+        toast.message("Saved offline — will sync when online");
+      } else {
+        toast.error(e?.response?.data?.detail || "Failed");
+        load();
+        throw e;
+      }
+    }
+  }
+
   async function mark(id: string, status: string) {
     if (!canMutate) return;
-    setItems((it) => sortDeliveries(it.map((d) => (d.id === id ? { ...d, status } : d))));
+    setItems((it) =>
+      it.map((d) =>
+        d.id === id
+          ? { ...d, status, ...(status === "pending" ? { delivery_image_url: null } : {}) }
+          : d,
+      ),
+    );
     try {
       await api.patch(`/deliveries/${id}`, { status });
       toast.success(`Marked ${status}`);
+      void load(true);
     } catch (e: any) {
       if (!navigator.onLine || !e?.response) {
         const q = readQueue().filter((x) => x.id !== id);
@@ -193,14 +274,21 @@ export default function Deliveries() {
 
   async function markAllDelivered() {
     if (!canMutate) return;
-    const ids = items.filter((d) => d.status === "pending").map((d) => d.id);
-    if (!ids.length) {
-      toast.message("No pending deliveries");
-      setConfirmBulkDeliver(false);
-      return;
-    }
     setBulkBusy(true);
     try {
+      // Legacy full list for pending IDs in current filter context (no page_size)
+      const params: Record<string, string> = { date, status: "pending" };
+      if (debouncedQ) params.q = debouncedQ;
+      if (!isDriver && driverId) params.driver_id = driverId;
+      if (mealSlot && mealSlot !== "all") params.meal_slot = mealSlot;
+      const { data } = await api.get(`/deliveries`, { params });
+      const pending = Array.isArray(data) ? data : asPageEnvelope<any>(data).items;
+      const ids = pending.map((d: any) => d.id).filter(Boolean);
+      if (!ids.length) {
+        toast.message("No pending deliveries");
+        setConfirmBulkDeliver(false);
+        return;
+      }
       await api.post("/deliveries/bulk-status", { ids, status: "delivered" });
       toast.success(`Marked ${ids.length} delivered`);
       setConfirmBulkDeliver(false);
@@ -214,17 +302,18 @@ export default function Deliveries() {
 
   async function reorder(id: string, direction: -1 | 1) {
     if (!canMutate) return;
-    const ordered = sortDeliveries(items);
-    const idx = ordered.findIndex((d) => d.id === id);
-    const swap = idx + direction;
-    if (idx < 0 || swap < 0 || swap >= ordered.length) return;
-    const next = [...ordered];
-    [next[idx], next[swap]] = [next[swap], next[idx]];
-    const ordered_ids = next.map((d) => d.id);
-    setItems(next.map((d, i) => ({ ...d, route_order: i })));
+    // Load full day list for correct route order, then apply swap among full set
     try {
-      const { data } = await api.patch("/deliveries/route-order", { date, ordered_ids });
-      setItems(sortDeliveries(data));
+      const { data: raw } = await api.get(`/deliveries`, { params: { date } });
+      const full = sortDeliveries(Array.isArray(raw) ? raw : asPageEnvelope<any>(raw).items);
+      const idx = full.findIndex((d) => d.id === id);
+      const swap = idx + direction;
+      if (idx < 0 || swap < 0 || swap >= full.length) return;
+      const next = [...full];
+      [next[idx], next[swap]] = [next[swap], next[idx]];
+      const ordered_ids = next.map((d) => d.id);
+      await api.patch("/deliveries/route-order", { date, ordered_ids });
+      load();
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || "Reorder failed");
       load();
@@ -265,11 +354,8 @@ export default function Deliveries() {
     setDate(d.toISOString().slice(0, 10));
   }
 
-  const counts = items.reduce((a: any, d: any) => { a[d.status] = (a[d.status] || 0) + 1; return a; }, {});
-  const filtered = useMemo(() => {
-    const base = filter === "all" ? items : items.filter((d) => d.status === filter);
-    return sortDeliveries(base);
-  }, [items, filter]);
+  const counts = summary;
+  const filtered = items;
 
   const today = todayISO();
   const isFutureDate = date > today;
@@ -277,26 +363,10 @@ export default function Deliveries() {
 
   const nextPending = canMarkStatuses ? items.find((d) => d.status === "pending") : undefined;
 
-  const mealsToday = useMemo(
-    () => items.reduce((sum, d) => sum + deliveryQty(d), 0),
-    [items],
-  );
-
-  const mealsBySlot = useMemo(() => {
-    const out = { lunch: 0, dinner: 0, uncategorized: 0 };
-    for (const d of items) {
-      const slot = (d.meal_slot || "uncategorized") as keyof typeof out;
-      const key = slot in out ? slot : "uncategorized";
-      out[key] += deliveryQty(d);
-    }
-    return out;
-  }, [items]);
-
-  const showSlotBreakdown =
-    mealsBySlot.lunch > 0 || mealsBySlot.dinner > 0;
+  const mealsToday = summary.meals || 0;
 
   const statusFilters = [
-    { k: "all", label: "All", count: items.length },
+    { k: "all", label: "All", count: counts.total || 0 },
     { k: "pending", label: "Pending", count: counts.pending || 0 },
     { k: "delivered", label: "Delivered", count: counts.delivered || 0 },
     { k: "missed", label: "Missed", count: counts.missed || 0 },
@@ -310,14 +380,9 @@ export default function Deliveries() {
         <div>
           <span className="label-overline">Route · by order / area</span>
           <h1 className="font-display font-black text-2xl sm:text-4xl mt-0.5 sm:mt-1">Deliveries</h1>
-          {!loading && items.length > 0 ? (
+          {!loading && (summary.total || 0) > 0 ? (
             <p className="text-xs text-muted-foreground mt-1" data-testid="deliveries-meals-total">
-              {items.length} stop{items.length === 1 ? "" : "s"} · {mealsToday} meal{mealsToday === 1 ? "" : "s"}
-              {showSlotBreakdown
-                ? ` · Lunch ${mealsBySlot.lunch} · Dinner ${mealsBySlot.dinner}${
-                    mealsBySlot.uncategorized > 0 ? ` · Uncategorized ${mealsBySlot.uncategorized}` : ""
-                  }`
-                : ""}
+              {summary.total} stop{summary.total === 1 ? "" : "s"} · {mealsToday} meal{mealsToday === 1 ? "" : "s"}
             </p>
           ) : null}
           {queueLen > 0 ? (
@@ -376,7 +441,7 @@ export default function Deliveries() {
             </a>
             <button
               data-testid={`next-mark-delivered-${nextPending.id}`}
-              onClick={() => mark(nextPending.id, "delivered")}
+              onClick={() => setDeliverTarget(nextPending)}
               className="flex-1 h-11 rounded-full bg-secondary text-secondary-foreground font-semibold inline-flex items-center justify-center gap-2"
             >
               <CheckCircle size={18} weight="bold" /> Mark delivered
@@ -530,7 +595,7 @@ export default function Deliveries() {
                         <span className="hidden sm:inline">Adjust</span>
                       </button>
                     ) : null}
-                    <button data-testid={`mark-delivered-${d.id}`} onClick={() => mark(d.id, "delivered")} className="flex-1 sm:flex-none h-11 min-h-[44px] px-4 rounded-full bg-secondary text-secondary-foreground text-sm font-semibold active:scale-95 transition-transform inline-flex items-center justify-center gap-1 cursor-pointer hover:bg-brand-sageDark">
+                    <button data-testid={`mark-delivered-${d.id}`} onClick={() => setDeliverTarget(d)} className="flex-1 sm:flex-none h-11 min-h-[44px] px-4 rounded-full bg-secondary text-secondary-foreground text-sm font-semibold active:scale-95 transition-transform inline-flex items-center justify-center gap-1 cursor-pointer hover:bg-brand-sageDark">
                       <CheckCircle size={16} weight="bold" /> Delivered
                     </button>
                     <button data-testid={`mark-missed-${d.id}`} onClick={() => mark(d.id, "missed")} className="icon-btn icon-btn-danger" aria-label="Missed">
@@ -541,7 +606,10 @@ export default function Deliveries() {
                     </button>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap justify-end">
+                    {d.delivery_image_url ? (
+                      <DeliveryProofThumbButton delivery={d} onView={setViewingProof} />
+                    ) : null}
                     <StatusPill status={d.status} />
                     {canMutate && !isFutureDate && d.status !== "pending" && d.status !== "paused" ? (
                       <button data-testid={`reset-${d.id}`} onClick={() => mark(d.id, "pending")} className="min-h-[44px] px-3 text-xs text-muted-foreground hover:text-foreground cursor-pointer transition-colors">Undo</button>
@@ -553,6 +621,37 @@ export default function Deliveries() {
           </ul>
         )}
       </div>
+
+      <CursorPaginationBar
+        currentPage={paging.currentPage}
+        totalPages={paging.totalPages}
+        from={paging.from}
+        to={paging.to}
+        total={paging.total}
+        pageSize={paging.pageSize}
+        hasMore={paging.hasMore}
+        loading={loading}
+        onPrev={() => {
+          const c = paging.goPrev();
+          if (c !== undefined) fetchPage({ cursor: c });
+        }}
+        onNext={() => {
+          const c = paging.goNext();
+          if (c !== undefined) fetchPage({ cursor: c });
+        }}
+        onPageSizeChange={(size: AllowedPageSize) => {
+          paging.setPageSize(size);
+        }}
+      />
+
+      <MarkDeliveredSheet
+        open={!!deliverTarget}
+        onClose={() => setDeliverTarget(null)}
+        delivery={deliverTarget ? { id: deliverTarget.id, customer_name: deliverTarget.customer_name } : null}
+        onMark={markDelivered}
+      />
+
+      <DeliveryProofSheet delivery={viewingProof} onClose={() => setViewingProof(null)} />
 
       <AppSheet
         open={confirmBulkDeliver}

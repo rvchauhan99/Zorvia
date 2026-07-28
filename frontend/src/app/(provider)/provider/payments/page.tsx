@@ -6,15 +6,16 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canMutateAdmin, canSeePricing } from "@/lib/roles";
 import { fmtCAD, fmtDateTime } from "@/lib/format";
-import { asPageEnvelope, DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { asPageEnvelope, DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
+import { useCursorPagination } from "@/hooks/useCursorPagination";
 import StatusPill from "@/components/StatusPill";
 import AppSheet from "@/components/AppSheet";
 import RecordPaymentSheet from "@/components/RecordPaymentSheet";
 import CustomerAsyncSelect from "@/components/CustomerAsyncSelect";
-import LoadMoreButton from "@/components/LoadMoreButton";
+import CursorPaginationBar from "@/components/CursorPaginationBar";
 import { StatusFilterCards } from "@/components/StatusFilterCards";
 import { InlineLoader } from "@/components/loaders";
-import { CheckCircle, XCircle, Eye, Plus } from "@phosphor-icons/react";
+import { CheckCircle, XCircle, Eye, Plus, MagnifyingGlass, CalendarBlank, User } from "@phosphor-icons/react";
 
 export default function Payments() {
   const { session } = useAuth();
@@ -26,8 +27,6 @@ export default function Payments() {
   const [debouncedQ, setDebouncedQ] = useState("");
   const [range, setRange] = useState({ start: "", end: "" });
   const [customerFilter, setCustomerFilter] = useState<{ id: string; name: string } | null>(null);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(false);
   const [viewing, setViewing] = useState<any>(null);
   const [rejectFor, setRejectFor] = useState<any>(null);
   const [rejectReason, setRejectReason] = useState("");
@@ -35,8 +34,8 @@ export default function Payments() {
   const [batchBusy, setBatchBusy] = useState(false);
   const [confirmBatchVerify, setConfirmBatchVerify] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [recordOpen, setRecordOpen] = useState(false);
+  const paging = useCursorPagination({ initialPageSize: DEFAULT_PAGE_SIZE });
 
   useEffect(() => {
     const id = window.setTimeout(() => setDebouncedQ(q.trim()), 350);
@@ -44,10 +43,8 @@ export default function Payments() {
   }, [q]);
 
   const fetchPage = useCallback(
-    async (opts: { cursor?: string | null; append?: boolean; statusOverride?: string }) => {
-      const append = Boolean(opts.append);
-      if (append) setLoadingMore(true);
-      else setLoading(true);
+    async (opts: { cursor?: string | null; statusOverride?: string; pageSize?: number } = {}) => {
+      setLoading(true);
       try {
         const params = new URLSearchParams();
         const status = opts.statusOverride ?? filter;
@@ -56,27 +53,34 @@ export default function Payments() {
         if (range.start) params.set("start", range.start);
         if (range.end) params.set("end", range.end);
         if (customerFilter?.id) params.set("customer_id", customerFilter.id);
-        params.set("limit", String(DEFAULT_PAGE_SIZE));
+        params.set("limit", String(opts.pageSize ?? paging.pageSize));
         if (opts.cursor) params.set("cursor", opts.cursor);
+
         const { data } = await api.get(`/payments?${params.toString()}`);
         const page = asPageEnvelope<any>(data);
-        setItems((prev) => (append ? [...prev, ...page.items] : page.items));
-        setNextCursor(page.next_cursor);
-        setHasMore(page.has_more);
-        if (!append) setSelected(new Set());
+        setItems(page.items);
+        paging.applyPageResult(page);
+        setSelected(new Set());
       } catch {
         toast.error("Failed to load payments");
       } finally {
         setLoading(false);
-        setLoadingMore(false);
       }
     },
-    [filter, debouncedQ, range.start, range.end, customerFilter?.id],
+    [filter, debouncedQ, range.start, range.end, customerFilter?.id, paging.pageSize, paging.applyPageResult],
   );
 
+  const reloadCurrentPage = useCallback(() => {
+    const c = paging.currentPageIndex > 0 ? paging.cursorHistory[paging.currentPageIndex - 1] ?? null : null;
+    fetchPage({ cursor: c });
+  }, [paging.currentPageIndex, paging.cursorHistory, fetchPage]);
+
+  // When filters or page size change, reset pagination
   useEffect(() => {
-    fetchPage({ append: false });
-  }, [fetchPage]);
+    paging.resetToFirstPage();
+    fetchPage({ cursor: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset+fetch on filter identity
+  }, [filter, debouncedQ, range.start, range.end, customerFilter?.id, paging.pageSize]);
 
   const pendingIds = useMemo(
     () => items.filter((p) => p.status === "pending").map((p) => p.id),
@@ -87,7 +91,7 @@ export default function Payments() {
     try {
       await api.patch(`/payments/${id}/verify`);
       toast.success("Payment verified");
-      fetchPage({ append: false });
+      reloadCurrentPage();
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || "Failed");
     }
@@ -107,10 +111,10 @@ export default function Payments() {
       }
       toast.success(`Verified ${ids.length} payment(s)`);
       setConfirmBatchVerify(false);
-      fetchPage({ append: false });
+      reloadCurrentPage();
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || "Batch verify failed");
-      fetchPage({ append: false });
+      reloadCurrentPage();
     } finally {
       setBatchBusy(false);
     }
@@ -121,7 +125,7 @@ export default function Payments() {
       await api.patch(`/payments/${rejectFor.id}/reject`, { reason: rejectReason });
       toast.success("Payment rejected");
       setRejectFor(null); setRejectReason("");
-      fetchPage({ append: false });
+      reloadCurrentPage();
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || "Failed");
     }
@@ -138,42 +142,100 @@ export default function Payments() {
 
   return (
     <div className="flex flex-col gap-3 sm:gap-5 animate-fade-in-up">
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 sm:gap-3">
+      {/* ── HEADER & ACTIONS ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <span className="label-overline">Reconciliation</span>
-          <h1 className="font-display font-black text-2xl sm:text-4xl mt-0.5 sm:mt-1">Payments</h1>
+          <h1 className="font-display font-black text-2xl sm:text-3xl mt-0.5">Payments</h1>
         </div>
-        <div className="flex flex-col sm:flex-row flex-wrap gap-2 w-full sm:w-auto">
-          <div className="flex gap-2 w-full sm:w-auto">
+        {canMutate && (
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            <button
+              data-testid="record-payment"
+              type="button"
+              onClick={() => setRecordOpen(true)}
+              className="pill-btn btn-primary h-10 px-4 text-sm font-semibold flex-1 sm:flex-none justify-center gap-1.5"
+            >
+              <Plus size={16} weight="bold" /> Record payment
+            </button>
+            <button
+              data-testid="batch-verify"
+              disabled={batchBusy || selected.size === 0}
+              onClick={() => setConfirmBatchVerify(true)}
+              className="pill-btn btn-secondary h-10 px-4 text-sm font-semibold flex-1 sm:flex-none justify-center disabled:opacity-50"
+            >
+              Verify selected
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ── FILTER BAR (Bento Style) ── */}
+      <div className="card-tinted p-3 sm:p-4 flex flex-col sm:flex-row flex-wrap items-end gap-3">
+        {/* Search */}
+        <div className="flex-1 min-w-[200px]">
+          <label className="block text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-1.5 pl-1">
+            Search
+          </label>
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <MagnifyingGlass size={16} className="text-muted-foreground" />
+            </div>
             <input
               data-testid="payment-search"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search name or ref"
-              className="h-10 flex-1 sm:flex-none px-3 rounded-xl bg-white border border-brand-border text-sm min-w-0 sm:min-w-[180px]"
+              placeholder="Name or ref"
+              className="h-10 w-full pl-9 pr-3 rounded-xl bg-white border border-brand-border text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
             />
           </div>
-          <label className="flex items-center gap-2 text-sm">
-            <span className="label-overline">From</span>
-            <input
-              type="date"
-              data-testid="payment-range-start"
-              value={range.start}
-              onChange={(e) => setRange({ ...range, start: e.target.value })}
-              className="h-10 px-3 rounded-xl bg-white border border-brand-border text-sm"
-            />
+        </div>
+
+        {/* Date Range */}
+        <div className="flex flex-row items-end gap-2 shrink-0">
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-1.5 pl-1">
+              From
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
+                <CalendarBlank size={16} className="text-muted-foreground" />
+              </div>
+              <input
+                type="date"
+                data-testid="payment-range-start"
+                value={range.start}
+                onChange={(e) => setRange({ ...range, start: e.target.value })}
+                className="h-10 w-36 pl-9 pr-2 rounded-xl bg-white border border-brand-border text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+              />
+            </div>
+          </div>
+          <span className="text-muted-foreground mb-3 font-medium text-xs">→</span>
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-1.5 pl-1">
+              To
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
+                <CalendarBlank size={16} className="text-muted-foreground" />
+              </div>
+              <input
+                type="date"
+                data-testid="payment-range-end"
+                value={range.end}
+                onChange={(e) => setRange({ ...range, end: e.target.value })}
+                className="h-10 w-36 pl-9 pr-2 rounded-xl bg-white border border-brand-border text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Customer Filter */}
+        <div className="flex-1 min-w-[200px]">
+          <label className="block text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-1.5 pl-1">
+            Customer
           </label>
-          <label className="flex items-center gap-2 text-sm">
-            <span className="label-overline">To</span>
-            <input
-              type="date"
-              data-testid="payment-range-end"
-              value={range.end}
-              onChange={(e) => setRange({ ...range, end: e.target.value })}
-              className="h-10 px-3 rounded-xl bg-white border border-brand-border text-sm"
-            />
-          </label>
-          <div className="min-w-[200px] flex-1 sm:flex-none" data-testid="payment-customer-filter">
+          <div className="relative" data-testid="payment-customer-filter">
             <CustomerAsyncSelect
               testid="payment-customer"
               value={customerFilter}
@@ -182,26 +244,6 @@ export default function Payments() {
               activeOnly={false}
             />
           </div>
-          {canMutate ? (
-            <>
-              <button
-                data-testid="record-payment"
-                type="button"
-                onClick={() => setRecordOpen(true)}
-                className="h-10 px-4 rounded-full bg-primary text-primary-foreground text-sm font-semibold inline-flex items-center justify-center gap-1.5 w-full sm:w-auto cursor-pointer"
-              >
-                <Plus size={16} weight="bold" /> Record payment
-              </button>
-              <button
-                data-testid="batch-verify"
-                disabled={batchBusy || selected.size === 0}
-                onClick={() => setConfirmBatchVerify(true)}
-                className="h-10 px-4 rounded-full bg-secondary text-secondary-foreground text-sm font-semibold disabled:opacity-50 w-full sm:w-auto"
-              >
-                Verify selected
-              </button>
-            </>
-          ) : null}
         </div>
       </div>
 
@@ -218,74 +260,160 @@ export default function Payments() {
         ]}
       />
 
-      <div className="card-tinted overflow-hidden">
+      {/* ── DATATABLE ── */}
+      <div className="card-tinted overflow-hidden flex flex-col">
         {loading ? (
-          <InlineLoader testid="payments-loading" label="Loading payments…" />
+          <div className="p-10">
+            <InlineLoader testid="payments-loading" label="Loading payments…" />
+          </div>
         ) : items.length === 0 ? (
-          <div className="p-6 sm:p-10 text-center text-muted-foreground text-sm">No {filter === "all" ? "" : filter} payments.</div>
+          <div className="p-10 text-center text-muted-foreground text-sm">
+            No {filter === "all" ? "" : filter} payments.
+          </div>
         ) : (
-          <ul className="divide-y divide-brand-border">
-            {items.map((p) => (
-              <li key={p.id} data-testid={`pay-row-${p.id}`} className="p-4 flex flex-col gap-3 hover:bg-brand-surface/60 transition-colors">
-                <div className="flex items-start gap-3">
-                  {canMutate && p.status === "pending" ? (
-                    <label className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] -ml-1.5 shrink-0 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        data-testid={`pay-select-${p.id}`}
-                        checked={selected.has(p.id)}
-                        onChange={() => toggle(p.id)}
-                        className="h-4 w-4"
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse min-w-[800px]">
+              <thead>
+                <tr className="border-b border-brand-border bg-brand-surface/30 text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <th className="font-medium p-3 w-12 text-center">
+                    {canMutate && filter === "pending" && (
+                      <input 
+                        type="checkbox" 
+                        className="h-4 w-4 rounded border-brand-border text-primary focus:ring-primary/50 cursor-pointer"
+                        onChange={(e) => {
+                           if (e.target.checked) {
+                             const newSelected = new Set(selected);
+                             items.filter(p => p.status === "pending").forEach(p => newSelected.add(p.id));
+                             setSelected(newSelected);
+                           } else {
+                             setSelected(new Set());
+                           }
+                        }}
+                        checked={items.filter(p => p.status === "pending").length > 0 && items.filter(p => p.status === "pending").every(p => selected.has(p.id))}
                       />
-                    </label>
-                  ) : <span className="w-11 shrink-0" />}
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate">{p.customer_name}</div>
-                    <div className="text-xs text-muted-foreground truncate">Ref: <span className="font-mono">{p.reference}</span> · {fmtDateTime(p.submitted_at)}</div>
-                    {showMoney && typeof p.outstanding === "number" ? (
-                      <div className="text-xs text-muted-foreground mt-0.5">Outstanding: {fmtCAD(p.outstanding)}</div>
-                    ) : null}
-                    {p.reject_reason ? <div className="text-xs text-destructive italic mt-0.5">&quot;{p.reject_reason}&quot;</div> : null}
-                  </div>
-                  <div className="text-right shrink-0">
-                    {showMoney ? (
-                      <div className="text-lg font-display font-bold">{fmtCAD(p.amount)}</div>
-                    ) : (
-                      <div className="text-sm font-medium text-muted-foreground">Submitted</div>
                     )}
-                    <div className="mt-1 flex justify-end"><StatusPill status={p.status} /></div>
-                  </div>
-                </div>
-                {(p.screenshot_url || (canMutate && p.status === "pending")) ? (
-                  <div className="flex items-center gap-2 flex-wrap pl-0 sm:pl-11">
-                    {p.screenshot_url ? (
-                      <button data-testid={`view-shot-${p.id}`} onClick={() => setViewing(p)} className="h-11 min-h-[44px] min-w-[44px] px-3 rounded-full bg-white border border-brand-border hover:bg-brand-surface inline-flex items-center justify-center gap-1 text-sm cursor-pointer transition-colors" aria-label="View screenshot">
-                        <Eye size={16} /> <span className="sm:inline">View</span>
-                      </button>
-                    ) : null}
-                    {canMutate && p.status === "pending" ? (
-                      <>
-                        <button data-testid={`verify-${p.id}`} onClick={() => verify(p.id)} className="flex-1 sm:flex-none h-11 min-h-[44px] px-4 rounded-full bg-secondary text-secondary-foreground text-sm font-semibold inline-flex items-center justify-center gap-1 active:scale-95 transition-transform cursor-pointer hover:bg-brand-sageDark">
-                          <CheckCircle size={16} weight="bold" /> Verify
-                        </button>
-                        <button data-testid={`reject-${p.id}`} onClick={() => setRejectFor(p)} className="icon-btn icon-btn-danger" aria-label="Reject">
-                          <XCircle size={18} />
-                        </button>
-                      </>
-                    ) : null}
-                  </div>
-                ) : null}
-              </li>
-            ))}
-          </ul>
+                  </th>
+                  <th className="font-medium p-3">Customer</th>
+                  <th className="font-medium p-3">Date & Ref</th>
+                  <th className="font-medium p-3">Status</th>
+                  <th className="font-medium p-3 text-right">Amount</th>
+                  <th className="font-medium p-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-brand-border">
+                {items.map((p) => {
+                  const pending = canMutate && p.status === "pending";
+                  const isSelected = selected.has(p.id);
+                  return (
+                    <tr
+                      key={p.id}
+                      data-testid={`pay-row-${p.id}`}
+                      className={`hover:bg-brand-surface/60 transition-colors ${pending && isSelected ? "bg-primary/5" : "bg-white"}`}
+                    >
+                      <td className="p-3 text-center align-middle">
+                        {pending && (
+                          <input
+                            type="checkbox"
+                            data-testid={`pay-select-${p.id}`}
+                            checked={isSelected}
+                            onChange={() => toggle(p.id)}
+                            className="h-4 w-4 rounded border-brand-border text-primary focus:ring-primary/50 cursor-pointer"
+                          />
+                        )}
+                      </td>
+                      <td className="p-3 align-middle">
+                        <div className="font-display font-bold text-sm truncate max-w-[200px]" title={p.customer_name}>{p.customer_name}</div>
+                        {p.reject_reason ? (
+                          <div className="text-[11px] text-destructive italic mt-0.5 max-w-[200px] truncate" title={p.reject_reason}>
+                            &quot;{p.reject_reason}&quot;
+                          </div>
+                        ) : null}
+                      </td>
+                      <td className="p-3 align-middle">
+                        <div className="text-xs font-medium">{fmtDateTime(p.submitted_at)}</div>
+                        <div className="text-[10px] text-muted-foreground mt-0.5">
+                          Ref: <span className="font-mono bg-brand-surface px-1.5 py-0.5 rounded">{p.reference}</span>
+                        </div>
+                      </td>
+                      <td className="p-3 align-middle">
+                        <StatusPill status={p.status} />
+                      </td>
+                      <td className="p-3 align-middle text-right">
+                        {showMoney ? (
+                          <>
+                            <div className="text-base font-display font-black">{fmtCAD(p.amount)}</div>
+                            {typeof p.outstanding === "number" && p.outstanding > 0 ? (
+                              <div className="text-[10px] font-bold text-amber-600 mt-0.5">
+                                Due: {fmtCAD(p.outstanding)}
+                              </div>
+                            ) : null}
+                          </>
+                        ) : (
+                          <div className="text-sm font-medium text-muted-foreground">Submitted</div>
+                        )}
+                      </td>
+                      <td className="p-3 align-middle text-right">
+                        <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                          {p.screenshot_url && (
+                            <button
+                              data-testid={`view-shot-${p.id}`}
+                              onClick={() => setViewing(p)}
+                              className="pill-btn btn-outline h-7 text-[10px] px-2.5 gap-1"
+                              aria-label="View screenshot"
+                            >
+                              <Eye size={12} /> View
+                            </button>
+                          )}
+                          {pending && (
+                            <>
+                              <button
+                                data-testid={`verify-${p.id}`}
+                                onClick={() => verify(p.id)}
+                                className="pill-btn btn-secondary h-7 text-[10px] px-2.5 gap-1"
+                              >
+                                <CheckCircle size={12} weight="bold" /> Verify
+                              </button>
+                              <button
+                                data-testid={`reject-${p.id}`}
+                                onClick={() => setRejectFor(p)}
+                                className="pill-btn btn-outline-danger h-7 text-[10px] px-2.5 gap-1"
+                              >
+                                <XCircle size={12} weight="bold" /> Reject
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
-      <LoadMoreButton
-        hasMore={hasMore}
-        loading={loadingMore}
-        testid="payments-load-more"
-        onClick={() => fetchPage({ cursor: nextCursor, append: true })}
+      <CursorPaginationBar
+        currentPage={paging.currentPage}
+        totalPages={paging.totalPages}
+        from={paging.from}
+        to={paging.to}
+        total={paging.total}
+        pageSize={paging.pageSize}
+        hasMore={paging.hasMore}
+        loading={loading}
+        onPrev={() => {
+          const c = paging.goPrev();
+          if (c !== undefined) fetchPage({ cursor: c });
+        }}
+        onNext={() => {
+          const c = paging.goNext();
+          if (c !== undefined) fetchPage({ cursor: c });
+        }}
+        onPageSizeChange={(size: AllowedPageSize) => {
+          paging.setPageSize(size);
+        }}
+        testidPrefix="payments-pagination"
       />
 
       <AppSheet
@@ -362,7 +490,7 @@ export default function Payments() {
         onClose={() => setRecordOpen(false)}
         onRecorded={() => {
           setFilter("verified");
-          fetchPage({ append: false, statusOverride: "verified" });
+          fetchPage({ statusOverride: "verified" });
         }}
       />
     </div>
