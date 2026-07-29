@@ -59,7 +59,7 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
   const [sub, setSub] = useState<any>(null);
   const [badges, setBadges] = useState({ pendingPayments: 0, pendingCustomers: 0 });
   const [isDesktop, setIsDesktop] = useState(false);
-  const [fixedMonthly, setFixedMonthly] = useState(false);
+  const [monthlyBillingNav, setMonthlyBillingNav] = useState(false);
 
   const role = staffRole(session);
   const isDriver = roleIsDriver(session);
@@ -135,9 +135,9 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
     api.get("/providers/me")
       .then(({ data }) => {
         const mb = data?.settings?.monthly_billing;
-        setFixedMonthly(!!mb?.enabled && mb?.policy_variant === "monthly_fixed");
+        setMonthlyBillingNav(!!mb?.enabled);
       })
-      .catch(() => setFixedMonthly(false));
+      .catch(() => setMonthlyBillingNav(false));
   }, [session, isDriver]);
 
   useEffect(() => {
@@ -293,7 +293,7 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
               >
                 <ChartLine size={20} /> Reports
               </Link>
-              {fixedMonthly ? (
+              {monthlyBillingNav ? (
                 <Link
                   href="/provider/monthly-dues"
                   data-testid="side-nav-monthly-dues"

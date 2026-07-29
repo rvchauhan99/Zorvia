@@ -35,6 +35,15 @@ export default function Payments() {
   const [confirmBatchVerify, setConfirmBatchVerify] = useState(false);
   const [loading, setLoading] = useState(true);
   const [recordOpen, setRecordOpen] = useState(false);
+  const [verifyFor, setVerifyFor] = useState<any>(null);
+  const [verifyBusy, setVerifyBusy] = useState(false);
+  const [verifySettlement, setVerifySettlement] = useState<"plan" | "adjustable" | "submitted">("submitted");
+  const [verifyHints, setVerifyHints] = useState<{
+    monthly_fee: number | null;
+    month_charge: number | null;
+    tax_amount?: number | null;
+    showChoice: boolean;
+  } | null>(null);
   const paging = useCursorPagination({ initialPageSize: DEFAULT_PAGE_SIZE });
 
   useEffect(() => {
@@ -87,13 +96,94 @@ export default function Payments() {
     [items]
   );
 
-  async function verify(id: string) {
+  async function openVerify(payment: any) {
+    setVerifyFor(payment);
+    setVerifySettlement("submitted");
+    setVerifyHints(null);
+    const cid = payment?.customer_id;
+    if (!cid) {
+      setVerifyHints({ monthly_fee: null, month_charge: null, showChoice: false });
+      return;
+    }
     try {
-      await api.patch(`/payments/${id}/verify`);
+      const { data } = await api.get(`/customers/${cid}`);
+      const monthly = data?.billing?.billing_mode === "monthly_flat";
+      const variant = data?.billing?.policy_variant;
+      const fee = data?.billing?.monthly_fee != null ? Number(data.billing.monthly_fee) : null;
+      const chargeRaw = data?.current_month_billing?.month_charge_after_tax
+        ?? data?.current_month_billing?.month_charge_before_tax
+        ?? null;
+      const charge = chargeRaw != null ? Number(chargeRaw) : null;
+      const taxAmount = data?.current_month_billing?.tax_amount != null
+        ? Number(data.current_month_billing.tax_amount)
+        : null;
+      const showChoice =
+        monthly &&
+        variant === "monthly_adjustable" &&
+        fee != null &&
+        charge != null &&
+        Math.abs(fee - charge) >= 0.01;
+      if (!showChoice) {
+        setVerifyBusy(true);
+        try {
+          await api.patch(`/payments/${payment.id}/verify`, {});
+          toast.success("Payment verified");
+          setVerifyFor(null);
+          reloadCurrentPage();
+        } catch (e: any) {
+          toast.error(e?.response?.data?.detail || "Failed");
+          setVerifyFor(null);
+        } finally {
+          setVerifyBusy(false);
+        }
+        return;
+      }
+      setVerifyHints({ monthly_fee: fee, month_charge: charge, tax_amount: taxAmount, showChoice: true });
+      setVerifySettlement("plan");
+    } catch {
+      setVerifyBusy(true);
+      try {
+        await api.patch(`/payments/${payment.id}/verify`, {});
+        toast.success("Payment verified");
+        setVerifyFor(null);
+        reloadCurrentPage();
+      } catch (e: any) {
+        toast.error(e?.response?.data?.detail || "Failed");
+        setVerifyFor(null);
+      } finally {
+        setVerifyBusy(false);
+      }
+    }
+  }
+
+  async function confirmVerify() {
+    if (!verifyFor?.id) return;
+    setVerifyBusy(true);
+    try {
+      const body: { settle_amount?: number; settlement_basis?: string } = {};
+      if (verifyHints?.showChoice) {
+        if (verifySettlement === "plan" && verifyHints.monthly_fee != null) {
+          body.settle_amount = Number(verifyHints.monthly_fee);
+          body.settlement_basis = "plan";
+        } else if (verifySettlement === "adjustable" && verifyHints.month_charge != null) {
+          body.settle_amount = Number(verifyHints.month_charge);
+          body.settlement_basis = "adjustable";
+        } else {
+          body.settlement_basis = "submitted";
+        }
+      }
+      await api.patch(
+        `/payments/${verifyFor.id}/verify`,
+        Object.keys(body).length ? body : {},
+      );
       toast.success("Payment verified");
+      setVerifyFor(null);
+      setVerifyHints(null);
       reloadCurrentPage();
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || "Failed");
+    } finally {
+      setVerifyBusy(false);
     }
   }
 
@@ -107,7 +197,7 @@ export default function Payments() {
     setBatchBusy(true);
     try {
       for (const id of ids) {
-        await api.patch(`/payments/${id}/verify`);
+        await api.patch(`/payments/${id}/verify`, {});
       }
       toast.success(`Verified ${ids.length} payment(s)`);
       setConfirmBatchVerify(false);
@@ -368,7 +458,7 @@ export default function Payments() {
                             <>
                               <button
                                 data-testid={`verify-${p.id}`}
-                                onClick={() => verify(p.id)}
+                                onClick={() => openVerify(p)}
                                 className="pill-btn btn-secondary h-7 text-[10px] px-2.5 gap-1"
                               >
                                 <CheckCircle size={12} weight="bold" /> Verify
@@ -452,6 +542,9 @@ export default function Payments() {
           </span>
           {" "}selected pending payment(s) as verified. Make sure the Interac references match before continuing.
         </p>
+        <p className="text-xs text-muted-foreground mt-2">
+          Batch verify keeps each payment&apos;s submitted amount. Adjustable settlement choice (plan vs adjustable) is not available in batch — use single-payment verify if you need to override the amount.
+        </p>
       </AppSheet>
 
       <AppSheet open={!!viewing} onClose={() => setViewing(null)} title={viewing ? `${viewing.customer_name}${showMoney ? ` · ${fmtCAD(viewing.amount)}` : ""}` : "Screenshot"} size="2xl" showHandle={false}>
@@ -460,6 +553,81 @@ export default function Payments() {
           {viewing?.screenshot_url ? (
             <img data-testid="screenshot-img" src={viewing.screenshot_url} alt="payment screenshot" className="max-w-full max-h-[60vh] object-contain" />
           ) : null}
+        </div>
+      </AppSheet>
+
+      <AppSheet
+        open={!!verifyFor && !!verifyHints?.showChoice}
+        onClose={() => {
+          if (!verifyBusy) {
+            setVerifyFor(null);
+            setVerifyHints(null);
+          }
+        }}
+        title="Settle & verify payment?"
+        size="md"
+        footer={(
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={verifyBusy}
+              onClick={() => { setVerifyFor(null); setVerifyHints(null); }}
+              className="pill-btn btn-outline flex-1 h-11 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              data-testid="verify-settle-confirm"
+              type="button"
+              disabled={verifyBusy}
+              onClick={confirmVerify}
+              className="pill-btn btn-secondary flex-1 h-11 disabled:opacity-50"
+            >
+              {verifyBusy ? "Verifying…" : "Verify"}
+            </button>
+          </div>
+        )}
+      >
+        <p className="text-sm text-muted-foreground mb-3">
+          Submitted {showMoney && verifyFor ? fmtCAD(verifyFor.amount) : ""}. Plan and recalculated month charge differ — choose settlement amount.
+        </p>
+        <div className="flex flex-col gap-2" data-testid="verify-settlement-options">
+          <button
+            type="button"
+            data-testid="verify-settle-plan"
+            onClick={() => setVerifySettlement("plan")}
+            className={`h-11 px-4 rounded-xl text-sm font-semibold border text-left cursor-pointer ${
+              verifySettlement === "plan"
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-white border-brand-border"
+            }`}
+          >
+            {(verifyHints?.tax_amount ?? 0) > 0 ? "Plan fee (pre-tax)" : "Plan amount"}{verifyHints?.monthly_fee != null ? ` · ${fmtCAD(verifyHints.monthly_fee)}` : ""}
+          </button>
+          <button
+            type="button"
+            data-testid="verify-settle-adjustable"
+            onClick={() => setVerifySettlement("adjustable")}
+            className={`h-11 px-4 rounded-xl text-sm font-semibold border text-left cursor-pointer ${
+              verifySettlement === "adjustable"
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-white border-brand-border"
+            }`}
+          >
+            {(verifyHints?.tax_amount ?? 0) > 0 ? "Adjustable (after tax)" : "Adjustable amount"}{verifyHints?.month_charge != null ? ` · ${fmtCAD(verifyHints.month_charge)}` : ""}
+          </button>
+          <button
+            type="button"
+            data-testid="verify-settle-submitted"
+            onClick={() => setVerifySettlement("submitted")}
+            className={`h-11 px-4 rounded-xl text-sm font-semibold border text-left cursor-pointer ${
+              verifySettlement === "submitted"
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-white border-brand-border"
+            }`}
+          >
+            Keep submitted{verifyFor && showMoney ? ` · ${fmtCAD(verifyFor.amount)}` : ""}
+          </button>
         </div>
       </AppSheet>
 

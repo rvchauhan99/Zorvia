@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { fmtCAD } from "@/lib/format";
@@ -12,9 +12,11 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onRecorded: () => void;
-  /** When set, customer is locked (customer 360). */
+  /** When set, customer is locked (customer 360 / Quick Renew). */
   lockedCustomer?: { id: string; name: string } | null;
 };
+
+type SettlementBasis = "plan" | "adjustable";
 
 const input =
   "h-11 px-4 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all w-full";
@@ -25,11 +27,13 @@ export default function RecordPaymentSheet({ open, onClose, onRecorded, lockedCu
   const [reference, setReference] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [settlement, setSettlement] = useState<SettlementBasis>("plan");
   const [billingHint, setBillingHint] = useState<{
     outstanding: number;
     credit: number;
     month_charge?: number | null;
     monthly_fee?: number | null;
+    tax_amount?: number | null;
     collection_due_date?: string | null;
     plan_name?: string | null;
     monthly?: boolean;
@@ -42,12 +46,21 @@ export default function RecordPaymentSheet({ open, onClose, onRecorded, lockedCu
     setReference("");
     setFile(null);
     setBillingHint(null);
+    setSettlement("plan");
     if (lockedCustomer) {
       setCustomer({ id: lockedCustomer.id, name: lockedCustomer.name });
     } else {
       setCustomer(null);
     }
   }, [open, lockedCustomer]);
+
+  const showSettlementChoice = useMemo(() => {
+    if (!billingHint?.monthly || billingHint.policy_variant !== "monthly_adjustable") return false;
+    const fee = billingHint.monthly_fee;
+    const charge = billingHint.month_charge;
+    if (fee == null || charge == null) return false;
+    return Math.abs(Number(fee) - Number(charge)) >= 0.01;
+  }, [billingHint]);
 
   useEffect(() => {
     const cid = lockedCustomer?.id || customer?.id;
@@ -69,6 +82,9 @@ export default function RecordPaymentSheet({ open, onClose, onRecorded, lockedCu
           ?? data?.current_month_billing?.month_charge_before_tax
           ?? null;
         const monthChargeNum = monthCharge != null ? Number(monthCharge) : null;
+        const taxAmount = data?.current_month_billing?.tax_amount != null
+          ? Number(data.current_month_billing.tax_amount)
+          : null;
         setBillingHint({
           outstanding,
           credit,
@@ -76,18 +92,30 @@ export default function RecordPaymentSheet({ open, onClose, onRecorded, lockedCu
           policy_variant: policyVariant,
           monthly_fee: monthlyFee,
           month_charge: monthChargeNum,
+          tax_amount: taxAmount,
           collection_due_date: data?.billing?.collection_due_date || data?.current_month_billing?.collection_due_date || null,
           plan_name: data?.billing?.monthly_plan_name || data?.current_month_billing?.plan_name || null,
         });
+
+        const adjustableDiff =
+          monthly &&
+          policyVariant === "monthly_adjustable" &&
+          monthlyFee != null &&
+          monthChargeNum != null &&
+          Math.abs(monthlyFee - monthChargeNum) >= 0.01;
+
+        setSettlement("plan");
         setAmount((prev) => {
           if (prev) return prev;
-          if (outstanding > 0) return outstanding.toFixed(2);
-          if (monthly && policyVariant === "monthly_fixed" && monthlyFee != null && monthlyFee > 0) {
+          if (adjustableDiff && monthlyFee != null && monthlyFee > 0) {
             return monthlyFee.toFixed(2);
           }
-          if (monthly && policyVariant !== "monthly_fixed") {
-            const hint = monthChargeNum != null && monthChargeNum > 0 ? monthChargeNum : monthlyFee;
-            if (hint != null && hint > 0) return Number(hint).toFixed(2);
+          if (outstanding > 0) return outstanding.toFixed(2);
+          if (monthly && monthlyFee != null && monthlyFee > 0) {
+            return monthlyFee.toFixed(2);
+          }
+          if (monthly && monthChargeNum != null && monthChargeNum > 0) {
+            return monthChargeNum.toFixed(2);
           }
           return prev;
         });
@@ -97,6 +125,16 @@ export default function RecordPaymentSheet({ open, onClose, onRecorded, lockedCu
     })();
     return () => { cancelled = true; };
   }, [open, lockedCustomer?.id, customer?.id]);
+
+  function applySettlement(basis: SettlementBasis) {
+    setSettlement(basis);
+    if (!billingHint) return;
+    if (basis === "plan" && billingHint.monthly_fee != null && billingHint.monthly_fee > 0) {
+      setAmount(Number(billingHint.monthly_fee).toFixed(2));
+    } else if (basis === "adjustable" && billingHint.month_charge != null && billingHint.month_charge > 0) {
+      setAmount(Number(billingHint.month_charge).toFixed(2));
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -206,6 +244,41 @@ export default function RecordPaymentSheet({ open, onClose, onRecorded, lockedCu
               {billingHint.collection_due_date ? ` · due ${billingHint.collection_due_date}` : ""}
             </div>
           ) : null}
+        </div>
+      ) : null}
+
+      {showSettlementChoice ? (
+        <div className="mb-4" data-testid="record-payment-settlement">
+          <div className="label-overline mb-2">Settle amount</div>
+          <p className="text-xs text-muted-foreground mb-2">
+            Plan and recalculated month charge differ. Choose which amount to collect (you can still edit the field).
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              data-testid="record-payment-settle-plan"
+              onClick={() => applySettlement("plan")}
+              className={`h-10 px-4 rounded-full text-sm font-semibold border cursor-pointer ${
+                settlement === "plan"
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-white border-brand-border text-foreground hover:bg-brand-surface"
+              }`}
+            >
+              {(billingHint?.tax_amount ?? 0) > 0 ? "Plan fee (pre-tax)" : "Plan"}{billingHint?.monthly_fee != null ? ` ${fmtCAD(billingHint.monthly_fee)}` : ""}
+            </button>
+            <button
+              type="button"
+              data-testid="record-payment-settle-adjustable"
+              onClick={() => applySettlement("adjustable")}
+              className={`h-10 px-4 rounded-full text-sm font-semibold border cursor-pointer ${
+                settlement === "adjustable"
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-white border-brand-border text-foreground hover:bg-brand-surface"
+              }`}
+            >
+              {(billingHint?.tax_amount ?? 0) > 0 ? "Adjustable (after tax)" : "Adjustable"}{billingHint?.month_charge != null ? ` ${fmtCAD(billingHint.month_charge)}` : ""}
+            </button>
+          </div>
         </div>
       ) : null}
 

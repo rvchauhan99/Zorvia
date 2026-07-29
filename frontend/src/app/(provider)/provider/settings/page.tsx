@@ -688,6 +688,7 @@ export default function Settings() {
                   <div>
                     <span className="font-bold text-sm text-foreground">Enable monthly subscription policy</span>
                     <span className="block text-xs text-muted-foreground">Turns on flat monthly billing for all customers (replaces per-meal accrual)</span>
+                    <span className="block text-xs text-amber-600 mt-1">Monthly flat billing does not retroactively prorate existing balances when enabled mid-month. Joining date is honoured, but month charges are calculated per collection month rules (no proration in v1).</span>
                   </div>
                 </label>
 

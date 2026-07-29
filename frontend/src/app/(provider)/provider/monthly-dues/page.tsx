@@ -23,6 +23,10 @@ type DueRow = {
   credit?: number;
   prepaid_months?: number;
   monthly_fee?: number;
+  month_charge_after_tax?: number | null;
+  month_charge_before_tax?: number | null;
+  tier_applied?: string | null;
+  policy_variant?: string | null;
   renewal_date?: string | null;
   collection_due_date?: string | null;
   last_due_date?: string | null;
@@ -38,29 +42,34 @@ export default function MonthlyDuesPage() {
   const canMutate = canMutateAdmin(session);
   const [loading, setLoading] = useState(true);
   const [allowed, setAllowed] = useState(false);
+  const [policyVariant, setPolicyVariant] = useState<string | null>(null);
   const [rows, setRows] = useState<DueRow[]>([]);
   const [totals, setTotals] = useState<{ due_amount?: number; overdue_amount?: number; overdue_count?: number; customer_count?: number } | null>(null);
   const [renewCustomer, setRenewCustomer] = useState<{ id: string; name: string } | null>(null);
-  const paging = useCursorPagination({ initialPageSize: DEFAULT_PAGE_SIZE });
+  // Default to 100 so paid-up / new customers are visible without extra paging
+  const paging = useCursorPagination({ initialPageSize: 100 });
 
   const load = useCallback(async (opts: { cursor?: string | null } = {}) => {
     setLoading(true);
     try {
       const { data: prov } = await api.get("/providers/me");
       const mb = prov?.settings?.monthly_billing;
-      const fixed = !!mb?.enabled && mb?.policy_variant === "monthly_fixed";
-      if (!fixed) {
+      const monthlyOn = !!mb?.enabled;
+      if (!monthlyOn) {
         setAllowed(false);
+        setPolicyVariant(null);
         setRows([]);
         setTotals(null);
         return;
       }
       setAllowed(true);
+      setPolicyVariant(mb?.policy_variant || "monthly_adjustable");
       const params = new URLSearchParams({ page_size: String(paging.pageSize) });
       if (opts.cursor) params.set("cursor", opts.cursor);
       const { data } = await api.get(`/reports/monthly-dues?${params.toString()}`);
       setRows(Array.isArray(data?.rows) ? data.rows : []);
       setTotals(data?.totals || null);
+      if (data?.policy_variant) setPolicyVariant(data.policy_variant);
       paging.applyPageResult({
         next_cursor: data?.next_cursor ?? null,
         has_more: Boolean(data?.has_more),
@@ -95,6 +104,8 @@ export default function MonthlyDuesPage() {
     void load({ cursor: c });
   }, [paging.currentPageIndex, paging.cursorHistory, load]);
 
+  const isAdjustable = policyVariant === "monthly_adjustable";
+
   if (loading && !rows.length && !totals) {
     return <PageLoader testid="monthly-dues-loading" label="Loading customer subscriptions…" />;
   }
@@ -107,9 +118,9 @@ export default function MonthlyDuesPage() {
           <h1 className="font-display font-black text-2xl sm:text-3xl mt-0.5">Customer subscriptions</h1>
         </div>
         <div className="card-tinted p-6 text-sm text-muted-foreground">
-          Customer subscriptions is available when Settings → Subscription Policy is enabled with{" "}
-          <strong className="text-foreground">Fixed Monthly</strong>. Adjustable and per-meal kitchens use Reports as usual.
-          Overdue-only dues stay under Reports → Outstanding.
+          Customer subscriptions is available when Settings → Subscription Policy has{" "}
+          <strong className="text-foreground">monthly billing</strong> enabled (Fixed or Adjustable).
+          Overdue-only dues for Fixed stay under Reports → Outstanding.
         </div>
       </div>
     );
@@ -122,7 +133,9 @@ export default function MonthlyDuesPage() {
           <span className="label-overline">Billing</span>
           <h1 className="font-display font-black text-2xl sm:text-3xl mt-0.5">Customer subscriptions</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            All Fixed Monthly customers with renewal dates. Overdue first, then nearest renewal. Quick Renew anytime — early full-fee payments advance next renewal; partial advances stay as credit.
+            {isAdjustable
+              ? "All monthly customers with renewal dates. This month shows the recalculated charge. Quick Renew lets you settle at plan fee or adjustable amount when they differ; credit updates from verified payments."
+              : "All Fixed Monthly customers with renewal dates. Overdue first, then nearest renewal. Quick Renew anytime — early full-fee payments advance next renewal; partial advances stay as credit."}
           </p>
         </div>
         <button
@@ -165,6 +178,7 @@ export default function MonthlyDuesPage() {
             <ul className="md:hidden divide-y divide-brand-border" data-testid="monthly-dues-list-mobile">
               {rows.map((r) => {
                 const credit = Number(r.credit ?? Math.max(0, -Number(r.outstanding || 0)));
+                const monthCharge = r.month_charge_after_tax ?? r.month_charge_before_tax;
                 return (
                   <li
                     key={r.customer_id}
@@ -188,6 +202,11 @@ export default function MonthlyDuesPage() {
                           Renewal {r.renewal_date || r.collection_due_date || "—"}
                           {r.is_overdue && r.days_overdue ? ` · ${r.days_overdue}d overdue` : null}
                         </div>
+                        {showMoney && monthCharge != null ? (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            This month {fmtCAD(Number(monthCharge))}
+                          </div>
+                        ) : null}
                         {showMoney && credit > 0 ? (
                           <div className="text-xs text-secondary mt-1 font-medium">{fmtCAD(credit)} credit</div>
                         ) : null}
@@ -209,7 +228,8 @@ export default function MonthlyDuesPage() {
                       {canMutate && showMoney ? (
                         <button
                           type="button"
-                          data-testid={`monthly-dues-renew-${r.customer_id}`}
+                          data-testid={`monthly-dues-renew-mobile-${r.customer_id}`}
+                          aria-hidden="true"
                           onClick={() => setRenewCustomer({ id: r.customer_id, name: r.name })}
                           className="h-10 rounded-full bg-primary text-primary-foreground text-sm font-semibold cursor-pointer"
                         >
@@ -222,7 +242,7 @@ export default function MonthlyDuesPage() {
               })}
             </ul>
             <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-sm min-w-[720px]" data-testid="monthly-dues-table">
+              <table className="w-full text-sm min-w-[800px]" data-testid="monthly-dues-table">
                 <thead className="text-left bg-brand-surface">
                   <tr>
                     <th className="px-3 py-2 label-overline">Customer</th>
@@ -230,6 +250,7 @@ export default function MonthlyDuesPage() {
                     <th className="px-3 py-2 label-overline">Renewal date</th>
                     <th className="px-3 py-2 label-overline">Overdue by</th>
                     {showMoney ? <th className="px-3 py-2 label-overline text-right">Amount</th> : null}
+                    {showMoney ? <th className="px-3 py-2 label-overline text-right">This month</th> : null}
                     {showMoney ? <th className="px-3 py-2 label-overline text-right">Credit</th> : null}
                     <th className="px-3 py-2 label-overline text-right">Action</th>
                   </tr>
@@ -237,6 +258,7 @@ export default function MonthlyDuesPage() {
                 <tbody className="divide-y divide-brand-border">
                   {rows.map((r) => {
                     const credit = Number(r.credit ?? Math.max(0, -Number(r.outstanding || 0)));
+                    const monthCharge = r.month_charge_after_tax ?? r.month_charge_before_tax;
                     return (
                       <tr
                         key={r.customer_id}
@@ -263,6 +285,11 @@ export default function MonthlyDuesPage() {
                         </td>
                         {showMoney ? (
                           <td className="px-3 py-2 text-right font-semibold text-primary">{fmtCAD(r.monthly_fee ?? 0)}</td>
+                        ) : null}
+                        {showMoney ? (
+                          <td className="px-3 py-2 text-right text-muted-foreground">
+                            {monthCharge != null ? fmtCAD(Number(monthCharge)) : "—"}
+                          </td>
                         ) : null}
                         {showMoney ? (
                           <td className="px-3 py-2 text-right text-secondary font-medium">

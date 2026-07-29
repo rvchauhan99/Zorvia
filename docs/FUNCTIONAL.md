@@ -137,8 +137,9 @@ When enabled, **all customers** on that tenant switch to monthly-period billing;
 | Plan templates | Editable Mon–Fri / Mon–Sat defaults (fee, standard days, weekdays); auto-matched from customer schedule; optional `monthly_plan_id` override on customer. |
 | Collection day | Provider `default_collection_day` (1–31, required when enabled); per-customer `payment_collection_day` override in CRM when monthly billing on. |
 | Outstanding | Balance = `opening_balance` + Σ calendar-month charges (after tax) − verified payments. **Listing:** per-meal and Adjustable = all balances `> 0`. **Fixed Monthly** = overdue only (past collection day). |
-| Reports | `GET /reports/payment-due` — amounts due by collection due date; Collections tab **Amounts due** sub-view. Fixed: `GET /reports/monthly-dues` + Outstanding renewal/overdue columns. |
-| Monthly dues UI | `/provider/monthly-dues` — Fixed Monthly **Customer subscriptions** roster (all active + renewal dates); Amount = plan fee; Credit when advance on file; **History** → customer Payment history (`?tab=payments`); Quick Renew anytime (full-fee early pay advances renewal; partial = credit only) |
+| Reports | `GET /reports/payment-due` — amounts due by collection due date; Collections tab **Amounts due** sub-view. Monthly: `GET /reports/monthly-dues` + Fixed Outstanding renewal/overdue columns. |
+| Monthly dues UI | `/provider/monthly-dues` — **Customer subscriptions** for Fixed **and** Adjustable (all active + renewal dates); Amount = plan fee; This month = recalculated charge; Credit when advance on file; **History** → customer Payment history (`?tab=payments`); Quick Renew with settlement choice when Adjustable fee ≠ month charge (plan vs adjustable); full-fee early pay advances renewal for both monthly variants |
+| Settlement | Adjustable: recalc is informational. Provider settles **plan** or **adjustable** amount on Renew / Record payment / Verify (`PATCH /payments/{id}/verify` optional `settle_amount` + `settlement_basis`). Batch verify keeps submitted amounts. |
 | Statement | Monthly statement rows include plan, tier, collection due date when monthly billing active |
 
 ### 4.6 Reports (provider)
@@ -154,7 +155,7 @@ When enabled, **all customers** on that tenant switch to monthly-period billing;
 - Daily deliveries  
 - Collections (payments received by submission date)  
 - **Payment due** (`GET /reports/payment-due`) — monthly kitchens: who owes what by collection due date  
-- **Customer subscriptions** (`GET /reports/monthly-dues`, Fixed Monthly only) — all active customers, overdue-first then nearest renewal; Amount = plan fee; credit + prepaid-aware renewal; Quick Renew anytime  
+- **Customer subscriptions** (`GET /reports/monthly-dues`, Fixed **or** Adjustable) — all active customers, overdue-first then nearest renewal; Amount = plan fee; This month = recalc charge; credit + prepaid-aware renewal; Quick Renew with settlement choice when Adjustable amounts differ  
 - **Customer credit** (`GET /reports/outstanding?balance=credit`) — advances for all policies; Fixed rows include next renewal when prepaid  
 - Active customers  
 - Area summary (optional FSA prefix)  
