@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -111,12 +112,41 @@ function CustomerRowActions({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const rootRef = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setMenuPos(null);
+      return;
+    }
+    const place = () => {
+      const rect = btnRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const menuWidth = 184;
+      const pad = 8;
+      const left = Math.min(
+        Math.max(pad, rect.right - menuWidth),
+        window.innerWidth - menuWidth - pad,
+      );
+      setMenuPos({ top: rect.bottom + 4, left });
+    };
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) onClose();
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      onClose();
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -134,9 +164,129 @@ function CustomerRowActions({
     action();
   }
 
+  const menu =
+    open && menuPos && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            ref={menuRef}
+            role="menu"
+            data-testid={`customer-actions-menu-${customer.id}`}
+            style={{ position: "fixed", top: menuPos.top, left: menuPos.left, zIndex: 80 }}
+            className="min-w-[11.5rem] rounded-xl border border-brand-border bg-white shadow-lg py-1"
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              data-testid={`customer-payment-history-${customer.id}`}
+              className={MENU_ITEM}
+              onClick={(e) => {
+                e.stopPropagation();
+                run(onHistory);
+              }}
+            >
+              <ClockCounterClockwise size={16} className="shrink-0 text-muted-foreground" />
+              Payment history
+            </button>
+            {canMutate ? (
+              <>
+                {customer.pending_approval ? (
+                  <>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-testid={`approve-${customer.id}`}
+                      className={`${MENU_ITEM} text-secondary`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        run(onApprove);
+                      }}
+                    >
+                      <CheckCircle size={16} className="shrink-0" />
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-testid={`reject-${customer.id}`}
+                      className={`${MENU_ITEM} text-destructive`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        run(onReject);
+                      }}
+                    >
+                      <XCircle size={16} className="shrink-0" />
+                      Reject
+                    </button>
+                  </>
+                ) : null}
+                {paused ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    data-testid={`resume-${customer.id}`}
+                    className={`${MENU_ITEM} text-secondary`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      run(onResume);
+                    }}
+                  >
+                    <PlayCircle size={16} className="shrink-0" />
+                    Resume
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    data-testid={`pause-${customer.id}`}
+                    className={MENU_ITEM}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      run(onPause);
+                    }}
+                  >
+                    <PauseCircle size={16} className="shrink-0 text-muted-foreground" />
+                    Pause
+                  </button>
+                )}
+                <button
+                  type="button"
+                  role="menuitem"
+                  data-testid={`edit-${customer.id}`}
+                  className={MENU_ITEM}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    run(onEdit);
+                  }}
+                >
+                  <PencilSimple size={16} className="shrink-0 text-muted-foreground" />
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  data-testid={`delete-${customer.id}`}
+                  className={`${MENU_ITEM} text-destructive`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    run(onDelete);
+                  }}
+                >
+                  <Trash size={16} className="shrink-0" />
+                  Delete
+                </button>
+              </>
+            ) : null}
+          </div>,
+          document.body,
+        )
+      : null;
+
   return (
-    <div ref={rootRef} className="relative inline-flex">
+    <div className="relative inline-flex">
       <button
+        ref={btnRef}
         type="button"
         data-testid={`customer-actions-${customer.id}`}
         onClick={(e) => {
@@ -151,115 +301,7 @@ function CustomerRowActions({
       >
         <DotsThreeVertical size={18} weight="bold" />
       </button>
-      {open ? (
-        <div
-          role="menu"
-          className="absolute right-0 top-full mt-1 z-30 min-w-[11.5rem] rounded-xl border border-brand-border bg-white shadow-lg py-1 overflow-hidden"
-        >
-          <button
-            type="button"
-            role="menuitem"
-            data-testid={`customer-payment-history-${customer.id}`}
-            className={MENU_ITEM}
-            onClick={(e) => {
-              e.stopPropagation();
-              run(onHistory);
-            }}
-          >
-            <ClockCounterClockwise size={16} className="shrink-0 text-muted-foreground" />
-            Payment history
-          </button>
-          {canMutate ? (
-            <>
-              {customer.pending_approval ? (
-                <>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    data-testid={`approve-${customer.id}`}
-                    className={`${MENU_ITEM} text-secondary`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      run(onApprove);
-                    }}
-                  >
-                    <CheckCircle size={16} className="shrink-0" />
-                    Approve
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    data-testid={`reject-${customer.id}`}
-                    className={`${MENU_ITEM} text-destructive`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      run(onReject);
-                    }}
-                  >
-                    <XCircle size={16} className="shrink-0" />
-                    Reject
-                  </button>
-                </>
-              ) : null}
-              {paused ? (
-                <button
-                  type="button"
-                  role="menuitem"
-                  data-testid={`resume-${customer.id}`}
-                  className={`${MENU_ITEM} text-secondary`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    run(onResume);
-                  }}
-                >
-                  <PlayCircle size={16} className="shrink-0" />
-                  Resume
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  role="menuitem"
-                  data-testid={`pause-${customer.id}`}
-                  className={MENU_ITEM}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    run(onPause);
-                  }}
-                >
-                  <PauseCircle size={16} className="shrink-0 text-muted-foreground" />
-                  Pause
-                </button>
-              )}
-              <button
-                type="button"
-                role="menuitem"
-                data-testid={`edit-${customer.id}`}
-                className={MENU_ITEM}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  run(onEdit);
-                }}
-              >
-                <PencilSimple size={16} className="shrink-0 text-muted-foreground" />
-                Edit
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                data-testid={`delete-${customer.id}`}
-                className={`${MENU_ITEM} text-destructive`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  run(onDelete);
-                }}
-              >
-                <Trash size={16} className="shrink-0" />
-                Delete
-              </button>
-            </>
-          ) : null}
-        </div>
-      ) : null}
+      {menu}
     </div>
   );
 }
