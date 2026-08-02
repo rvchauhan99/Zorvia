@@ -76,7 +76,7 @@ export default function WhatsAppCreditsPage() {
 
   return (
     <AdminShell title="WhatsApp credits">
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3">
         <p className="text-sm text-neutral-600">
           Prepaid WhatsApp top-ups (Interac). Approve to add credit to the provider wallet.
         </p>
@@ -100,9 +100,9 @@ export default function WhatsAppCreditsPage() {
 
         <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden">
           {loading ? (
-            <div className="p-8 text-center text-sm text-neutral-500">Loading…</div>
+            <div className="p-4 text-center text-sm text-neutral-500">Loading…</div>
           ) : rows.length === 0 ? (
-            <div className="p-8 text-center text-sm text-neutral-500" data-testid="wa-empty-list">
+            <div className="p-4 text-center text-sm text-neutral-500" data-testid="wa-empty-list">
               No {status} records.
             </div>
           ) : (

@@ -117,7 +117,7 @@ export default function ConsumerHome() {
 
   if (loading && !me) {
     return (
-      <div className="flex flex-col gap-5 animate-fade-in-up" data-testid="consumer-home-loading">
+      <div className="flex flex-col gap-3 animate-fade-in-up" data-testid="consumer-home-loading">
         <div className="grid grid-cols-2 gap-3">
           <div className="stat-card h-28 animate-pulse bg-brand-surface/80" />
           <div className="stat-card h-28 animate-pulse bg-brand-surface/80" />
@@ -129,17 +129,17 @@ export default function ConsumerHome() {
 
   if (me?.customer?.pending_approval) {
     return (
-      <div className="flex flex-col gap-5 animate-fade-in-up" data-testid="pending-approval-state">
+      <div className="flex flex-col gap-3 animate-fade-in-up" data-testid="pending-approval-state">
         <div>
           <span className="label-overline">Welcome</span>
-          <h1 className="font-display font-black text-3xl mt-1">Almost there</h1>
+          <h1 className="font-display font-black text-xl sm:text-2xl mt-1">Almost there</h1>
         </div>
-        <div className="card-tinted p-6 flex flex-col gap-5">
+        <div className="card-tinted p-4 flex flex-col gap-4">
           <p className="text-sm text-muted-foreground">
             Your account with <strong className="text-foreground">{me?.provider?.name || "your provider"}</strong> is awaiting approval.
             Here&apos;s what happens next:
           </p>
-          <ol className="space-y-4">
+          <ol className="space-y-3">
             <li className="flex gap-3">
               <Clock size={22} className="text-brand-amber shrink-0 mt-0.5" weight="duotone" />
               <div>
@@ -168,7 +168,7 @@ export default function ConsumerHome() {
   }
 
   return (
-    <div className="flex flex-col gap-5 animate-fade-in-up">
+    <div className="flex flex-col gap-3 animate-fade-in-up">
       <div className="grid grid-cols-2 gap-3">
         <div className="stat-card">
           <div className="flex items-center justify-between"><span className="label-overline">Outstanding</span><CurrencyDollar size={20} className="text-primary" weight="duotone" /></div>
@@ -217,7 +217,7 @@ export default function ConsumerHome() {
       ) : null}
 
       {menu?.image_url ? (
-        <section className="card-tinted p-4 sm:p-5 flex flex-col gap-3" data-testid="consumer-menu-section">
+        <section className="card-tinted p-3 sm:p-4 flex flex-col gap-3" data-testid="consumer-menu-section">
           <div>
             <h2 className="font-display font-bold text-xl">Current menu</h2>
             <p className="text-sm text-muted-foreground mt-0.5" data-testid="consumer-menu-label">
@@ -255,11 +255,11 @@ export default function ConsumerHome() {
         </div>
         <ul className="card-tinted divide-y divide-brand-border overflow-hidden">
           {upcoming.length === 0 ? (
-            <li className="p-6 text-center text-muted-foreground text-sm">No upcoming deliveries.</li>
+            <li className="p-4 text-center text-muted-foreground text-sm">No upcoming deliveries.</li>
           ) : upcoming.map((d) => {
             const extraBadge = fmtExtraBadge(d);
             return (
-              <li key={d.id} data-testid={`c-up-${d.id}`} className="p-4 flex flex-col gap-3 sm:flex-row sm:items-center hover:bg-brand-surface/60 transition-colors">
+              <li key={d.id} data-testid={`c-up-${d.id}`} className="px-3 py-2.5 flex flex-col gap-2 sm:flex-row sm:items-center hover:bg-brand-surface/60 transition-colors">
                 <div className="flex-1 min-w-0 flex items-center gap-3">
                   <div className="flex-1">
                     <div className="font-medium">{fmtDate(d.delivery_date)}</div>
@@ -304,9 +304,9 @@ export default function ConsumerHome() {
         <h2 className="font-display font-bold text-xl mb-3">Recent history</h2>
         <ul className="card-tinted divide-y divide-brand-border overflow-hidden">
           {history.length === 0 ? (
-            <li className="p-6 text-center text-muted-foreground text-sm">No history yet.</li>
+            <li className="p-4 text-center text-muted-foreground text-sm">No history yet.</li>
           ) : history.map((d) => (
-            <li key={d.id} className="p-4 flex items-center gap-3 hover:bg-brand-surface/60 transition-colors">
+            <li key={d.id} className="px-3 py-2.5 flex items-center gap-3 hover:bg-brand-surface/60 transition-colors">
               <div className="flex-1">
                 <div className="font-medium">{fmtDate(d.delivery_date)}</div>
                 <div className="text-xs text-muted-foreground">
@@ -401,7 +401,7 @@ export default function ConsumerHome() {
             ? me.customer.meal_slots
             : extraTarget && extraTarget !== "new" && extraTarget.meal_slot
               ? [extraTarget.meal_slot]
-              : ["uncategorized"]
+              : ["dinner"]
         }
         defaultMealSlot={
           extraTarget && extraTarget !== "new"

@@ -38,9 +38,9 @@ export type AdjustPreviewPatch = {
 };
 
 function normSlot(slot?: string | null): string {
-  const s = String(slot || "uncategorized").toLowerCase();
+  const s = String(slot || "dinner").toLowerCase();
   if (s === "lunch" || s === "dinner") return s;
-  return "uncategorized";
+  return "dinner";
 }
 
 /** Rebuild matrix / totals / by_slot from a pack list. */
@@ -51,7 +51,6 @@ export function recomputeDaySummaryFromPack(
   const by_slot: Record<string, { meals: number; stops: number }> = {
     lunch: { meals: 0, stops: 0 },
     dinner: { meals: 0, stops: 0 },
-    uncategorized: { meals: 0, stops: 0 },
   };
   const matrixKey = new Map<string, {
     meal_type_id: string;
@@ -101,7 +100,7 @@ export function recomputeDaySummaryFromPack(
     }
   }
 
-  const slotRank: Record<string, number> = { lunch: 0, dinner: 1, uncategorized: 2 };
+  const slotRank: Record<string, number> = { lunch: 0, dinner: 1 };
   const matrix = Array.from(matrixKey.values()).sort(
     (a, b) => (slotRank[a.slot] ?? 9) - (slotRank[b.slot] ?? 9) || a.meal_type_name.localeCompare(b.meal_type_name),
   );
@@ -189,7 +188,7 @@ export function projectConsumerDaySummary(
       customer_name: d.customer_name || patch.customer_name || "",
       meal_type_id: d.meal_type_id,
       meal_type_name: d.meal_type_name,
-      meal_slot: d.meal_slot || "uncategorized",
+      meal_slot: d.meal_slot || "dinner",
       quantity: d.quantity,
       status: d.status,
     })),

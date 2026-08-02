@@ -67,10 +67,24 @@
     "status_badges": "Soft background with dark text (e.g., bg-green-100 text-green-800) with rounded-full."
   },
   "grids_and_layouts": {
-    "spacing_system": "Use generous padding: p-4 to p-6 for mobile cards, p-8 to p-12 for desktop sections.",
-    "dashboard_grid": "High Density Grid (Bento): grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 or gap-6. Every pixel utilized.",
-    "marketing_grid": "Tetris Grid: Asymmetrical, grid-cols-1 md:grid-cols-12 gap-8. Break standard symmetry.",
-    "mobile_first": "Ensure tap targets are at least 48x48px. Limit image heights to max-h-[60vh] on mobile."
+    "ops_density": {
+      "principle": "Data integrity first on provider, consumer app, and admin — maximize rows/fields per viewport. Marketing stays generous.",
+      "shell_gutters": "px-3 sm:px-4 lg:px-6; py-3 sm:py-4 lg:py-6 (no lg:py-10 / lg:px-10 on ops shells).",
+      "page_stacks": "gap-3 default; gap-4 max for sectioned settings.",
+      "page_h1": "text-xl sm:text-2xl; keep label-overline; long help is one line or collapsible.",
+      "cards_and_rows": "body p-3 / px-3 py-2.5; empty/loading p-4 (not p-8/p-10).",
+      "kpis": "p-3; no forced tall min-h on ops dashboards.",
+      "appsheet": "body/footer px-4 sm:px-5 py-3; title text-lg.",
+      "forms": "field gap-3; card header px-4 py-2; body p-3 sm:p-4.",
+      "mobile": "One bottom clearance (nav OR sticky form bar). Primary CTAs ≥44px; filter chips may be h-9.",
+      "dashboard_grid": "High Density Grid (Bento): grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3 or gap-4. Every pixel utilized."
+    },
+    "marketing_spacing": {
+      "spacing_system": "Use generous padding: p-4 to p-6 for mobile cards, p-8 to p-12 for desktop sections.",
+      "marketing_grid": "Tetris Grid: Asymmetrical, grid-cols-1 md:grid-cols-12 gap-8. Break standard symmetry.",
+      "note": "Apply 2-3x more spacing than feels comfortable ONLY on marketing / landing / pricing / blog — never on ops dashboards."
+    },
+    "mobile_first": "Ensure primary tap targets are at least 44x44px (prefer 48px for Mark Delivered / Verify). Limit image heights to max-h-[60vh] on mobile."
   },
   "motion": {
     "transitions": "Specific transitions only. e.g., transition-transform duration-200 ease-out. NO 'transition-all'.",
@@ -121,7 +135,7 @@
     "Always use modern button styles (pill-shaped or rounded-xl) with hover animations.",
     "NEVER use AI assistant Emoji characters (🤖🧠💭) for icons.",
     "Every interaction needs micro-animations (hover, focus, active).",
-    "Use 2-3x more spacing than feels comfortable.",
+    "Ops (provider/consumer app/admin): prefer dense spacing (gap-3, p-3) — data integrity first. Marketing only: use 2-3x more spacing than feels comfortable.",
     "Use the exact image URLs provided. Do not use placeholder text or dummy image services."
   ]
 }

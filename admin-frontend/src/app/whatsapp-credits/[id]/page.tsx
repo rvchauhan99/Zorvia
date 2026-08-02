@@ -90,11 +90,11 @@ export default function WhatsAppCreditDetailPage() {
 
   return (
     <AdminShell title="WhatsApp credit review">
-      <div className="max-w-3xl flex flex-col gap-4">
+      <div className="max-w-3xl flex flex-col gap-3">
         <Link href="/whatsapp-credits" className="text-sm text-teal-700 hover:underline w-fit">
           ← Back to WhatsApp credits
         </Link>
-        <div className="bg-white border border-neutral-200 rounded-2xl p-5 flex flex-col gap-3">
+        <div className="bg-white border border-neutral-200 rounded-2xl p-4 flex flex-col gap-3">
           <div className="text-xs uppercase tracking-widest text-neutral-500 font-semibold">
             Provider
           </div>
@@ -157,7 +157,7 @@ export default function WhatsAppCreditDetailPage() {
         </div>
 
         {pending ? (
-          <div className="bg-white border border-neutral-200 rounded-2xl p-5 flex flex-col gap-3">
+          <div className="bg-white border border-neutral-200 rounded-2xl p-4 flex flex-col gap-3">
             <button
               type="button"
               data-testid="wa-approve-credit"

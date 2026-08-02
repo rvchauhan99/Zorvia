@@ -8,6 +8,8 @@ const SIZE: Record<string, string> = {
   lg: "sm:max-w-lg",
   xl: "sm:max-w-xl",
   "2xl": "sm:max-w-2xl",
+  "3xl": "sm:max-w-3xl",
+  "4xl": "sm:max-w-4xl",
 };
 
 export default function AppSheet({
@@ -28,7 +30,7 @@ export default function AppSheet({
   title?: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
-  size?: "md" | "lg" | "xl" | "2xl";
+  size?: "md" | "lg" | "xl" | "2xl" | "3xl" | "4xl";
   as?: "div" | "form";
   onSubmit?: (e: React.FormEvent) => void;
   closeTestId?: string;
@@ -98,8 +100,8 @@ export default function AppSheet({
       ) : null}
 
       {title ? (
-        <div className="shrink-0 flex items-center justify-between gap-3 px-5 sm:px-8 pt-2 sm:pt-6 pb-3 border-b border-brand-border/60">
-          <h3 id={titleId} className="font-display font-bold text-xl sm:text-2xl truncate">
+        <div className="shrink-0 flex items-center justify-between gap-3 px-4 sm:px-5 pt-2 sm:pt-4 pb-2.5 border-b border-brand-border/60">
+          <h3 id={titleId} className="font-display font-bold text-lg truncate">
             {title}
           </h3>
           <button
@@ -115,13 +117,13 @@ export default function AppSheet({
 
       <div
         ref={bodyRef}
-        className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 sm:px-8 py-4 sm:py-5"
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 sm:px-5 py-3"
       >
         {children}
       </div>
 
       {footer ? (
-        <div className="shrink-0 border-t border-brand-border bg-white px-5 sm:px-8 pt-3 pb-[max(1rem,env(safe-area-inset-bottom,0px))] sm:pb-6">
+        <div className="shrink-0 border-t border-brand-border bg-white px-4 sm:px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] sm:pb-4">
           {footer}
         </div>
       ) : (

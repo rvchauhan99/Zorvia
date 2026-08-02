@@ -47,7 +47,7 @@ export default function InboxPage() {
 
   return (
     <AdminShell title="Inbox">
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3">
         <div className="flex gap-2 flex-wrap">
           {(["new", "read", "archived"] as StatusFilter[]).map((s) => (
             <button
@@ -67,9 +67,9 @@ export default function InboxPage() {
         </div>
         <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden">
           {loading ? (
-            <div className="p-8 text-center text-sm text-neutral-500">Loading…</div>
+            <div className="p-4 text-center text-sm text-neutral-500">Loading…</div>
           ) : rows.length === 0 ? (
-            <div className="p-8 text-center text-sm text-neutral-500" data-testid="inbox-empty">
+            <div className="p-4 text-center text-sm text-neutral-500" data-testid="inbox-empty">
               No {status} messages.
             </div>
           ) : (

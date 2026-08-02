@@ -65,7 +65,7 @@ type Props = {
   mealSlots: MealSlot[];
   onMealSlotsChange: (slots: MealSlot[]) => void;
   deliveryDays: number[];
-  /** Single-slot / uncategorized schedule (legacy mirror). */
+  /** Single-slot schedule (legacy meal_schedule mirror). */
   mealSchedule: Record<string, number>;
   mealQuantity: number;
   /** Dual-slot same-mode quantities. */
@@ -134,7 +134,7 @@ export default function MealScheduleFields({
     if (!deliveryDays.length) return "Select at least one day";
     if (mode === "same") {
       const labels = WEEKDAYS.filter((d) => deliveryDays.includes(d.i)).map((d) => d.s).join(", ");
-      const slotLabel = slots[0] === "uncategorized" ? "" : `${MEAL_SLOT_LABELS[slots[0]]} · `;
+      const slotLabel = slots[0] === "dinner" && !dual ? "" : `${MEAL_SLOT_LABELS[slots[0]]} · `;
       return `${labels} · ${slotLabel}${mealQuantity} meal${mealQuantity === 1 ? "" : "s"}/day · ${priceLabel}`;
     }
     const parts = WEEKDAYS.filter((d) => deliveryDays.includes(d.i)).map((d) => {
@@ -160,8 +160,8 @@ export default function MealScheduleFields({
     let next: MealSlot[];
     if (has) {
       next = mealSlots.filter((s) => s !== slot) as MealSlot[];
-      if (!next.length || next.includes("uncategorized")) next = ["uncategorized"];
-      else next = normalizeMealSlots(next.filter((s) => s !== "uncategorized"));
+      if (!next.length) next = ["dinner"];
+      else next = normalizeMealSlots(next);
     } else {
       const cats = mealSlots.filter((s) => s === "lunch" || s === "dinner") as MealSlot[];
       cats.push(slot);
@@ -175,19 +175,6 @@ export default function MealScheduleFields({
       <div>
         <span className="label-overline">Meal category</span>
         <div className="flex gap-2 mt-1.5 flex-wrap">
-          <button
-            type="button"
-            data-testid="meal-slot-uncategorized"
-            disabled={disabled}
-            onClick={() => onMealSlotsChange(["uncategorized"])}
-            className={`h-11 min-h-[44px] px-3 rounded-full text-sm font-semibold border cursor-pointer ${
-              !dual && slots[0] === "uncategorized"
-                ? "bg-primary text-primary-foreground border-primary"
-                : "bg-white border-brand-border"
-            }`}
-          >
-            Uncategorized
-          </button>
           <button
             type="button"
             data-testid="meal-slot-lunch"
@@ -216,7 +203,7 @@ export default function MealScheduleFields({
           </button>
         </div>
         <p className="text-xs text-muted-foreground mt-1">
-          Default is Uncategorized. Select Lunch and/or Dinner to split kitchen counts and drivers.
+          Default is Dinner. Select Lunch and/or Dinner to split kitchen counts and drivers.
         </p>
       </div>
 

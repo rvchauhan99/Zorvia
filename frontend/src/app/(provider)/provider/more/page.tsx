@@ -14,20 +14,10 @@ export default function More() {
   const router = useRouter();
   const [activity, setActivity] = useState<any[]>([]);
   const [waEnabled, setWaEnabled] = useState(false);
-  const [fixedMonthly, setFixedMonthly] = useState(false);
   const admin = canMutateAdmin(session);
 
   useEffect(() => {
     void fetchWhatsappFeaturesEnabled().then(setWaEnabled);
-  }, []);
-
-  useEffect(() => {
-    api.get("/providers/me")
-      .then(({ data }) => {
-        const mb = data?.settings?.monthly_billing;
-        setFixedMonthly(!!mb?.enabled && mb?.policy_variant === "monthly_fixed");
-      })
-      .catch(() => setFixedMonthly(false));
   }, []);
 
   const items = useMemo(() => {
@@ -40,14 +30,12 @@ export default function More() {
         : []),
       { to: "/provider/analysis", label: "Analysis", icon: ChartLine, testid: "more-analysis" },
       { to: "/provider/reports", label: "Reports", icon: ChartLine, testid: "more-reports" },
-      ...(fixedMonthly
-        ? [{ to: "/provider/monthly-dues", label: "Customer subscriptions", icon: CalendarBlank, testid: "more-monthly-dues" }]
-        : []),
+      { to: "/provider/monthly-dues", label: "Customer subscriptions", icon: CalendarBlank, testid: "more-monthly-dues" },
       { to: "/provider/subscription", label: "Subscription", icon: CreditCard, testid: "more-subscription", adminOnly: true },
       { to: "/provider/settings", label: "Settings", icon: Gear, testid: "more-settings", adminOnly: true },
     ];
     return all.filter((it) => !it.adminOnly || admin);
-  }, [admin, waEnabled, fixedMonthly]);
+  }, [admin, waEnabled]);
 
   useEffect(() => {
     if (isDriver(session)) {

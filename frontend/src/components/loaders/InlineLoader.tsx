@@ -18,7 +18,7 @@ export default function InlineLoader({
   return (
     <div
       data-testid={testid}
-      className={`flex items-center justify-center gap-2 p-6 sm:p-8 text-sm text-muted-foreground ${className}`}
+      className={`flex items-center justify-center gap-2 p-4 text-sm text-muted-foreground ${className}`}
     >
       <Loader size="sm" testid={`${testid}-spinner`} />
       <span>{label}</span>

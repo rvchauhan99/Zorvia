@@ -10,6 +10,8 @@ import { toast } from "sonner";
 import ImageSourceField from "@/components/ImageSourceField";
 import { PageLoader } from "@/components/loaders";
 import { scheduleSummaryLabel } from "@/components/MealScheduleFields";
+import { CA_PROVINCES } from "@/lib/ca-provinces";
+import SearchableSelect from "@/components/SearchableSelect";
 
 function toCSV(rows: any[]) {
   if (!rows || !rows.length) return "";
@@ -162,11 +164,11 @@ export default function ConsumerProfile() {
   const c = me.customer || {};
 
   return (
-    <div className="flex flex-col gap-4 animate-fade-in-up">
+    <div className="flex flex-col gap-3 animate-fade-in-up">
       <div className="flex items-start justify-between gap-3">
         <div>
           <span className="label-overline">Account</span>
-          <h1 className="font-display font-black text-3xl mt-1">Profile</h1>
+          <h1 className="font-display font-black text-xl sm:text-2xl mt-1">Profile</h1>
         </div>
         <button
           data-testid="download-statement"
@@ -177,7 +179,7 @@ export default function ConsumerProfile() {
         </button>
       </div>
 
-      <div className="card-tinted p-5 flex flex-col gap-3" data-testid="avatar-section">
+      <div className="card-tinted p-4 flex flex-col gap-3" data-testid="avatar-section">
         <ImageSourceField
           label="Profile picture"
           optional
@@ -196,7 +198,7 @@ export default function ConsumerProfile() {
         ) : null}
       </div>
 
-      <form onSubmit={save} className="card-tinted p-5 flex flex-col gap-4">
+      <form onSubmit={save} className="card-tinted p-4 flex flex-col gap-3">
         <div>
           <div className="label-overline">Name</div>
           <div className="font-medium">{c.name}</div>
@@ -224,16 +226,14 @@ export default function ConsumerProfile() {
           </label>
           <label className="flex flex-col gap-1.5">
             <span className="label-overline">Province</span>
-            <select
-              data-testid="profile-province"
-              className={input}
+            <SearchableSelect
+              testid="profile-province"
+              inputClassName={input}
               value={form.province || "ON"}
-              onChange={(e) => setForm({ ...form, province: e.target.value })}
-            >
-              {["AB","BC","MB","NB","NL","NS","NT","NU","ON","PE","QC","SK","YT"].map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
+              onChange={(v) => setForm({ ...form, province: v })}
+              options={CA_PROVINCES.map((p) => ({ value: p.code, label: `${p.code} — ${p.name}` }))}
+              placeholder="Search province…"
+            />
           </label>
           <label className="flex flex-col gap-1.5">
             <span className="label-overline">Postal code</span>
@@ -276,7 +276,7 @@ export default function ConsumerProfile() {
         </button>
       </form>
 
-      <form onSubmit={changePassword} className="card-tinted p-5 flex flex-col gap-3" data-testid="change-password-section">
+      <form onSubmit={changePassword} className="card-tinted p-4 flex flex-col gap-3" data-testid="change-password-section">
         <h2 className="font-display font-bold text-xl">{hasPassword ? "Change password" : "Set password"}</h2>
         {!hasPassword ? (
           <p className="text-sm text-muted-foreground">You signed in with Google. Set a password to also use email login.</p>

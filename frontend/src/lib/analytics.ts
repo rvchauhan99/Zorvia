@@ -1,6 +1,6 @@
 export type PeriodKey = "7d" | "30d" | "90d" | "mtd" | "last_month" | "ytd" | "custom";
 
-export type MealSlotFilter = "all" | "lunch" | "dinner" | "uncategorized";
+export type MealSlotFilter = "all" | "lunch" | "dinner";
 
 export type KpiValue = {
   value: number;
@@ -86,7 +86,6 @@ export const MEAL_SLOT_FILTERS: Array<{ key: MealSlotFilter; label: string }> = 
   { key: "all", label: "All slots" },
   { key: "lunch", label: "Lunch" },
   { key: "dinner", label: "Dinner" },
-  { key: "uncategorized", label: "Uncategorized" },
 ];
 
 export function fmtDelta(kpi?: KpiValue, suffix = "") {

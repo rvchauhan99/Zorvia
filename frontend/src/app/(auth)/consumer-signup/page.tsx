@@ -9,6 +9,8 @@ import { useAuth } from "@/lib/auth";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
 import ImageSourceField from "@/components/ImageSourceField";
 import { trackEvent } from "@/lib/ga";
+import { CA_PROVINCES } from "@/lib/ca-provinces";
+import SearchableSelect from "@/components/SearchableSelect";
 
 function ConsumerSignupForm() {
   const { consumerSignup } = useAuth();
@@ -152,16 +154,14 @@ function ConsumerSignupForm() {
             </label>
             <label className={label}>
               <span className="label-overline">Province</span>
-              <select
-                data-testid="csignup-province"
-                className={input}
+              <SearchableSelect
+                testid="csignup-province"
+                inputClassName={input}
                 value={form.province}
-                onChange={(e) => setForm({ ...form, province: e.target.value })}
-              >
-                {["AB","BC","MB","NB","NL","NS","NT","NU","ON","PE","QC","SK","YT"].map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
+                onChange={(v) => setForm({ ...form, province: v })}
+                options={CA_PROVINCES.map((p) => ({ value: p.code, label: `${p.code} — ${p.name}` }))}
+                placeholder="Search province…"
+              />
             </label>
             <label className={label}>
               <span className="label-overline">Postal code</span>

@@ -127,7 +127,7 @@ export default function AdminShell({
           </nav>
         </div>
       </header>
-      <main className="max-w-6xl mx-auto px-4 py-6">{children}</main>
+      <main className="max-w-6xl mx-auto px-3 py-3 sm:px-4 sm:py-4 lg:px-6 lg:py-6">{children}</main>
     </div>
   );
 }

@@ -21,6 +21,14 @@ type SettlementBasis = "plan" | "adjustable";
 const input =
   "h-11 px-4 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all w-full";
 
+function tierLabel(tier?: string | null) {
+  if (!tier) return null;
+  if (tier === "recalc_daily") return "recalc daily";
+  if (tier === "flat_with_deductions") return "flat with deductions";
+  if (tier === "fixed_monthly") return "fixed monthly";
+  return String(tier).replace(/_/g, " ");
+}
+
 export default function RecordPaymentSheet({ open, onClose, onRecorded, lockedCustomer = null }: Props) {
   const [customer, setCustomer] = useState<CustomerAsyncOption | null>(null);
   const [amount, setAmount] = useState("");
@@ -33,11 +41,13 @@ export default function RecordPaymentSheet({ open, onClose, onRecorded, lockedCu
     credit: number;
     month_charge?: number | null;
     monthly_fee?: number | null;
-    tax_amount?: number | null;
     collection_due_date?: string | null;
     plan_name?: string | null;
     monthly?: boolean;
     policy_variant?: string | null;
+    tier_applied?: string | null;
+    cancelled_units?: number | null;
+    delivered_units?: number | null;
   } | null>(null);
 
   useEffect(() => {
@@ -78,12 +88,15 @@ export default function RecordPaymentSheet({ open, onClose, onRecorded, lockedCu
         const monthly = data?.billing?.billing_mode === "monthly_flat";
         const policyVariant = data?.billing?.policy_variant || null;
         const monthlyFee = data?.billing?.monthly_fee != null ? Number(data.billing.monthly_fee) : null;
-        const monthCharge = data?.current_month_billing?.month_charge_after_tax
-          ?? data?.current_month_billing?.month_charge_before_tax
-          ?? null;
-        const monthChargeNum = monthCharge != null ? Number(monthCharge) : null;
-        const taxAmount = data?.current_month_billing?.tax_amount != null
-          ? Number(data.current_month_billing.tax_amount)
+        // Pre-tax month charge for apples-to-apples compare with plan fee
+        const monthChargeRaw = data?.current_month_billing?.month_charge_before_tax ?? null;
+        const monthChargeNum = monthChargeRaw != null ? Number(monthChargeRaw) : null;
+        const tier = data?.current_month_billing?.tier_applied || null;
+        const cancelledUnits = data?.current_month_billing?.cancelled_units != null
+          ? Number(data.current_month_billing.cancelled_units)
+          : null;
+        const deliveredUnits = data?.current_month_billing?.delivered_units != null
+          ? Number(data.current_month_billing.delivered_units)
           : null;
         setBillingHint({
           outstanding,
@@ -92,9 +105,11 @@ export default function RecordPaymentSheet({ open, onClose, onRecorded, lockedCu
           policy_variant: policyVariant,
           monthly_fee: monthlyFee,
           month_charge: monthChargeNum,
-          tax_amount: taxAmount,
           collection_due_date: data?.billing?.collection_due_date || data?.current_month_billing?.collection_due_date || null,
           plan_name: data?.billing?.monthly_plan_name || data?.current_month_billing?.plan_name || null,
+          tier_applied: tier,
+          cancelled_units: cancelledUnits,
+          delivered_units: deliveredUnits,
         });
 
         const adjustableDiff =
@@ -158,6 +173,9 @@ export default function RecordPaymentSheet({ open, onClose, onRecorded, lockedCu
       fd.append("amount", amount);
       fd.append("reference", reference.trim());
       if (file) fd.append("screenshot", file);
+      if (showSettlementChoice) {
+        fd.append("settlement_basis", settlement);
+      }
       await api.post("/payments", fd, { headers: { "Content-Type": "multipart/form-data" } });
       toast.success("Payment recorded — outstanding updated");
       onRecorded();
@@ -168,6 +186,8 @@ export default function RecordPaymentSheet({ open, onClose, onRecorded, lockedCu
       setSubmitting(false);
     }
   }
+
+  const tier = tierLabel(billingHint?.tier_applied);
 
   return (
     <AppSheet
@@ -237,10 +257,14 @@ export default function RecordPaymentSheet({ open, onClose, onRecorded, lockedCu
             </div>
           ) : null}
           {billingHint.monthly ? (
-            <div className="text-xs text-muted-foreground mt-1">
+            <div className="text-xs text-muted-foreground mt-1" data-testid="record-payment-tier-hint">
               {billingHint.plan_name || "Monthly plan"}
-              {billingHint.monthly_fee != null ? ` · fee ${fmtCAD(billingHint.monthly_fee)}` : ""}
-              {billingHint.month_charge != null ? ` · month charge ${fmtCAD(billingHint.month_charge)}` : ""}
+              {billingHint.monthly_fee != null ? ` · plan fee ${fmtCAD(billingHint.monthly_fee)}` : ""}
+              {billingHint.month_charge != null ? ` · this month ${fmtCAD(billingHint.month_charge)}` : ""}
+              {tier ? ` · ${tier}` : ""}
+              {billingHint.cancelled_units != null || billingHint.delivered_units != null
+                ? ` · ${billingHint.cancelled_units ?? 0} cancelled / ${billingHint.delivered_units ?? 0} delivered`
+                : ""}
               {billingHint.collection_due_date ? ` · due ${billingHint.collection_due_date}` : ""}
             </div>
           ) : null}
@@ -251,7 +275,8 @@ export default function RecordPaymentSheet({ open, onClose, onRecorded, lockedCu
         <div className="mb-4" data-testid="record-payment-settlement">
           <div className="label-overline mb-2">Settle amount</div>
           <p className="text-xs text-muted-foreground mb-2">
-            Plan and recalculated month charge differ. Choose which amount to collect (you can still edit the field).
+            Plan fee and recalculated month charge differ
+            {tier ? ` (${tier})` : ""}. Choose which amount to collect (you can still edit the field).
           </p>
           <div className="flex flex-wrap gap-2">
             <button
@@ -264,7 +289,7 @@ export default function RecordPaymentSheet({ open, onClose, onRecorded, lockedCu
                   : "bg-white border-brand-border text-foreground hover:bg-brand-surface"
               }`}
             >
-              {(billingHint?.tax_amount ?? 0) > 0 ? "Plan fee (pre-tax)" : "Plan"}{billingHint?.monthly_fee != null ? ` ${fmtCAD(billingHint.monthly_fee)}` : ""}
+              Plan fee{billingHint?.monthly_fee != null ? ` ${fmtCAD(billingHint.monthly_fee)}` : ""}
             </button>
             <button
               type="button"
@@ -276,7 +301,7 @@ export default function RecordPaymentSheet({ open, onClose, onRecorded, lockedCu
                   : "bg-white border-brand-border text-foreground hover:bg-brand-surface"
               }`}
             >
-              {(billingHint?.tax_amount ?? 0) > 0 ? "Adjustable (after tax)" : "Adjustable"}{billingHint?.month_charge != null ? ` ${fmtCAD(billingHint.month_charge)}` : ""}
+              Adjustable this month{billingHint?.month_charge != null ? ` ${fmtCAD(billingHint.month_charge)}` : ""}
             </button>
           </div>
         </div>

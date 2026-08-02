@@ -10,6 +10,7 @@ import { DownloadSimple } from "@phosphor-icons/react";
 import { InlineLoader } from "@/components/loaders";
 import { AreaChart } from "@/components/analytics/AreaChart";
 import CursorPaginationBar from "@/components/CursorPaginationBar";
+import SearchableSelect from "@/components/SearchableSelect";
 import { DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
 
@@ -65,7 +66,9 @@ export default function Reports() {
   const rows = data?.rows ?? [];
   const balanceListTab = tab === "outstanding" || tab === "customer-credit";
   const pagedTab = tab === "outstanding" || tab === "customer-credit" || tab === "statement" || tab === "area";
-  const fixedOutstanding = tab === "outstanding" && data?.billing_mode === "monthly_fixed";
+  const fixedOutstanding =
+    tab === "outstanding" &&
+    (data?.billing_mode === "monthly_fixed" || data?.billing_mode === "mixed");
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(listQ.trim()), 300);
@@ -199,12 +202,14 @@ export default function Reports() {
                 email: r.email,
                 credit: r.credit ?? Math.abs(Number(r.outstanding) || 0),
               }))
-            : tab === "outstanding" && data?.billing_mode === "monthly_fixed"
+            : tab === "outstanding" &&
+                (data?.billing_mode === "monthly_fixed" || data?.billing_mode === "mixed")
               ? rows.map((r: any) => ({
                   customer_id: r.customer_id,
                   name: r.name,
                   phone: r.phone,
                   email: r.email,
+                  billing_mode: r.billing_mode || "",
                   renewal_date: r.renewal_date || r.collection_due_date || r.last_due_date || "",
                   days_overdue: r.days_overdue ?? 0,
                   outstanding: r.outstanding,
@@ -215,11 +220,11 @@ export default function Reports() {
   }
 
   return (
-    <div className="flex flex-col gap-3 sm:gap-5 animate-fade-in-up">
+    <div className="flex flex-col gap-3 animate-fade-in-up">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <span className="label-overline">Insights</span>
-          <h1 className="font-display font-black text-2xl sm:text-4xl mt-0.5 sm:mt-1">Reports</h1>
+          <h1 className="font-display font-black text-xl sm:text-2xl mt-0.5">Reports</h1>
         </div>
         {canExport ? (
           <button data-testid="export-csv" onClick={exportCSV} className="pill-btn btn-outline gap-2 cursor-pointer hover:bg-brand-surface h-11 min-h-[44px] shrink-0">
@@ -284,17 +289,21 @@ export default function Reports() {
           </label>
           <label className="flex items-center gap-2">
             <span className="label-overline">Collection day</span>
-            <select
-              data-testid="due-collection-day"
-              value={dueCollectionDay}
-              onChange={(e) => setDueCollectionDay(e.target.value)}
-              className="h-10 px-3 rounded-xl bg-white border border-brand-border"
-            >
-              <option value="">All</option>
-              {[1, 5, 10, 15, 20, 25, 28].map((d) => (
-                <option key={d} value={String(d)}>{d}</option>
-              ))}
-            </select>
+            <div className="w-28">
+              <SearchableSelect
+                testid="due-collection-day"
+                value={dueCollectionDay}
+                onChange={setDueCollectionDay}
+                allowEmpty
+                emptyLabel="All"
+                options={[1, 5, 10, 15, 20, 25, 28].map((d) => ({
+                  value: String(d),
+                  label: String(d),
+                }))}
+                inputClassName="h-10 px-3 rounded-xl bg-white border border-brand-border"
+                placeholder="Day…"
+              />
+            </div>
           </label>
         </div>
       ) : null}
@@ -380,17 +389,17 @@ export default function Reports() {
       <div className="card-tinted p-4 sm:p-5 overflow-hidden">
         {!data ? <InlineLoader /> :
          !showMoney && (tab === "outstanding" || tab === "customer-credit" || tab === "collections" || tab === "statement") ? (
-          <div className="p-8 text-center text-sm text-muted-foreground" data-testid="reports-money-hidden">
+          <div className="p-4 text-center text-sm text-muted-foreground" data-testid="reports-money-hidden">
             Balance and payment amounts are visible to admins only. Use the Daily deliveries tab for stop counts, or ask an admin for financial reports.
           </div>
          ) : tab === "daily" ? (
           rows.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">No data in range.</div>
+            <div className="p-4 text-center text-muted-foreground">No data in range.</div>
           ) : (
             <>
               <ul className="md:hidden divide-y divide-brand-border -mx-4 sm:-mx-5">
                 {rows.map((r: any, i: number) => (
-                  <li key={r.date ? `deliv-${r.date}-${i}` : `deliv-${i}`} className="px-4 sm:px-5 py-4 flex flex-col gap-2">
+                  <li key={r.date ? `deliv-${r.date}-${i}` : `deliv-${i}`} className="px-3 py-2.5 flex flex-col gap-2">
                     <div className="font-medium">{r.date}</div>
                     <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
                       <span className="text-muted-foreground">Delivered</span>
@@ -447,7 +456,7 @@ export default function Reports() {
               ) : null}
             </div>
             {rows.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground">
+              <div className="p-4 text-center text-muted-foreground">
                 {fixedOutstanding
                   ? "No overdue balances — customers only appear after their collection day if they still owe"
                   : "No outstanding balances"}
@@ -458,7 +467,7 @@ export default function Reports() {
                   {rows.map((r: any, i: number) => (
                     <li
                       key={r.customer_id || `outstanding-${r.email || r.name || i}`}
-                      className={`px-4 sm:px-5 py-4 flex items-start justify-between gap-3 ${
+                      className={`px-3 py-2.5 flex items-start justify-between gap-3 ${
                         fixedOutstanding ? "bg-destructive/5" : ""
                       }`}
                     >
@@ -555,18 +564,21 @@ export default function Reports() {
               </span>
             </div>
             {rows.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground" data-testid="customer-credit-empty">
+              <div className="p-4 text-center text-muted-foreground" data-testid="customer-credit-empty">
                 No customer credits
               </div>
             ) : (
               <>
                 <ul className="md:hidden divide-y divide-brand-border -mx-4 sm:-mx-5" data-testid="customer-credit-list">
                   {rows.map((r: any, i: number) => (
-                    <li key={r.customer_id || `credit-${r.email || r.name || i}`} className="px-4 sm:px-5 py-4 flex items-start justify-between gap-3">
+                    <li key={r.customer_id || `credit-${r.email || r.name || i}`} className="px-3 py-2.5 flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="font-medium truncate">{r.name}</div>
                         <div className="text-xs text-muted-foreground mt-0.5 truncate">{[r.phone, r.email].filter(Boolean).join(" · ")}</div>
-                        {data?.billing_mode === "monthly_fixed" && (r.renewal_date || r.collection_due_date) ? (
+                        {(data?.billing_mode === "monthly_fixed" ||
+                          data?.billing_mode === "mixed" ||
+                          r.billing_mode === "monthly_fixed") &&
+                        (r.renewal_date || r.collection_due_date) ? (
                           <div className="text-xs text-muted-foreground mt-1">
                             Next renewal {r.renewal_date || r.collection_due_date}
                             {r.prepaid_months ? ` · ${r.prepaid_months} mo prepaid` : ""}
@@ -587,7 +599,7 @@ export default function Reports() {
                         <th className="px-3 py-2 label-overline">Customer</th>
                         <th className="px-3 py-2 label-overline">Phone</th>
                         <th className="px-3 py-2 label-overline">Email</th>
-                        {data?.billing_mode === "monthly_fixed" ? (
+                        {data?.billing_mode === "monthly_fixed" || data?.billing_mode === "mixed" ? (
                           <th className="px-3 py-2 label-overline">Next renewal</th>
                         ) : null}
                         <th className="px-3 py-2 label-overline text-right">Credit</th>
@@ -599,7 +611,7 @@ export default function Reports() {
                           <td className="px-3 py-2 font-medium">{r.name}</td>
                           <td className="px-3 py-2 text-muted-foreground">{r.phone}</td>
                           <td className="px-3 py-2 text-muted-foreground">{r.email}</td>
-                          {data?.billing_mode === "monthly_fixed" ? (
+                          {data?.billing_mode === "monthly_fixed" || data?.billing_mode === "mixed" ? (
                             <td className="px-3 py-2 text-muted-foreground">
                               {r.renewal_date || r.collection_due_date || "—"}
                               {r.prepaid_months ? (
@@ -631,7 +643,7 @@ export default function Reports() {
                   {data?.totals?.customer_count ?? 0} customers
                 </div>
                 {rows.length === 0 ? (
-                  <div className="p-8 text-center text-muted-foreground">No amounts due for this filter.</div>
+                  <div className="p-4 text-center text-muted-foreground">No amounts due for this filter.</div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm min-w-[720px]">
@@ -665,12 +677,12 @@ export default function Reports() {
               <>
             <div className="mb-3 text-sm">Total collected: <span className="font-display font-bold text-2xl text-secondary">{fmtCAD(data.total_amount)}</span> across {data.total_count} payments</div>
             {rows.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground">No collections in range.</div>
+              <div className="p-4 text-center text-muted-foreground">No collections in range.</div>
             ) : (
               <>
                 <ul className="md:hidden divide-y divide-brand-border -mx-4 sm:-mx-5">
                   {rows.map((r: any, i: number) => (
-                    <li key={r.date ? `coll-${r.date}-${i}` : `coll-${i}`} className="px-4 sm:px-5 py-4 flex items-center justify-between gap-3">
+                    <li key={r.date ? `coll-${r.date}-${i}` : `coll-${i}`} className="px-3 py-2.5 flex items-center justify-between gap-3">
                       <div>
                         <div className="font-medium">{r.date}</div>
                         <div className="text-xs text-muted-foreground mt-0.5">{r.count} payment{r.count === 1 ? "" : "s"}</div>
@@ -705,11 +717,11 @@ export default function Reports() {
             )}
           </>
         ) : tab === "active" ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[{k:"total",l:"Total"},{k:"active",l:"Active"},{k:"pending",l:"Pending approval"},{k:"on_pause",l:"On pause"}].map((it: any) => (
-              <div key={it.k} className="card-tinted p-5">
+              <div key={it.k} className="card-tinted p-3">
                 <div className="label-overline">{it.l}</div>
-                <div className="font-display font-black text-3xl mt-1">{data[it.k]}</div>
+                <div className="font-display font-black text-2xl mt-1">{data[it.k]}</div>
               </div>
             ))}
           </div>
@@ -736,12 +748,12 @@ export default function Reports() {
               </div>
             </div>
             {rows.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground">No statement rows for this month.</div>
+              <div className="p-4 text-center text-muted-foreground">No statement rows for this month.</div>
             ) : data.billing_mode === "monthly_flat" ? (
               <>
                 <ul className="md:hidden divide-y divide-brand-border -mx-4 sm:-mx-5">
                   {rows.map((r: any, i: number) => (
-                    <li key={r.customer_id || `statement-${r.email || r.name || i}`} className="px-4 sm:px-5 py-4 flex flex-col gap-2">
+                    <li key={r.customer_id || `statement-${r.email || r.name || i}`} className="px-3 py-2.5 flex flex-col gap-2">
                       <div className="font-medium">{r.name}</div>
                       <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
                         <span className="text-muted-foreground">Plan</span>
@@ -801,7 +813,7 @@ export default function Reports() {
               <>
                 <ul className="md:hidden divide-y divide-brand-border -mx-4 sm:-mx-5">
                   {rows.map((r: any, i: number) => (
-                    <li key={r.customer_id || `statement-${r.email || r.name || i}`} className="px-4 sm:px-5 py-4 flex flex-col gap-2">
+                    <li key={r.customer_id || `statement-${r.email || r.name || i}`} className="px-3 py-2.5 flex flex-col gap-2">
                       <div className="font-medium">{r.name}</div>
                       <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
                         <span className="text-muted-foreground">Meals</span>
@@ -846,13 +858,13 @@ export default function Reports() {
           </>
         ) : (
           rows.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground" data-testid="area-empty">No area data yet.</div>
+            <div className="p-4 text-center text-muted-foreground" data-testid="area-empty">No area data yet.</div>
           ) : (
-            <div className="flex flex-col gap-5" data-testid="area-summary-report">
+            <div className="flex flex-col gap-3" data-testid="area-summary-report">
               <AreaChart data={rows} showMoney={showMoney} />
               <ul className="md:hidden divide-y divide-brand-border -mx-4 sm:-mx-5">
                 {rows.map((r: any, i: number) => (
-                  <li key={r.area || `area-${i}`} className="px-4 sm:px-5 py-4 flex items-center justify-between gap-3">
+                  <li key={r.area || `area-${i}`} className="px-3 py-2.5 flex items-center justify-between gap-3">
                     <div>
                       <div className="font-mono uppercase font-medium">{r.area}</div>
                       <div className="text-xs text-muted-foreground mt-0.5">

@@ -160,13 +160,13 @@ export default function AnalysisPage() {
   const refreshing = busy && !!data;
 
   return (
-    <div className="flex flex-col gap-4 sm:gap-6 animate-fade-in-up">
-      <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3 sm:gap-4">
+    <div className="flex flex-col gap-3 animate-fade-in-up">
+      <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
         <div>
           <span className="label-overline">Business health</span>
-          <h1 className="font-display font-black text-2xl sm:text-4xl mt-0.5 sm:mt-1">Analysis</h1>
-          <p className="text-sm sm:text-base text-muted-foreground mt-1.5 sm:mt-2 max-w-2xl">
-            Period trends, receivables risk, collections, delivery performance, and top customer signals.
+          <h1 className="font-display font-black text-xl sm:text-2xl mt-0.5">Analysis</h1>
+          <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
+            Period trends, receivables, collections, and delivery signals.
           </p>
         </div>
         <div className="flex flex-col sm:items-end gap-2">
@@ -189,9 +189,9 @@ export default function AnalysisPage() {
       </div>
 
       {busy && !data ? (
-        <div className="flex flex-col gap-4 sm:gap-6" data-testid="analysis-loading">
+        <div className="flex flex-col gap-3" data-testid="analysis-loading">
           <KpiSkeleton count={8} testid="analysis-kpi-skeleton" className="md:grid-cols-2" />
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 sm:gap-4">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
             <SectionSkeleton testid="analysis-chart-skeleton-0" />
             <SectionSkeleton testid="analysis-chart-skeleton-1" />
             <SectionSkeleton testid="analysis-chart-skeleton-2" />
@@ -206,7 +206,7 @@ export default function AnalysisPage() {
               </div>
             ) : null}
 
-            <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 mt-4 sm:mt-6 animate-fade-in-up" style={stagger(1)}>
+            <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 mt-3 animate-fade-in-up" style={stagger(1)}>
               {showMoney ? (
                 <>
                   <KpiCard testid="kpi-collections" label="Collections" value={fmtCAD(k.collections_amount?.value || 0)} kpi={k.collections_amount} hint={`${k.collections_count?.value || 0} verified payments`} />
@@ -290,7 +290,7 @@ export default function AnalysisPage() {
           </section>
         </>
       ) : (
-        <div className="card-tinted p-8 text-center">
+        <div className="card-tinted p-4 text-center">
           <ChartLine size={32} className="mx-auto text-primary" />
           <h2 className="font-display font-bold text-xl mt-3">Analysis unavailable</h2>
           <p className="text-sm text-muted-foreground mt-1">Try again after deliveries or payments are added.</p>

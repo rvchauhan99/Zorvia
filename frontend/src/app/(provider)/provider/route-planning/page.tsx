@@ -28,10 +28,11 @@ import { canMutateAdmin } from "@/lib/roles";
 import { mealSlotBadgeLabel } from "@/lib/mealSlots";
 import { InlineLoader } from "@/components/loaders";
 import CursorPaginationBar from "@/components/CursorPaginationBar";
+import SearchableSelect from "@/components/SearchableSelect";
 import { OPS_DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
 
-type MealSlot = "uncategorized" | "lunch" | "dinner";
+type MealSlot = "lunch" | "dinner";
 
 type Stop = {
   id: string;
@@ -151,7 +152,7 @@ function evenSplitRanges(
 export default function RoutePlanningPage() {
   const { session } = useAuth();
   const admin = canMutateAdmin(session);
-  const [slot, setSlot] = useState<MealSlot>("uncategorized");
+  const [slot, setSlot] = useState<MealSlot>("dinner");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [plan, setPlan] = useState<any>(null);
@@ -534,7 +535,7 @@ export default function RoutePlanningPage() {
 
       {/* ── MEAL SLOT TABS ── */}
       <div className="flex flex-wrap gap-1.5" data-testid="route-slot-tabs">
-        {(["uncategorized", "lunch", "dinner"] as MealSlot[]).map((s) => (
+        {(["lunch", "dinner"] as MealSlot[]).map((s) => (
           <button
             key={s}
             type="button"
@@ -703,19 +704,18 @@ export default function RoutePlanningPage() {
                         {selected.size > 0 ? `${selected.size} stop${selected.size > 1 ? "s" : ""} selected` : "No stops selected"}
                       </span>
                       <span className="text-muted-foreground">→</span>
-                      <select
-                        data-testid="route-assign-driver"
-                        className="h-8 rounded-lg border border-brand-border bg-white px-2.5 text-xs min-w-36"
-                        value={assignDriverId}
-                        onChange={(e) => setAssignDriverId(e.target.value)}
-                      >
-                        <option value="">Unassigned pool</option>
-                        {drivers.map((d) => (
-                          <option key={d.id} value={d.id}>
-                            {d.name}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="min-w-36 flex-1 sm:flex-none">
+                        <SearchableSelect
+                          testid="route-assign-driver"
+                          value={assignDriverId}
+                          onChange={setAssignDriverId}
+                          allowEmpty
+                          emptyLabel="Unassigned pool"
+                          options={drivers.map((d) => ({ value: d.id, label: d.name }))}
+                          inputClassName="h-8 rounded-lg border border-brand-border bg-white px-2.5 text-xs"
+                          placeholder="Search driver…"
+                        />
+                      </div>
                       <button
                         type="button"
                         data-testid="route-assign-submit"
@@ -731,28 +731,26 @@ export default function RoutePlanningPage() {
                   /* ── Sequence Ranges Tab ── */
                   <div className="flex flex-col gap-2.5">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                      <label className="text-xs text-muted-foreground shrink-0 font-medium" htmlFor="route-bulk-source">
+                      <label className="text-xs text-muted-foreground shrink-0 font-medium">
                         Source pool
                       </label>
-                      <select
-                        id="route-bulk-source"
-                        data-testid="route-bulk-source"
-                        className="h-8 rounded-lg border border-brand-border bg-white px-2.5 text-xs flex-1 min-w-0"
+                      <SearchableSelect
+                        testid="route-bulk-source"
                         value={bulkSourceKey}
-                        onChange={(e) => setBulkSourceKey(e.target.value)}
-                      >
-                        {sections.map((sec) => {
+                        onChange={setBulkSourceKey}
+                        options={sections.map((sec) => {
                           const span = seqSpan(sec.stops);
                           const hint = span
                             ? `#${span.min}–#${span.max} (${span.counted})`
                             : `${sec.stops.length} stops`;
-                          return (
-                            <option key={sec.key} value={sec.key}>
-                              {sec.title} · {hint}
-                            </option>
-                          );
+                          return {
+                            value: sec.key,
+                            label: `${sec.title} · ${hint}`,
+                          };
                         })}
-                      </select>
+                        inputClassName="h-8 rounded-lg border border-brand-border bg-white px-2.5 text-xs"
+                        placeholder="Search pool…"
+                      />
                     </div>
 
                     <div className="flex flex-col gap-2" data-testid="route-bulk-ranges">
@@ -793,23 +791,22 @@ export default function RoutePlanningPage() {
                               }
                             />
                             <span className="text-xs text-muted-foreground">→</span>
-                            <select
-                              data-testid={`route-bulk-target-${idx}`}
-                              className="h-8 rounded-lg border border-brand-border bg-white px-2.5 text-xs min-w-32 flex-1"
-                              value={row.driverId}
-                              onChange={(e) =>
-                                setBulkRows((rows) =>
-                                  rows.map((r) => (r.id === row.id ? { ...r, driverId: e.target.value } : r))
-                                )
-                              }
-                            >
-                              <option value="">Unassigned pool</option>
-                              {drivers.map((d) => (
-                                <option key={d.id} value={d.id}>
-                                  {d.name}
-                                </option>
-                              ))}
-                            </select>
+                            <div className="min-w-32 flex-1">
+                              <SearchableSelect
+                                testid={`route-bulk-target-${idx}`}
+                                value={row.driverId}
+                                onChange={(driverId) =>
+                                  setBulkRows((rows) =>
+                                    rows.map((r) => (r.id === row.id ? { ...r, driverId } : r))
+                                  )
+                                }
+                                allowEmpty
+                                emptyLabel="Unassigned pool"
+                                options={drivers.map((d) => ({ value: d.id, label: d.name }))}
+                                inputClassName="h-8 rounded-lg border border-brand-border bg-white px-2.5 text-xs"
+                                placeholder="Search driver…"
+                              />
+                            </div>
                             <span
                               className="text-[11px] text-muted-foreground min-w-18"
                               data-testid={`route-bulk-preview-${idx}`}
@@ -912,7 +909,7 @@ export default function RoutePlanningPage() {
             </div>
 
             {stops.length === 0 ? (
-              <p className="card-tinted p-6 text-sm text-muted-foreground text-center">
+              <p className="card-tinted p-4 text-sm text-muted-foreground text-center">
                 No customers on this meal slot.
               </p>
             ) : (
@@ -1207,19 +1204,18 @@ export default function RoutePlanningPage() {
             <UserCircle size={16} className="text-primary shrink-0" />
             <span className="text-xs font-medium">{selected.size} selected</span>
             <span className="text-xs text-muted-foreground">→</span>
-            <select
-              data-testid="route-assign-driver"
-              className="h-8 rounded-lg border border-brand-border bg-white px-2.5 text-xs min-w-36"
-              value={assignDriverId}
-              onChange={(e) => setAssignDriverId(e.target.value)}
-            >
-              <option value="">Unassigned pool</option>
-              {drivers.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
+            <div className="min-w-36 flex-1 sm:flex-none max-w-xs">
+              <SearchableSelect
+                testid="route-assign-driver"
+                value={assignDriverId}
+                onChange={setAssignDriverId}
+                allowEmpty
+                emptyLabel="Unassigned pool"
+                options={drivers.map((d) => ({ value: d.id, label: d.name }))}
+                inputClassName="h-8 rounded-lg border border-brand-border bg-white px-2.5 text-xs"
+                placeholder="Search driver…"
+              />
+            </div>
             <button
               type="button"
               data-testid="route-assign-submit"

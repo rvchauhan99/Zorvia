@@ -18,7 +18,7 @@ export default function PageLoader({
   return (
     <div
       data-testid={testid}
-      className={`min-h-[40vh] flex flex-col items-center justify-center gap-3 ${className}`}
+      className={`min-h-[28vh] flex flex-col items-center justify-center gap-2 ${className}`}
     >
       <Loader size="lg" testid={`${testid}-spinner`} />
       <p className="text-sm text-muted-foreground">{label}</p>

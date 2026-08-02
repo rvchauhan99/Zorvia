@@ -96,7 +96,7 @@ export default function TenantDetailPage() {
 
   return (
     <AdminShell title="Tenant">
-      <div className="flex flex-col gap-4 max-w-3xl">
+      <div className="flex flex-col gap-3 max-w-3xl">
         <Link href="/tenants" className="text-sm text-teal-700 hover:underline w-fit">
           ← Back to tenants
         </Link>
@@ -104,18 +104,18 @@ export default function TenantDetailPage() {
           <div className="text-sm text-neutral-500">Loading…</div>
         ) : (
           <>
-            <div className="bg-white border border-neutral-200 rounded-2xl p-5 flex flex-col gap-2">
+            <div className="bg-white border border-neutral-200 rounded-2xl p-4 flex flex-col gap-2">
               <div className="text-xs uppercase tracking-widest text-neutral-500 font-semibold">
                 Kitchen
               </div>
-              <div className="text-2xl font-bold" data-testid="tenant-name">
+              <div className="text-xl sm:text-2xl font-bold" data-testid="tenant-name">
                 {data.name}
               </div>
               <div className="text-sm text-neutral-600">{data.admin_email || "—"}</div>
               <div className="text-xs font-mono text-neutral-400">{data.signup_code}</div>
             </div>
 
-            <div className="bg-white border border-neutral-200 rounded-2xl p-5">
+            <div className="bg-white border border-neutral-200 rounded-2xl p-4">
               <div className="font-semibold mb-3">Subscription</div>
               <div className="grid grid-cols-2 gap-3 text-sm" data-testid="tenant-subscription">
                 <div>
@@ -140,7 +140,7 @@ export default function TenantDetailPage() {
             </div>
 
             {waEnabled ? (
-              <div className="bg-white border border-neutral-200 rounded-2xl p-5">
+              <div className="bg-white border border-neutral-200 rounded-2xl p-4">
                 <div className="font-semibold mb-3">WhatsApp credit</div>
                 <div className="text-sm" data-testid="tenant-wa-billing">
                   <div className="text-xs uppercase tracking-widest text-neutral-500">Balance</div>
@@ -176,7 +176,7 @@ export default function TenantDetailPage() {
               ))}
             </div>
 
-            <div className="bg-white border border-neutral-200 rounded-2xl p-5 flex flex-col gap-3" data-testid="kitchen-health">
+            <div className="bg-white border border-neutral-200 rounded-2xl p-4 flex flex-col gap-3" data-testid="kitchen-health">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="font-semibold">Kitchen health</div>
                 <div className="flex gap-1">
@@ -218,7 +218,7 @@ export default function TenantDetailPage() {
               )}
             </div>
 
-            <div className="bg-white border border-neutral-200 rounded-2xl p-5 flex flex-col gap-3" data-testid="tenant-notes">
+            <div className="bg-white border border-neutral-200 rounded-2xl p-4 flex flex-col gap-3" data-testid="tenant-notes">
               <div className="font-semibold">Support notes</div>
               <textarea
                 data-testid="note-body"
@@ -265,11 +265,11 @@ export default function TenantDetailPage() {
             </div>
 
             <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden">
-              <div className="px-5 py-4 border-b border-neutral-200 font-semibold">
+              <div className="px-4 py-3 border-b border-neutral-200 font-semibold">
                 SaaS payment records
               </div>
               {(data.saas_payments || []).length === 0 ? (
-                <div className="p-5 text-sm text-neutral-500">No SaaS payments yet.</div>
+                <div className="p-4 text-sm text-neutral-500">No SaaS payments yet.</div>
               ) : (
                 <ul className="divide-y divide-neutral-200">
                   {data.saas_payments.map((r: any) => (
@@ -294,11 +294,11 @@ export default function TenantDetailPage() {
 
             {waEnabled ? (
               <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden">
-                <div className="px-5 py-4 border-b border-neutral-200 font-semibold">
+                <div className="px-4 py-3 border-b border-neutral-200 font-semibold">
                   WhatsApp credit purchases
                 </div>
                 {(data.whatsapp_credit_purchases || []).length === 0 ? (
-                  <div className="p-5 text-sm text-neutral-500">No WhatsApp top-ups yet.</div>
+                  <div className="p-4 text-sm text-neutral-500">No WhatsApp top-ups yet.</div>
                 ) : (
                   <ul className="divide-y divide-neutral-200" data-testid="tenant-wa-purchases">
                     {data.whatsapp_credit_purchases.map((r: any) => (

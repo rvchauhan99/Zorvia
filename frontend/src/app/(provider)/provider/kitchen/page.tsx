@@ -7,13 +7,10 @@ import {
   CookingPot,
   MagnifyingGlass,
   CalendarBlank,
-  CaretDown,
   SunHorizon,
   Moon,
-  Question,
   Tray,
   Package,
-  Users,
   ArrowClockwise,
 } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
@@ -23,10 +20,11 @@ import { fmtDate, todayISO } from "@/lib/format";
 import { mealSlotBadgeLabel } from "@/lib/mealSlots";
 import { InlineLoader } from "@/components/loaders";
 import CursorPaginationBar from "@/components/CursorPaginationBar";
+import SearchableSelect from "@/components/SearchableSelect";
 import { OPS_DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
 
-type SlotFilter = "all" | "lunch" | "dinner" | "uncategorized";
+type SlotFilter = "all" | "lunch" | "dinner";
 
 const SLOT_CONFIG: Record<
   string,
@@ -52,13 +50,6 @@ const SLOT_CONFIG: Record<
     bg: "bg-secondary/10",
     border: "border-secondary/25",
     label: "Dinner",
-  },
-  uncategorized: {
-    icon: Question,
-    color: "text-muted-foreground",
-    bg: "bg-muted/60",
-    border: "border-brand-border",
-    label: "Other",
   },
 };
 
@@ -89,7 +80,7 @@ function AvatarChip({ name }: { name: string }) {
 }
 
 function SlotBadge({ slot }: { slot: string }) {
-  const cfg = SLOT_CONFIG[slot] ?? SLOT_CONFIG.uncategorized;
+  const cfg = SLOT_CONFIG[slot] ?? SLOT_CONFIG.dinner;
   const Icon = cfg.icon;
   return (
     <span
@@ -187,7 +178,7 @@ export default function KitchenPage() {
   }, [data]);
 
   const slotsShown: SlotFilter[] =
-    slotFilter === "all" ? ["lunch", "dinner", "uncategorized"] : [slotFilter];
+    slotFilter === "all" ? ["lunch", "dinner"] : [slotFilter];
 
   const slotCounts = data?.by_slot || {};
   const totalMeals = data?.totals?.meals ?? 0;
@@ -196,12 +187,6 @@ export default function KitchenPage() {
     { id: "all", label: "All", count: totalMeals, slot: "all" },
     { id: "lunch", label: "Lunch", count: slotCounts.lunch?.meals ?? 0, slot: "lunch" },
     { id: "dinner", label: "Dinner", count: slotCounts.dinner?.meals ?? 0, slot: "dinner" },
-    {
-      id: "uncategorized",
-      label: "Other",
-      count: slotCounts.uncategorized?.meals ?? 0,
-      slot: "uncategorized",
-    },
   ];
 
   const maxMealsInMatrix = useMemo(() => {
@@ -286,22 +271,22 @@ export default function KitchenPage() {
 
   return (
     <div
-      className="flex flex-col gap-6 sm:gap-8 animate-fade-in-up pb-8"
+      className="flex flex-col gap-3 animate-fade-in-up pb-6"
       data-testid="kitchen-summary"
     >
       {/* ── Page Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 print:flex-row">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 mt-0.5">
-            <CookingPot size={24} className="text-primary" weight="duotone" />
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 print:flex-row">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 mt-0.5">
+            <CookingPot size={20} className="text-primary" weight="duotone" />
           </div>
           <div>
             <span className="label-overline">Cook plan</span>
-            <h1 className="font-display font-black text-2xl sm:text-3xl mt-0.5 tracking-tight">
+            <h1 className="font-display font-black text-xl sm:text-2xl mt-0.5 tracking-tight">
               Kitchen
             </h1>
-            <p className="text-sm text-muted-foreground mt-0.5 print:hidden">
-              Meal counts by type &amp; slot for packing — pending + delivered only.
+            <p className="text-xs text-muted-foreground mt-0.5 print:hidden truncate">
+              Meal counts by type &amp; slot — pending + delivered only.
             </p>
           </div>
         </div>
@@ -360,27 +345,16 @@ export default function KitchenPage() {
           </div>
 
           {!isDriver && drivers.length > 0 && (
-            <div className="relative">
-              <Users
-                size={14}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
-              />
-              <select
-                data-testid="kitchen-driver-filter"
+            <div className="min-w-[160px] max-w-xs flex-1 sm:flex-none">
+              <SearchableSelect
+                testid="kitchen-driver-filter"
                 value={driverId}
-                onChange={(e) => setDriverId(e.target.value)}
-                className="h-10 pl-9 pr-8 rounded-full bg-white border border-brand-border text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-[box-shadow,border-color] duration-150 cursor-pointer"
-              >
-                <option value="">All drivers</option>
-                {drivers.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
-              <CaretDown
-                size={12}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+                onChange={setDriverId}
+                allowEmpty
+                emptyLabel="All drivers"
+                options={drivers.map((d) => ({ value: d.id, label: d.name }))}
+                inputClassName="h-10 px-3 rounded-full bg-white border border-brand-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-[box-shadow,border-color] duration-150"
+                placeholder="Search driver…"
               />
             </div>
           )}
@@ -393,7 +367,7 @@ export default function KitchenPage() {
         >
           {filterCards.map((card) => {
             const active = slotFilter === card.id;
-            const cfg = SLOT_CONFIG[card.slot] ?? SLOT_CONFIG.uncategorized;
+            const cfg = SLOT_CONFIG[card.slot] ?? SLOT_CONFIG.dinner;
             const Icon = cfg.icon;
             return (
               <button
@@ -428,12 +402,12 @@ export default function KitchenPage() {
 
       {/* ── Content ── */}
       {loading ? (
-        <div className="card-tinted p-8 flex items-center justify-center">
+        <div className="card-tinted p-4 flex items-center justify-center">
           <InlineLoader testid="kitchen-loader" label="Loading cook plan…" />
         </div>
       ) : !data ? (
-        <div className="card-tinted p-10 text-center">
-          <CookingPot size={36} className="text-muted-foreground/40 mx-auto mb-3" weight="duotone" />
+        <div className="card-tinted p-4 text-center">
+          <CookingPot size={28} className="text-muted-foreground/40 mx-auto mb-2" weight="duotone" />
           <p className="text-sm text-muted-foreground">Could not load kitchen plan.</p>
         </div>
       ) : (
@@ -447,7 +421,7 @@ export default function KitchenPage() {
                   <CookingPot size={16} className="text-primary" weight="duotone" />
                 </div>
               </div>
-              <div className="font-display font-black text-3xl">{data.totals?.meals ?? 0}</div>
+              <div className="font-display font-black text-2xl">{data.totals?.meals ?? 0}</div>
               <div className="text-xs text-muted-foreground">{fmtDate(data.date || date)}</div>
             </div>
 
@@ -458,7 +432,7 @@ export default function KitchenPage() {
                   <Package size={16} className="text-secondary" weight="duotone" />
                 </div>
               </div>
-              <div className="font-display font-black text-3xl">{data.totals?.stops ?? 0}</div>
+              <div className="font-display font-black text-2xl">{data.totals?.stops ?? 0}</div>
               <div className="text-xs text-muted-foreground">delivery stops</div>
             </div>
 
@@ -469,7 +443,7 @@ export default function KitchenPage() {
                   <SunHorizon size={16} className="text-brand-amber" weight="duotone" />
                 </div>
               </div>
-              <div className="font-display font-black text-3xl">
+              <div className="font-display font-black text-2xl">
                 {slotCounts.lunch?.meals ?? 0}
               </div>
               <div className="text-xs text-muted-foreground">
@@ -484,7 +458,7 @@ export default function KitchenPage() {
                   <Moon size={16} className="text-secondary" weight="duotone" />
                 </div>
               </div>
-              <div className="font-display font-black text-3xl">
+              <div className="font-display font-black text-2xl">
                 {slotCounts.dinner?.meals ?? 0}
               </div>
               <div className="text-xs text-muted-foreground">
@@ -523,7 +497,7 @@ export default function KitchenPage() {
                     <tr>
                       <th className="pb-3 pr-4 text-left label-overline">Type</th>
                       {slotsShown.map((s) => {
-                        const cfg = SLOT_CONFIG[s] ?? SLOT_CONFIG.uncategorized;
+                        const cfg = SLOT_CONFIG[s] ?? SLOT_CONFIG.dinner;
                         const Icon = cfg.icon;
                         return (
                           <th key={s} className="pb-3 px-2 label-overline text-right">
@@ -651,8 +625,8 @@ export default function KitchenPage() {
             </div>
 
             {packList.length === 0 ? (
-              <div className="p-10 text-center">
-                <Package size={32} className="text-muted-foreground/30 mx-auto mb-2" weight="duotone" />
+              <div className="p-4 text-center">
+                <Package size={28} className="text-muted-foreground/30 mx-auto mb-2" weight="duotone" />
                 <p className="text-sm text-muted-foreground">No stops to pack.</p>
               </div>
             ) : (
@@ -660,7 +634,7 @@ export default function KitchenPage() {
                 {packList.map((row: any) => (
                   <li
                     key={row.delivery_id}
-                    className="flex items-start gap-3 sm:gap-4 px-4 sm:px-5 py-3.5 hover:bg-brand-surface/40 transition-colors duration-100"
+                    className="flex items-start gap-3 px-3 py-2.5 hover:bg-brand-surface/40 transition-colors duration-100"
                     data-testid={`kitchen-pack-${row.delivery_id}`}
                   >
                     <AvatarChip name={row.customer_name || "?"} />

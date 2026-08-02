@@ -1,17 +1,17 @@
-import type { NextConfig } from "next";
 import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const backend =
   process.env.BACKEND_URL ||
   process.env.NEXT_PUBLIC_BACKEND_URL ||
-  // Prefer IPv4: macOS resolves `localhost` to ::1 first; uvicorn --host 0.0.0.0 is IPv4-only.
   "http://127.0.0.1:8000";
 
 const frontendRoot = path.resolve(__dirname);
 
-const nextConfig: NextConfig = {
-  // Turbopack walks up looking for a workspace root; the monorepo root has
-  // package.json but no `next` install → "Next.js package not found" (v0.0.0).
+/** @type {import("next").NextConfig} */
+const nextConfig = {
   turbopack: {
     root: frontendRoot,
   },
@@ -19,7 +19,6 @@ const nextConfig: NextConfig = {
     if (dev) {
       config.watchOptions = {
         ...(config.watchOptions || {}),
-        // Only watch this app; ignore monorepo siblings and heavy dirs
         ignored: [
           "**/node_modules/**",
           "**/.git/**",

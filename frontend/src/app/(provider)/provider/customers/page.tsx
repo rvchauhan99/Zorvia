@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Plus, MagnifyingGlass, PencilSimple, Trash, PauseCircle, PlayCircle, CheckCircle, XCircle, UploadSimple, EnvelopeSimple, DownloadSimple, ClockCounterClockwise, DotsThreeVertical } from "@phosphor-icons/react";
+import { Plus, MagnifyingGlass, PencilSimple, Trash, PauseCircle, PlayCircle, CheckCircle, XCircle, UploadSimple, EnvelopeSimple, ClockCounterClockwise, DotsThreeVertical } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canMutateAdmin, canSeePricing } from "@/lib/roles";
@@ -32,14 +32,17 @@ import {
   normalizeMealSlots,
   unionDaysFromSlotSchedules,
 } from "@/lib/mealSlots";
-import { CA_PROVINCES, formatCaPostal, isValidCaPostal } from "@/lib/ca-provinces";
+import SearchableSelect from "@/components/SearchableSelect";
+import ImportCustomersSheet from "@/components/ImportCustomersSheet";
+import { formatCaPostal, isValidCaPostal } from "@/lib/ca-provinces";
+import CaAddressFields from "@/components/CaAddressFields";
 
 const empty = {
   name: "", email: "", phone: "", address: "", apartment: "", city: "", province: "ON", country: "CA", postal_code: "",
   notes: "", delivery_days: [0, 1, 2, 3, 4], meal_type_id: "regular", meal_price: "",
   meal_schedule: scheduleFromDays([0, 1, 2, 3, 4], 1),
   meal_quantity: 1,
-  meal_slots: ["uncategorized"] as MealSlot[],
+  meal_slots: ["dinner"] as MealSlot[],
   lunch_quantity: 1,
   dinner_quantity: 1,
   slot_schedules: {} as Record<string, Record<string, number>>,
@@ -52,23 +55,8 @@ const empty = {
   joining_date: "",
   payment_collection_day: "",
   monthly_plan_id: "",
+  billing_policy: "inherit",
 };
-
-const SAMPLE_CSV = `name,phone,email,address,apartment,city,province,postal_code,delivery_days,meal_price,meal_quantity,meal_slots,lunch_meal_quantity,dinner_meal_quantity,opening_balance,joining_date,payment_collection_day,monthly_plan_id
-Aarav Sharma,4165551212,aarav@example.com,45 Bloor St W,Unit 302,Toronto,ON,M5S 1M2,"0,1,2,3,4",12,2,uncategorized,,,45.00,2024-03-01,1,mon_fri
-Priya Patel,6475559898,priya@example.com,100 King St E,,Toronto,ON,M5C 1G6,"0,2,4",14,,"lunch,dinner",1,1,-20,2024-06-15,15,
-Neha Gupta,9055553344,neha@example.com,12 Queen St W,Suite 5,Toronto,ON,M5H 2N2,"1,3,5",12,1,uncategorized,,,0,,1,mon_sat
-`;
-
-function downloadSampleCsv() {
-  const blob = new Blob([SAMPLE_CSV], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "mealhq-customers-sample.csv";
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 type Filter = "all" | "pending" | "paused" | "inactive" | "high_balance";
 
@@ -329,9 +317,9 @@ export default function Customers() {
   const [rejectReason, setRejectReason] = useState("");
   const [openActionsId, setOpenActionsId] = useState<string | null>(null);
   const [showInvite, setShowInvite] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [extraOpen, setExtraOpen] = useState(false);
   const [inviteForm, setInviteForm] = useState({ name: "", email: "" });
-  const [importing, setImporting] = useState(false);
   const [scheduleMode, setScheduleMode] = useState<ScheduleMode>("same");
   const [staff, setStaff] = useState<any[]>([]);
   const [mealTypes, setMealTypes] = useState<{ id: string; name: string; price: number }[]>([
@@ -347,6 +335,7 @@ export default function Customers() {
     all: 0, pending: 0, paused: 0, inactive: 0, high_balance: 0,
   });
   const [monthlyBillingEnabled, setMonthlyBillingEnabled] = useState(false);
+  const [kitchenDefaultVariant, setKitchenDefaultVariant] = useState<"monthly_adjustable" | "monthly_fixed">("monthly_adjustable");
   const [monthlyPlans, setMonthlyPlans] = useState<{ id: string; name: string; monthly_fee_cad?: number }[]>([]);
   const [routePreview, setRoutePreview] = useState<any>(null);
   const [routePreviewLoading, setRoutePreviewLoading] = useState(false);
@@ -364,10 +353,10 @@ export default function Customers() {
   function previewMealSlot() {
     const slots: string[] = Array.isArray(form.meal_slots) && form.meal_slots.length
       ? form.meal_slots
-      : ["uncategorized"];
+      : ["dinner"];
     return slots.includes("lunch") && slots.includes("dinner")
       ? "lunch"
-      : slots[0] || "uncategorized";
+      : slots[0] || "dinner";
   }
 
   function hasDriverAssignment() {
@@ -508,6 +497,11 @@ export default function Customers() {
       ]);
       setStaff(data || []);
       setMonthlyBillingEnabled(!!prov?.settings?.monthly_billing?.enabled);
+      setKitchenDefaultVariant(
+        prov?.settings?.monthly_billing?.policy_variant === "monthly_fixed"
+          ? "monthly_fixed"
+          : "monthly_adjustable",
+      );
       const plans = Array.isArray(prov?.settings?.monthly_billing?.plans)
         ? prov.settings.monthly_billing.plans.map((p: any) => ({
             id: String(p.id),
@@ -641,17 +635,18 @@ export default function Customers() {
           delivery_sequence: sa.dinner?.delivery_sequence != null ? String(sa.dinner.delivery_sequence) : "",
         },
       },
-      driver_id: c.driver_id || (slots.length === 1 && slots[0] !== "uncategorized" ? (sa[slots[0]]?.driver_id || "") : ""),
+      driver_id: c.driver_id || (slots.length === 1 ? (sa[slots[0]]?.driver_id || "") : ""),
       delivery_sequence:
         c.delivery_sequence != null
           ? String(c.delivery_sequence)
-          : (slots.length === 1 && slots[0] !== "uncategorized" && sa[slots[0]]?.delivery_sequence != null
+          : (slots.length === 1 && sa[slots[0]]?.delivery_sequence != null
             ? String(sa[slots[0]].delivery_sequence)
             : ""),
       opening_balance: c.opening_balance != null ? String(c.opening_balance) : "0",
       joining_date: joining,
       payment_collection_day: c.payment_collection_day != null ? String(c.payment_collection_day) : "",
       monthly_plan_id: c.monthly_plan_id || "",
+      billing_policy: c.billing_policy || "inherit",
     });
     setScheduleMode(detectSlotScheduleMode(ss, slots));
     setShowForm(true);
@@ -884,10 +879,15 @@ export default function Customers() {
         }
       }
       if (form.joining_date) payload.joining_date = form.joining_date;
-      if (monthlyBillingEnabled && form.payment_collection_day !== "" && form.payment_collection_day != null) {
+      payload.billing_policy = form.billing_policy || "inherit";
+      const effectiveMonthly =
+        form.billing_policy === "monthly_adjustable" ||
+        form.billing_policy === "monthly_fixed" ||
+        ((form.billing_policy === "inherit" || !form.billing_policy) && monthlyBillingEnabled);
+      if (effectiveMonthly && form.payment_collection_day !== "" && form.payment_collection_day != null) {
         payload.payment_collection_day = Number(form.payment_collection_day);
       }
-      if (monthlyBillingEnabled) {
+      if (effectiveMonthly) {
         payload.monthly_plan_id = form.monthly_plan_id || null;
       }
 
@@ -924,24 +924,15 @@ export default function Customers() {
             : form.meal_schedule;
         payload.delivery_days = daysFromSchedule(schedule);
         payload.meal_schedule = schedule;
-        if (slots[0] === "uncategorized") {
-          payload.driver_id = form.driver_id || null;
-          payload.delivery_sequence =
-            form.delivery_sequence === "" || form.delivery_sequence == null
-              ? null
-              : Number(form.delivery_sequence);
-          payload.slot_assignments = {};
-        } else {
-          payload.slot_assignments = {
-            [slots[0]]: {
-              driver_id: form.driver_id || null,
-              delivery_sequence:
-                form.delivery_sequence === "" || form.delivery_sequence == null
-                  ? null
-                  : Number(form.delivery_sequence),
-            },
-          };
-        }
+        payload.slot_assignments = {
+          [slots[0]]: {
+            driver_id: form.driver_id || null,
+            delivery_sequence:
+              form.delivery_sequence === "" || form.delivery_sequence == null
+                ? null
+                : Number(form.delivery_sequence),
+          },
+        };
       }
 
       if (editing) {
@@ -1023,37 +1014,12 @@ export default function Customers() {
     }
   }
 
-  async function onImportFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    setImporting(true);
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const { data } = await api.post("/customers/import", fd);
-      const parts = [`Imported ${data.created} customer(s)`];
-      if (data.geocoded) parts.push(`${data.geocoded} geocoded`);
-      if (data.route_placed) parts.push(`${data.route_placed} placed on route`);
-      toast.success(parts.join(" · "));
-      if (!data.route_placed) {
-        toast.message("Assign drivers in Customer edit (Route & drivers) or Route planning when ready");
-      }
-      if (data.errors?.length) toast.message(`${data.errors.length} row(s) skipped`);
-      reloadAll();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Import failed");
-    } finally {
-      setImporting(false);
-    }
-  }
-
   return (
-    <div className="flex flex-col gap-3 sm:gap-5 animate-fade-in-up">
+    <div className="flex flex-col gap-3 animate-fade-in-up">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <span className="label-overline">CRM</span>
-          <h1 className="font-display font-black text-2xl sm:text-4xl mt-0.5 sm:mt-1">Customers</h1>
+          <h1 className="font-display font-black text-xl sm:text-2xl mt-0.5">Customers</h1>
           {canMutate ? (
             <Link
               href="/provider/route-planning"
@@ -1077,7 +1043,7 @@ export default function Customers() {
               </button>
               <button
                 data-testid="add-customer-btn"
-                onClick={openCreate}
+                onClick={() => router.push("/provider/customers/new")}
                 className="pill-btn btn-primary gap-2 flex-1 sm:flex-none shrink-0 cursor-pointer h-11 inline-flex items-center justify-center"
               >
                 <Plus size={16} weight="bold" /> Add customer
@@ -1086,22 +1052,14 @@ export default function Customers() {
             <div className="flex gap-2 w-full sm:w-auto">
               <button
                 type="button"
-                data-testid="download-sample-csv"
-                onClick={() => { downloadSampleCsv(); toast.success("Sample CSV downloaded"); }}
-                className="pill-btn btn-outline gap-1.5 sm:gap-2 flex-1 sm:flex-none shrink-0 cursor-pointer h-11 inline-flex items-center justify-center"
-                title="Download sample CSV"
-              >
-                <DownloadSimple size={16} />
-                <span className="sm:inline">Sample</span>
-              </button>
-              <label
+                data-testid="import-customers-open"
+                onClick={() => setShowImport(true)}
                 className="pill-btn btn-outline gap-1.5 sm:gap-2 flex-1 sm:flex-none shrink-0 cursor-pointer h-11 inline-flex items-center justify-center"
                 title="Import CSV"
               >
                 <UploadSimple size={16} />
-                <span className="truncate">{importing ? "…" : "Import"}</span>
-                <input data-testid="import-customers-input" type="file" accept=".csv,.json,text/csv,application/json" className="hidden" onChange={onImportFile} disabled={importing} />
-              </label>
+                <span className="truncate">Import</span>
+              </button>
               <button
                 data-testid="invite-customer-btn"
                 onClick={() => setShowInvite(true)}
@@ -1122,28 +1080,30 @@ export default function Customers() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2" data-testid="customers-extra-filters">
-          <select
-            data-testid="customers-driver-filter"
-            value={filterDriverId}
-            onChange={(e) => setFilterDriverId(e.target.value)}
-            className="h-10 px-3 rounded-xl bg-white border border-brand-border text-sm"
-          >
-            <option value="">All drivers</option>
-            {drivers.map((d: any) => (
-              <option key={d.id} value={d.id}>{d.name || d.email}</option>
-            ))}
-          </select>
-          <select
-            data-testid="customers-meal-type-filter"
-            value={filterMealTypeId}
-            onChange={(e) => setFilterMealTypeId(e.target.value)}
-            className="h-10 px-3 rounded-xl bg-white border border-brand-border text-sm"
-          >
-            <option value="">All meal types</option>
-            {mealTypes.map((t) => (
-              <option key={t.id} value={t.id}>{t.name}</option>
-            ))}
-          </select>
+          <div className="min-w-[160px] max-w-xs flex-1 sm:flex-none">
+            <SearchableSelect
+              testid="customers-driver-filter"
+              value={filterDriverId}
+              onChange={setFilterDriverId}
+              allowEmpty
+              emptyLabel="All drivers"
+              options={drivers.map((d: any) => ({ value: d.id, label: d.name || d.email }))}
+              inputClassName="h-10 px-3 rounded-xl bg-white border border-brand-border text-sm"
+              placeholder="Search driver…"
+            />
+          </div>
+          <div className="min-w-[160px] max-w-xs flex-1 sm:flex-none">
+            <SearchableSelect
+              testid="customers-meal-type-filter"
+              value={filterMealTypeId}
+              onChange={setFilterMealTypeId}
+              allowEmpty
+              emptyLabel="All meal types"
+              options={mealTypes.map((t) => ({ value: t.id, label: t.name }))}
+              inputClassName="h-10 px-3 rounded-xl bg-white border border-brand-border text-sm"
+              placeholder="Search meal type…"
+            />
+          </div>
         </div>
       </div>
 
@@ -1162,7 +1122,7 @@ export default function Customers() {
         {loading ? (
           <InlineLoader testid="customers-loading" label="Loading customers…" />
         ) : filtered.length === 0 ? (
-          <div className="p-6 sm:p-8 text-center text-muted-foreground text-sm">No customers match this filter.</div>
+          <div className="p-4 text-center text-muted-foreground text-sm">No customers match this filter.</div>
         ) : (
           <>
             <ul className="md:hidden divide-y divide-brand-border">
@@ -1247,7 +1207,7 @@ export default function Customers() {
                       onReject={() => { setRejectTarget(c); setRejectReason(""); }}
                       onPause={() => setPauseTarget(c)}
                       onResume={() => resume(c)}
-                      onEdit={() => openEdit(c)}
+                      onEdit={() => router.push(`/provider/customers/${c.id}/edit`)}
                       onDelete={() => setDeleteTarget(c)}
                     />
                   </div>
@@ -1259,21 +1219,21 @@ export default function Customers() {
               <table className={`w-full text-sm ${showMoney ? "min-w-[960px]" : "min-w-[720px]"}`}>
                 <thead className="bg-brand-surface">
                   <tr className="text-left">
-                    <th className="px-4 py-3 label-overline">Name</th>
-                    <th className="px-4 py-3 label-overline">Contact</th>
-                    <th className="px-4 py-3 label-overline hidden lg:table-cell">Days</th>
-                    <th className="px-4 py-3 label-overline">Seq</th>
-                    <th className="px-4 py-3 label-overline hidden lg:table-cell">Driver</th>
-                    <th className="px-4 py-3 label-overline">Meals</th>
-                    {showMoney ? <th className="px-4 py-3 label-overline">Price</th> : null}
-                    {showMoney ? <th className="px-4 py-3 label-overline">Outstanding</th> : null}
-                    <th className="px-4 py-3 label-overline text-right sticky right-0 bg-brand-surface">Actions</th>
+                    <th className="px-3 py-2.5 label-overline">Name</th>
+                    <th className="px-3 py-2.5 label-overline">Contact</th>
+                    <th className="px-3 py-2.5 label-overline hidden lg:table-cell">Days</th>
+                    <th className="px-3 py-2.5 label-overline">Seq</th>
+                    <th className="px-3 py-2.5 label-overline hidden lg:table-cell">Driver</th>
+                    <th className="px-3 py-2.5 label-overline">Meals</th>
+                    {showMoney ? <th className="px-3 py-2.5 label-overline">Price</th> : null}
+                    {showMoney ? <th className="px-3 py-2.5 label-overline">Outstanding</th> : null}
+                    <th className="px-3 py-2.5 label-overline text-right sticky right-0 bg-brand-surface">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-brand-border">
                   {filtered.map((c) => (
                     <tr key={c.id} data-testid={`customer-row-${c.id}`} className="hover:bg-brand-surface/60 transition-colors group">
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2.5">
                         <Link href={`/provider/customers/${c.id}?tab=analysis`} data-testid={`customer-link-${c.id}`} className="font-medium hover:text-primary hover:underline">
                           {c.name}
                         </Link>
@@ -1285,11 +1245,11 @@ export default function Customers() {
                           {!c.active ? <span className="text-[10px] uppercase tracking-widest bg-neutral-200 text-neutral-800 px-2 py-0.5 rounded-full">Inactive</span> : null}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground">
+                      <td className="px-3 py-2.5 text-muted-foreground">
                         <div>{c.phone || "—"}</div>
                         <div className="text-xs">{c.email || ""}</div>
                       </td>
-                      <td className="px-4 py-3 hidden lg:table-cell">
+                      <td className="px-3 py-2.5 hidden lg:table-cell">
                         <div className="flex gap-0.5">
                           {WEEKDAYS.map((d) => (
                             <span key={d.i} className={`w-6 h-6 rounded-full text-[10px] font-medium inline-flex items-center justify-center ${
@@ -1298,20 +1258,20 @@ export default function Customers() {
                           ))}
                         </div>
                       </td>
-                      <td className="px-4 py-3 font-mono text-muted-foreground text-center">
+                      <td className="px-3 py-2.5 font-mono text-muted-foreground text-center">
                         {c.delivery_sequence != null ? c.delivery_sequence : "—"}
                       </td>
-                      <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground text-xs">
+                      <td className="px-3 py-2.5 hidden lg:table-cell text-muted-foreground text-xs">
                         {c.driver_name || "—"}
                       </td>
-                      <td className="px-4 py-3 font-semibold">{customerSlotSummary(c)}</td>
+                      <td className="px-3 py-2.5 font-semibold">{customerSlotSummary(c)}</td>
                       {showMoney ? (
-                        <td className="px-4 py-3">{fmtCAD(c.meal_price)}</td>
+                        <td className="px-3 py-2.5">{fmtCAD(c.meal_price)}</td>
                       ) : null}
                       {showMoney ? (
-                        <td className={`px-4 py-3 font-semibold ${c.outstanding > 0 ? "text-primary" : "text-muted-foreground"}`}>{fmtCAD(c.outstanding || 0)}</td>
+                        <td className={`px-3 py-2.5 font-semibold ${c.outstanding > 0 ? "text-primary" : "text-muted-foreground"}`}>{fmtCAD(c.outstanding || 0)}</td>
                       ) : null}
-                      <td className="px-4 py-3 whitespace-nowrap sticky right-0 bg-white group-hover:bg-brand-surface/60">
+                      <td className="px-3 py-2.5 whitespace-nowrap sticky right-0 bg-white group-hover:bg-brand-surface/60">
                         <div className="flex justify-end items-center shrink-0">
                           <CustomerRowActions
                             customer={c}
@@ -1325,7 +1285,7 @@ export default function Customers() {
                             onReject={() => { setRejectTarget(c); setRejectReason(""); }}
                             onPause={() => setPauseTarget(c)}
                             onResume={() => resume(c)}
-                            onEdit={() => openEdit(c)}
+                            onEdit={() => router.push(`/provider/customers/${c.id}/edit`)}
                             onDelete={() => setDeleteTarget(c)}
                           />
                         </div>
@@ -1427,23 +1387,20 @@ export default function Customers() {
             <>
               <label className="flex flex-col gap-1.5">
                 <span className="label-overline">Meal type</span>
-                <select
-                  data-testid="cf-meal-type"
-                  className={input}
+                <SearchableSelect
+                  testid="cf-meal-type"
+                  inputClassName={input}
                   value={form.meal_type_id || "regular"}
-                  onChange={(e) => {
-                    const tid = e.target.value;
+                  onChange={(tid) => {
                     setForm({
                       ...form,
                       meal_type_id: tid,
                       meal_price: String(priceForMealType(tid)),
                     });
                   }}
-                >
-                  {mealTypes.map((t) => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
+                  options={mealTypes.map((t) => ({ value: t.id, label: t.name }))}
+                  placeholder="Search meal type…"
+                />
               </label>
               <label className="flex flex-col gap-1.5">
                 <span className="label-overline">Price per meal (CAD)</span>
@@ -1484,24 +1441,60 @@ export default function Customers() {
               className={input}
             />
           </label>
-          {monthlyBillingEnabled ? (
+          {canMutate ? (
+            <label className="flex flex-col gap-1.5 sm:col-span-2">
+              <span className="label-overline">Billing policy</span>
+              <SearchableSelect
+                testid="customer-billing-policy"
+                inputClassName={input}
+                value={form.billing_policy || "inherit"}
+                onChange={(v) => setForm({ ...form, billing_policy: v })}
+                options={[
+                  {
+                    value: "inherit",
+                    label: `Inherit from settings (${
+                      monthlyBillingEnabled
+                        ? kitchenDefaultVariant === "monthly_fixed"
+                          ? "Fixed Monthly"
+                          : "Adjustable Monthly"
+                        : "Per-meal"
+                    })`,
+                  },
+                  { value: "per_meal", label: "Per-meal" },
+                  { value: "monthly_adjustable", label: "Adjustable Monthly" },
+                  { value: "monthly_fixed", label: "Fixed Monthly" },
+                ]}
+                placeholder="Search policy…"
+              />
+              <span className="text-xs text-muted-foreground">
+                Default follows Settings → Subscription Policy. Override only when this customer differs.
+              </span>
+            </label>
+          ) : null}
+          {(
+            form.billing_policy === "monthly_adjustable" ||
+            form.billing_policy === "monthly_fixed" ||
+            ((form.billing_policy === "inherit" || !form.billing_policy) && monthlyBillingEnabled)
+          ) ? (
             <>
               <label className="flex flex-col gap-1.5">
                 <span className="label-overline">Monthly plan</span>
-                <select
-                  data-testid="cf-monthly-plan"
+                <SearchableSelect
+                  testid="cf-monthly-plan"
+                  inputClassName={input}
                   value={form.monthly_plan_id || ""}
-                  onChange={(e) => setForm({ ...form, monthly_plan_id: e.target.value })}
-                  className={input}
-                >
-                  <option value="">Auto-match from schedule</option>
-                  {monthlyPlans.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                      {p.monthly_fee_cad != null ? ` · $${Number(p.monthly_fee_cad).toFixed(2)}` : ""}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(v) => setForm({ ...form, monthly_plan_id: v })}
+                  allowEmpty
+                  emptyLabel="Auto-match from schedule"
+                  options={monthlyPlans.map((p) => ({
+                    value: p.id,
+                    label:
+                      p.monthly_fee_cad != null
+                        ? `${p.name} · $${Number(p.monthly_fee_cad).toFixed(2)}`
+                        : p.name,
+                  }))}
+                  placeholder="Search plan…"
+                />
               </label>
               <label className="flex flex-col gap-1.5">
                 <span className="label-overline">Collection day override (1–31)</span>
@@ -1518,75 +1511,21 @@ export default function Customers() {
               </label>
             </>
           ) : null}
-          <label className="flex flex-col gap-1.5 sm:col-span-2">
-            <span className="label-overline">Street address</span>
-            <input
-              required
-              data-testid="cf-address"
-              value={form.address}
-              onChange={(e) => {
-                setForm({ ...form, address: e.target.value });
-                setRoutePreview(null);
-              }}
-              className={input}
-            />
-          </label>
-          <label className="flex flex-col gap-1.5">
-            <span className="label-overline">Apartment / unit</span>
-            <input
-              data-testid="cf-apt"
-              value={form.apartment}
-              onChange={(e) => {
-                setForm({ ...form, apartment: e.target.value });
-                setRoutePreview(null);
-              }}
-              className={input}
-            />
-          </label>
-          <label className="flex flex-col gap-1.5">
-            <span className="label-overline">City</span>
-            <input
-              required
-              data-testid="cf-city"
-              value={form.city}
-              onChange={(e) => {
-                setForm({ ...form, city: e.target.value });
-                setRoutePreview(null);
-              }}
-              className={input}
-            />
-          </label>
-          <label className="flex flex-col gap-1.5">
-            <span className="label-overline">Province / territory</span>
-            <select
-              required
-              data-testid="cf-province"
-              value={form.province || "ON"}
-              onChange={(e) => {
-                setForm({ ...form, province: e.target.value });
-                setRoutePreview(null);
-              }}
-              className={input}
-            >
-              {CA_PROVINCES.map((p) => (
-                <option key={p.code} value={p.code}>{p.code} — {p.name}</option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1.5">
-            <span className="label-overline">Postal code</span>
-            <input
-              required
-              data-testid="cf-postal"
-              value={form.postal_code}
-              onChange={(e) => {
-                setForm({ ...form, postal_code: e.target.value.toUpperCase() });
-                setRoutePreview(null);
-              }}
-              className={`${input} uppercase`}
-              placeholder="M5H 2M9"
-            />
-          </label>
+          <CaAddressFields
+            testidPrefix="cf"
+            inputClassName={input}
+            values={{
+              province: form.province || "ON",
+              city: form.city,
+              postal_code: form.postal_code,
+              address: form.address,
+              apartment: form.apartment,
+            }}
+            onChange={(patch) => {
+              setForm({ ...form, ...patch });
+              setRoutePreview(null);
+            }}
+          />
           <div className="sm:col-span-2 flex flex-col gap-2">
             <button
               type="button"
@@ -1616,7 +1555,7 @@ export default function Customers() {
               )}
             </div>
           </div>
-          <label className="flex flex-col gap-1.5 sm:col-span-2"><span className="label-overline">Notes</span><textarea data-testid="cf-notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="min-h-[80px] w-full px-4 py-3 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all" /></label>
+          <label className="flex flex-col gap-1.5 sm:col-span-2"><span className="label-overline">Notes</span><textarea data-testid="cf-notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="min-h-[80px] w-full px-3 py-2.5 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all" /></label>
           <div className="flex flex-col gap-2 sm:col-span-2">
             <span className="label-overline">Meal schedule</span>
             <MealScheduleFields
@@ -1650,11 +1589,11 @@ export default function Customers() {
             <>
               <label className="flex flex-col gap-1.5">
                 <span className="label-overline">Lunch driver</span>
-                <select
-                  data-testid="cf-lunch-driver"
+                <SearchableSelect
+                  testid="cf-lunch-driver"
+                  inputClassName={input}
                   value={form.slot_assignments?.lunch?.driver_id || ""}
-                  onChange={(e) => {
-                    const driver_id = e.target.value;
+                  onChange={(driver_id) => {
                     setForm({
                       ...form,
                       slot_assignments: {
@@ -1664,13 +1603,14 @@ export default function Customers() {
                     });
                     void applyDriverPlacement(driver_id, "lunch");
                   }}
-                  className={input}
-                >
-                  <option value="">Select driver…</option>
-                  {drivers.map((d) => (
-                    <option key={d.id} value={d.id}>{d.name || d.email}</option>
-                  ))}
-                </select>
+                  allowEmpty
+                  emptyLabel="Select driver…"
+                  options={drivers.map((d) => ({
+                    value: d.id,
+                    label: d.name || d.email,
+                  }))}
+                  placeholder="Search driver…"
+                />
               </label>
               <label className="flex flex-col gap-1.5">
                 <span className="label-overline">Lunch sequence</span>
@@ -1695,11 +1635,11 @@ export default function Customers() {
               </label>
               <label className="flex flex-col gap-1.5">
                 <span className="label-overline">Dinner driver</span>
-                <select
-                  data-testid="cf-dinner-driver"
+                <SearchableSelect
+                  testid="cf-dinner-driver"
+                  inputClassName={input}
                   value={form.slot_assignments?.dinner?.driver_id || ""}
-                  onChange={(e) => {
-                    const driver_id = e.target.value;
+                  onChange={(driver_id) => {
                     setForm({
                       ...form,
                       slot_assignments: {
@@ -1709,13 +1649,14 @@ export default function Customers() {
                     });
                     void applyDriverPlacement(driver_id, "dinner");
                   }}
-                  className={input}
-                >
-                  <option value="">Select driver…</option>
-                  {drivers.map((d) => (
-                    <option key={d.id} value={d.id}>{d.name || d.email}</option>
-                  ))}
-                </select>
+                  allowEmpty
+                  emptyLabel="Select driver…"
+                  options={drivers.map((d) => ({
+                    value: d.id,
+                    label: d.name || d.email,
+                  }))}
+                  placeholder="Search driver…"
+                />
               </label>
               <label className="flex flex-col gap-1.5">
                 <span className="label-overline">Dinner sequence</span>
@@ -1743,21 +1684,22 @@ export default function Customers() {
             <>
               <label className="flex flex-col gap-1.5">
                 <span className="label-overline">Assigned driver</span>
-                <select
-                  data-testid="cf-driver"
+                <SearchableSelect
+                  testid="cf-driver"
+                  inputClassName={input}
                   value={form.driver_id}
-                  onChange={(e) => {
-                    const driver_id = e.target.value;
+                  onChange={(driver_id) => {
                     setForm({ ...form, driver_id });
                     void applyDriverPlacement(driver_id, previewMealSlot());
                   }}
-                  className={input}
-                >
-                  <option value="">Select driver…</option>
-                  {drivers.map((d) => (
-                    <option key={d.id} value={d.id}>{d.name || d.email}</option>
-                  ))}
-                </select>
+                  allowEmpty
+                  emptyLabel="Select driver…"
+                  options={drivers.map((d) => ({
+                    value: d.id,
+                    label: d.name || d.email,
+                  }))}
+                  placeholder="Search driver…"
+                />
                 {drivers.length === 0 ? (
                   <span className="text-xs text-muted-foreground">Add staff with role Driver in Settings to assign routes.</span>
                 ) : null}
@@ -1792,6 +1734,21 @@ export default function Customers() {
         </div>
         )}
       </AppSheet>
+
+      <ImportCustomersSheet
+        open={showImport}
+        onClose={() => setShowImport(false)}
+        defaultPolicy={
+          monthlyBillingEnabled
+            ? kitchenDefaultVariant === "monthly_fixed"
+              ? "monthly_fixed"
+              : "monthly_adjustable"
+            : "per_meal"
+        }
+        onFinished={() => {
+          reloadAll();
+        }}
+      />
 
       <AppSheet open={showInvite} onClose={() => setShowInvite(false)} title="Invite customer" size="md" as="form" onSubmit={submitInvite} footer={(
         <button data-testid="invite-submit" type="submit" className="pill-btn btn-primary h-12 w-full cursor-pointer">Send invite</button>
@@ -1837,7 +1794,7 @@ export default function Customers() {
         <p className="text-sm text-muted-foreground mb-4">They will be marked inactive and notified if they have a consumer account.</p>
         <label className="flex flex-col gap-1.5">
           <span className="label-overline">Reason (optional)</span>
-          <textarea data-testid="reject-reason" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} className="min-h-[80px] w-full px-4 py-3 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all" />
+          <textarea data-testid="reject-reason" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} className="min-h-[80px] w-full px-3 py-2.5 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all" />
         </label>
       </AppSheet>
 

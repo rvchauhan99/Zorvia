@@ -9,6 +9,8 @@ import { useAuth } from "@/lib/auth";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
 import { trackEvent } from "@/lib/ga";
 import { CA_PROVINCES, formatCaPostal, isValidCaPostal } from "@/lib/ca-provinces";
+import { CA_TIMEZONE_OPTIONS } from "@/lib/ca-timezones";
+import SearchableSelect from "@/components/SearchableSelect";
 
 export default function ProviderSignup() {
   const { providerSignup } = useAuth();
@@ -35,7 +37,7 @@ export default function ProviderSignup() {
     cutoff_hours: 4,
   });
   const [submitting, setSubmitting] = useState(false);
-  const upd = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm({ ...form, [k]: e.target.value });
+  const upd = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [k]: e.target.value });
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -155,11 +157,14 @@ export default function ProviderSignup() {
               </label>
               <label className={label}>
                 <span className="label-overline">Province / territory</span>
-                <select data-testid="signup-province" required className={input} value={form.province || "ON"} onChange={upd("province")}>
-                  {CA_PROVINCES.map((p) => (
-                    <option key={p.code} value={p.code}>{p.code} — {p.name}</option>
-                  ))}
-                </select>
+                <SearchableSelect
+                  testid="signup-province"
+                  inputClassName={input}
+                  value={form.province || "ON"}
+                  onChange={(v) => setForm({ ...form, province: v })}
+                  options={CA_PROVINCES.map((p) => ({ value: p.code, label: `${p.code} — ${p.name}` }))}
+                  placeholder="Search province…"
+                />
               </label>
               <label className={label}>
                 <span className="label-overline">Postal code</span>
@@ -182,14 +187,14 @@ export default function ProviderSignup() {
               </label>
               <label className={label}>
                 <span className="label-overline">Timezone</span>
-                <select data-testid="signup-timezone" className={input} value={form.timezone} onChange={upd("timezone")}>
-                  <option value="America/Toronto">America/Toronto (ET)</option>
-                  <option value="America/Vancouver">America/Vancouver (PT)</option>
-                  <option value="America/Edmonton">America/Edmonton (MT)</option>
-                  <option value="America/Winnipeg">America/Winnipeg (CT)</option>
-                  <option value="America/Halifax">America/Halifax (AT)</option>
-                  <option value="America/St_Johns">America/St_Johns (NT)</option>
-                </select>
+                <SearchableSelect
+                  testid="signup-timezone"
+                  inputClassName={input}
+                  value={form.timezone}
+                  onChange={(v) => setForm({ ...form, timezone: v })}
+                  options={[...CA_TIMEZONE_OPTIONS]}
+                  placeholder="Search timezone…"
+                />
               </label>
               <label className={label}>
                 <span className="label-overline">Cancellation cutoff (hours)</span>

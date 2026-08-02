@@ -241,7 +241,7 @@
     @apply bg-white border border-secondary/35 text-secondary hover:bg-secondary/10;
   }
   .stat-card {
-    @apply bg-white border border-brand-border rounded-2xl p-5 flex flex-col gap-2;
+    @apply bg-white border border-brand-border rounded-xl p-3 flex flex-col gap-1.5;
   }
   .checkout-banner-in {
     animation: checkout-banner-in 0.45s ease-out both;

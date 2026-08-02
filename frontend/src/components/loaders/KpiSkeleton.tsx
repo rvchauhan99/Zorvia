@@ -23,7 +23,7 @@ export default function KpiSkeleton({
         <div
           key={i}
           data-testid={`${testid}-${i}`}
-          className="card-tinted p-3.5 sm:p-5 min-h-[108px] sm:min-h-[132px] animate-pulse flex flex-col gap-3"
+          className="card-tinted p-3 animate-pulse flex flex-col gap-2"
         >
           <div className="h-3 w-20 rounded bg-brand-surface" />
           <div className="h-8 w-24 rounded bg-brand-surface" />

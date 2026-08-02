@@ -2,6 +2,7 @@
 
 import React from "react";
 import { ALLOWED_PAGE_SIZES, type AllowedPageSize } from "@/lib/pagination";
+import SearchableSelect from "@/components/SearchableSelect";
 
 type Props = {
   currentPage: number;
@@ -53,17 +54,17 @@ export default function CursorPaginationBar({
       <div className="flex flex-wrap items-center gap-2">
         <label className="inline-flex items-center gap-1.5">
           <span className="text-xs uppercase tracking-wide">Per page</span>
-          <select
-            data-testid={`${testidPrefix}-page-size`}
-            value={pageSize}
-            disabled={loading}
-            onChange={(e) => onPageSizeChange(Number(e.target.value) as AllowedPageSize)}
-            className="h-10 px-2 rounded-xl bg-white border border-brand-border text-sm text-foreground disabled:opacity-50"
-          >
-            {ALLOWED_PAGE_SIZES.map((n) => (
-              <option key={n} value={n}>{n}</option>
-            ))}
-          </select>
+          <div className="w-24">
+            <SearchableSelect
+              testid={`${testidPrefix}-page-size`}
+              value={String(pageSize)}
+              disabled={loading}
+              onChange={(v) => onPageSizeChange(Number(v) as AllowedPageSize)}
+              options={ALLOWED_PAGE_SIZES.map((n) => ({ value: String(n), label: String(n) }))}
+              inputClassName="h-10 px-2 rounded-xl bg-white border border-brand-border text-sm text-foreground disabled:opacity-50"
+              placeholder="Size…"
+            />
+          </div>
         </label>
         <button
           type="button"

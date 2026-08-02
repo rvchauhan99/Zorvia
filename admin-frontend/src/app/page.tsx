@@ -40,7 +40,7 @@ export default function DashboardPage() {
       {loading || !data ? (
         <div className="text-sm text-neutral-500">Loading dashboard…</div>
       ) : (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-3">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" data-testid="kpi-grid">
             {(
               [
@@ -93,12 +93,12 @@ export default function DashboardPage() {
             })}
           </div>
 
-          <div className="grid lg:grid-cols-2 gap-4">
-            <div className="bg-white border border-neutral-200 rounded-2xl p-5">
+          <div className="grid lg:grid-cols-2 gap-3">
+            <div className="bg-white border border-neutral-200 rounded-2xl p-4">
               <div className="font-semibold mb-3">Provider signups (30d)</div>
               <MiniBars items={data.series?.signups_by_day || []} valueKey="count" testid="chart-signups" />
             </div>
-            <div className="bg-white border border-neutral-200 rounded-2xl p-5">
+            <div className="bg-white border border-neutral-200 rounded-2xl p-4">
               <div className="font-semibold mb-3">Approved SaaS (30d)</div>
               <MiniBars
                 items={data.series?.saas_approved_by_day || []}
@@ -110,7 +110,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden">
-            <div className="px-5 py-4 border-b border-neutral-200 flex items-center justify-between gap-3 flex-wrap">
+            <div className="px-4 py-3 border-b border-neutral-200 flex items-center justify-between gap-3 flex-wrap">
               <div className="font-semibold">Trials ending within 7 days</div>
               <button
                 type="button"
@@ -123,7 +123,7 @@ export default function DashboardPage() {
               </button>
             </div>
             {(data.trials_ending_soon || []).length === 0 ? (
-              <div className="p-6 text-sm text-neutral-500" data-testid="trials-empty">
+              <div className="p-4 text-sm text-neutral-500" data-testid="trials-empty">
                 No trials ending soon.
               </div>
             ) : (

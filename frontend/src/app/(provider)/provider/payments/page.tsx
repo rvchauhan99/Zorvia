@@ -41,7 +41,9 @@ export default function Payments() {
   const [verifyHints, setVerifyHints] = useState<{
     monthly_fee: number | null;
     month_charge: number | null;
-    tax_amount?: number | null;
+    tier_applied?: string | null;
+    cancelled_units?: number | null;
+    delivered_units?: number | null;
     showChoice: boolean;
   } | null>(null);
   const paging = useCursorPagination({ initialPageSize: DEFAULT_PAGE_SIZE });
@@ -110,12 +112,15 @@ export default function Payments() {
       const monthly = data?.billing?.billing_mode === "monthly_flat";
       const variant = data?.billing?.policy_variant;
       const fee = data?.billing?.monthly_fee != null ? Number(data.billing.monthly_fee) : null;
-      const chargeRaw = data?.current_month_billing?.month_charge_after_tax
-        ?? data?.current_month_billing?.month_charge_before_tax
-        ?? null;
+      // Pre-tax month charge — compare/settle against plan fee (apples-to-apples)
+      const chargeRaw = data?.current_month_billing?.month_charge_before_tax ?? null;
       const charge = chargeRaw != null ? Number(chargeRaw) : null;
-      const taxAmount = data?.current_month_billing?.tax_amount != null
-        ? Number(data.current_month_billing.tax_amount)
+      const tier = data?.current_month_billing?.tier_applied || null;
+      const cancelledUnits = data?.current_month_billing?.cancelled_units != null
+        ? Number(data.current_month_billing.cancelled_units)
+        : null;
+      const deliveredUnits = data?.current_month_billing?.delivered_units != null
+        ? Number(data.current_month_billing.delivered_units)
         : null;
       const showChoice =
         monthly &&
@@ -138,7 +143,14 @@ export default function Payments() {
         }
         return;
       }
-      setVerifyHints({ monthly_fee: fee, month_charge: charge, tax_amount: taxAmount, showChoice: true });
+      setVerifyHints({
+        monthly_fee: fee,
+        month_charge: charge,
+        tier_applied: tier,
+        cancelled_units: cancelledUnits,
+        delivered_units: deliveredUnits,
+        showChoice: true,
+      });
       setVerifySettlement("plan");
     } catch {
       setVerifyBusy(true);
@@ -231,12 +243,12 @@ export default function Payments() {
   }
 
   return (
-    <div className="flex flex-col gap-3 sm:gap-5 animate-fade-in-up">
+    <div className="flex flex-col gap-3 animate-fade-in-up">
       {/* ── HEADER & ACTIONS ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <span className="label-overline">Reconciliation</span>
-          <h1 className="font-display font-black text-2xl sm:text-3xl mt-0.5">Payments</h1>
+          <h1 className="font-display font-black text-xl sm:text-2xl mt-0.5">Payments</h1>
         </div>
         {canMutate && (
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
@@ -261,7 +273,7 @@ export default function Payments() {
       </div>
 
       {/* ── FILTER BAR (Bento Style) ── */}
-      <div className="card-tinted p-3 sm:p-4 flex flex-col sm:flex-row flex-wrap items-end gap-3">
+      <div className="card-tinted p-3 flex flex-col sm:flex-row flex-wrap items-end gap-3">
         {/* Search */}
         <div className="flex-1 min-w-[200px]">
           <label className="block text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-1.5 pl-1">
@@ -353,11 +365,11 @@ export default function Payments() {
       {/* ── DATATABLE ── */}
       <div className="card-tinted overflow-hidden flex flex-col">
         {loading ? (
-          <div className="p-10">
+          <div className="p-4">
             <InlineLoader testid="payments-loading" label="Loading payments…" />
           </div>
         ) : items.length === 0 ? (
-          <div className="p-10 text-center text-muted-foreground text-sm">
+          <div className="p-4 text-center text-muted-foreground text-sm">
             No {filter === "all" ? "" : filter} payments.
           </div>
         ) : (
@@ -588,9 +600,22 @@ export default function Payments() {
           </div>
         )}
       >
-        <p className="text-sm text-muted-foreground mb-3">
-          Submitted {showMoney && verifyFor ? fmtCAD(verifyFor.amount) : ""}. Plan and recalculated month charge differ — choose settlement amount.
+        <p className="text-sm text-muted-foreground mb-2">
+          Submitted {showMoney && verifyFor ? fmtCAD(verifyFor.amount) : ""}. Plan fee and recalculated month charge differ — choose settlement amount.
         </p>
+        {verifyHints?.tier_applied || verifyHints?.cancelled_units != null ? (
+          <p className="text-xs text-muted-foreground mb-3" data-testid="verify-settlement-tier">
+            This month:{" "}
+            {verifyHints.tier_applied === "recalc_daily"
+              ? "recalc daily"
+              : verifyHints.tier_applied === "flat_with_deductions"
+                ? "flat with deductions"
+                : (verifyHints.tier_applied || "").replace(/_/g, " ") || "—"}
+            {verifyHints.cancelled_units != null || verifyHints.delivered_units != null
+              ? ` · ${verifyHints.cancelled_units ?? 0} cancelled / ${verifyHints.delivered_units ?? 0} delivered`
+              : ""}
+          </p>
+        ) : null}
         <div className="flex flex-col gap-2" data-testid="verify-settlement-options">
           <button
             type="button"
@@ -602,7 +627,7 @@ export default function Payments() {
                 : "bg-white border-brand-border"
             }`}
           >
-            {(verifyHints?.tax_amount ?? 0) > 0 ? "Plan fee (pre-tax)" : "Plan amount"}{verifyHints?.monthly_fee != null ? ` · ${fmtCAD(verifyHints.monthly_fee)}` : ""}
+            Plan fee{verifyHints?.monthly_fee != null ? ` · ${fmtCAD(verifyHints.monthly_fee)}` : ""}
           </button>
           <button
             type="button"
@@ -614,7 +639,7 @@ export default function Payments() {
                 : "bg-white border-brand-border"
             }`}
           >
-            {(verifyHints?.tax_amount ?? 0) > 0 ? "Adjustable (after tax)" : "Adjustable amount"}{verifyHints?.month_charge != null ? ` · ${fmtCAD(verifyHints.month_charge)}` : ""}
+            Adjustable this month{verifyHints?.month_charge != null ? ` · ${fmtCAD(verifyHints.month_charge)}` : ""}
           </button>
           <button
             type="button"

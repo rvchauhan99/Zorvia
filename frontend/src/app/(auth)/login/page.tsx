@@ -177,6 +177,7 @@ function LoginForm() {
               </Link>
             </div>
             <button
+              type="submit"
               data-testid="login-submit"
               disabled={submitting}
               className="pill-btn btn-primary h-12 mt-2 gap-2 disabled:opacity-60 cursor-pointer"

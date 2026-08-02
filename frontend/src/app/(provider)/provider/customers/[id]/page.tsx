@@ -339,17 +339,17 @@ export default function CustomerDetail() {
   const refreshingAnalysis = busyAnalysis && !!insights;
 
   return (
-    <div className="flex flex-col gap-3 sm:gap-5 animate-fade-in-up">
+    <div className="flex flex-col gap-3 animate-fade-in-up">
       <div className="flex items-start justify-between gap-3">
         <div>
           <Link
             href="/provider/customers"
             data-testid="customer-back"
-            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-1.5 sm:mb-2"
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-1"
           >
             <ArrowLeft size={14} /> Customers
           </Link>
-          <h1 className="font-display font-black text-2xl sm:text-4xl" data-testid="customer-detail-name">{c.name}</h1>
+          <h1 className="font-display font-black text-xl sm:text-2xl" data-testid="customer-detail-name">{c.name}</h1>
           <div className="mt-2 flex gap-1 flex-wrap">
             {c.pending_approval ? <span className="text-[10px] uppercase tracking-widest bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full">Pending</span> : null}
             {c.rejected ? <span className="text-[10px] uppercase tracking-widest bg-red-100 text-red-900 px-2 py-0.5 rounded-full">Rejected</span> : null}
@@ -385,7 +385,7 @@ export default function CustomerDetail() {
       </div>
 
       {tab === "overview" ? (
-        <div className="card-tinted p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+        <div className="card-tinted p-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <div className="label-overline">Phone</div>
             <div className="text-sm">{c.phone || "—"}</div>
@@ -423,11 +423,16 @@ export default function CustomerDetail() {
           {showMoney && c.billing?.billing_mode === "monthly_flat" ? (
             <div className="sm:col-span-2 rounded-xl border border-brand-border bg-white p-4 flex flex-col gap-2" data-testid="customer-monthly-billing-card">
               <div className="label-overline">Monthly billing</div>
-              <div className="font-medium">
+              <div className="font-medium" data-testid="customer-billing-policy-badge">
                 {c.billing?.monthly_plan_name || c.current_month_billing?.plan_name || "Plan"}
                 {" · "}
                 {fmtCAD(c.billing?.monthly_fee ?? c.current_month_billing?.monthly_fee ?? 0)}
                 {c.billing?.policy_variant === "monthly_fixed" ? " · Fixed" : " · Adjustable"}
+                {c.billing?.policy_source === "inherit"
+                  ? " · Inherited"
+                  : c.billing?.policy_source === "override"
+                    ? " · Override"
+                    : ""}
               </div>
               {c.current_month_billing ? (
                 <div className="text-sm text-muted-foreground">
@@ -519,7 +524,7 @@ export default function CustomerDetail() {
       ) : null}
 
       {tab === "analysis" ? (
-        <div className="flex flex-col gap-4" data-testid="customer-analysis">
+        <div className="flex flex-col gap-3" data-testid="customer-analysis">
           <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
             <div>
               <span className="label-overline">Customer health</span>
@@ -546,9 +551,9 @@ export default function CustomerDetail() {
           </div>
 
           {busyAnalysis && !insights ? (
-            <div className="flex flex-col gap-4" data-testid="customer-analysis-loading">
+            <div className="flex flex-col gap-3" data-testid="customer-analysis-loading">
               <KpiSkeleton count={8} testid="customer-kpi-skeleton" className="md:grid-cols-2" />
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
                 <SectionSkeleton testid="customer-chart-skeleton-0" />
                 <SectionSkeleton testid="customer-chart-skeleton-1" />
               </div>
@@ -578,7 +583,7 @@ export default function CustomerDetail() {
                   <KpiCard testid="cust-kpi-collection-efficiency" label="Collection efficiency" value={percent(k.collection_efficiency?.value)} kpi={k.collection_efficiency} hint="Collections vs delivered value" />
                 ) : null}
               </section>
-              <section className="grid grid-cols-1 xl:grid-cols-2 gap-4 mt-4">
+              <section className="grid grid-cols-1 xl:grid-cols-2 gap-3 mt-3">
                 <div className="animate-fade-in-up" style={stagger(2)}><DeliveryTrendChart data={insights.series} /></div>
                 {showMoney ? (
                   <>
@@ -589,7 +594,7 @@ export default function CustomerDetail() {
               </section>
             </div>
           ) : (
-            <div className="card-tinted p-6 text-center text-sm text-muted-foreground">Analysis unavailable.</div>
+            <div className="card-tinted p-4 text-center text-sm text-muted-foreground">Analysis unavailable.</div>
           )}
 
           <div className="card-tinted overflow-hidden animate-fade-in-up" style={stagger(5)} data-testid="customer-payment-history-panel">
@@ -612,7 +617,7 @@ export default function CustomerDetail() {
               </button>
             </div>
             {busyAnalysis && timeline.length === 0 ? (
-              <div className="p-6 space-y-3 animate-pulse">
+              <div className="p-4 space-y-3 animate-pulse">
                 {[0, 1, 2].map((i) => (
                   <div key={i} className="h-4 w-48 rounded bg-brand-surface" />
                 ))}
@@ -624,7 +629,7 @@ export default function CustomerDetail() {
                     ? ev.type === "payment"
                     : ev.type === "payment" || ev.type === "delivery"
                 ).length === 0 ? (
-                  <li className="p-6 text-center text-sm text-muted-foreground">No payment history yet.</li>
+                  <li className="p-4 text-center text-sm text-muted-foreground">No payment history yet.</li>
                 ) : (
                   timeline
                     .filter((ev) =>
@@ -653,7 +658,7 @@ export default function CustomerDetail() {
               <p className="text-xs text-muted-foreground">Deliveries, payments, pauses, and notes.</p>
             </div>
             {busyAnalysis && timeline.length === 0 ? (
-              <div className="p-6 space-y-3 animate-pulse" data-testid="customer-timeline-skeleton">
+              <div className="p-4 space-y-3 animate-pulse" data-testid="customer-timeline-skeleton">
                 {[0, 1, 2].map((i) => (
                   <div key={i} className="flex justify-between gap-3">
                     <div className="h-4 w-40 rounded bg-brand-surface" />
@@ -664,7 +669,7 @@ export default function CustomerDetail() {
             ) : (
               <ul className="divide-y divide-brand-border">
                 {timeline.length === 0 ? (
-                  <li className="p-6 text-center text-sm text-muted-foreground">No activity yet.</li>
+                  <li className="p-4 text-center text-sm text-muted-foreground">No activity yet.</li>
                 ) : (
                   timeline.slice(0, 40).map((ev, idx) => (
                     <li key={`${ev.type}-${ev.at}-${idx}`} className="p-4 flex items-start justify-between gap-3">
@@ -702,7 +707,7 @@ export default function CustomerDetail() {
             ) : (
               <ul className="divide-y divide-brand-border">
                 {customerDeliveries.length === 0 ? (
-                  <li className="p-6 text-center text-sm text-muted-foreground">No deliveries yet.</li>
+                  <li className="p-4 text-center text-sm text-muted-foreground">No deliveries yet.</li>
                 ) : (
                   customerDeliveries.map((d: any) => {
                     const badge = fmtExtraBadge(d);
@@ -776,6 +781,11 @@ export default function CustomerDetail() {
                 {" · "}
                 {fmtCAD(c.billing?.monthly_fee ?? 0)}
                 {c.billing?.policy_variant === "monthly_fixed" ? " · Fixed" : " · Adjustable"}
+                {c.billing?.policy_source === "inherit"
+                  ? " · Inherited"
+                  : c.billing?.policy_source === "override"
+                    ? " · Override"
+                    : ""}
               </div>
               <div className="text-xs text-muted-foreground mt-1">
                 {Number(c.outstanding) < 0 ? (
@@ -804,7 +814,7 @@ export default function CustomerDetail() {
               ) : (
                 <ul className="divide-y divide-brand-border">
                   {customerPayments.length === 0 ? (
-                    <li className="p-6 text-center text-sm text-muted-foreground">No payments yet.</li>
+                    <li className="p-4 text-center text-sm text-muted-foreground">No payments yet.</li>
                   ) : (
                     customerPayments.map((p: any) => (
                       <li key={p.id} className="p-4 flex items-start gap-3" data-testid={`payment-history-row-${p.id}`}>
@@ -826,7 +836,7 @@ export default function CustomerDetail() {
             ) : (
               <ul className="divide-y divide-brand-border" data-testid="payment-history-ledger">
                 {timeline.filter((ev) => ev.type === "payment" || ev.type === "delivery").length === 0 ? (
-                  <li className="p-6 text-center text-sm text-muted-foreground">No payments or meals yet.</li>
+                  <li className="p-4 text-center text-sm text-muted-foreground">No payments or meals yet.</li>
                 ) : (
                   timeline
                     .filter((ev) => ev.type === "payment" || ev.type === "delivery")
@@ -890,7 +900,7 @@ export default function CustomerDetail() {
         <div className="card-tinted overflow-hidden">
           <ul className="divide-y divide-brand-border">
             {(c.pauses || []).length === 0 ? (
-              <li className="p-6 text-center text-sm text-muted-foreground">No pause windows.</li>
+              <li className="p-4 text-center text-sm text-muted-foreground">No pause windows.</li>
             ) : (
               (c.pauses || []).map((p: any, i: number) => (
                 <li key={`${p.start}-${p.end}-${i}`} className="p-4 flex items-center justify-between gap-3">
@@ -909,7 +919,7 @@ export default function CustomerDetail() {
       ) : null}
 
       {tab === "notes" ? (
-        <div className="card-tinted p-4 sm:p-5 flex flex-col gap-3">
+        <div className="card-tinted p-3 flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <PencilSimple size={16} />
             <span className="font-display font-bold text-lg">Notes</span>
@@ -948,7 +958,7 @@ export default function CustomerDetail() {
         mealPrice={showMoney ? Number(c.meal_price) || 0 : undefined}
         mealTypes={mealTypes}
         defaultMealTypeId={c.meal_type_id || "regular"}
-        mealSlots={Array.isArray(c.meal_slots) && c.meal_slots.length ? c.meal_slots : ["uncategorized"]}
+        mealSlots={Array.isArray(c.meal_slots) && c.meal_slots.length ? c.meal_slots : ["dinner"]}
         defaultMealSlot={
           Array.isArray(c.meal_slots) && c.meal_slots.length === 1 ? c.meal_slots[0] : null
         }

@@ -32,7 +32,7 @@ function StatCard({ icon: Icon, label, value, hint, tone = "primary", testid }: 
         <span className="label-overline">{label}</span>
         <Icon size={22} className={toneMap[tone]} weight="duotone" />
       </div>
-      <div className="font-display font-black text-2xl sm:text-3xl">{value}</div>
+      <div className="font-display font-black text-xl sm:text-2xl">{value}</div>
       {hint ? <div className="text-xs text-muted-foreground">{hint}</div> : null}
     </div>
   );
@@ -163,7 +163,7 @@ export default function ProviderDashboard() {
   }
 
   return (
-    <div className="flex flex-col gap-4 sm:gap-6 animate-fade-in-up">
+    <div className="flex flex-col gap-3 animate-fade-in-up">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 sm:gap-3">
         <div className="flex items-center gap-3">
           {providerLoading ? (
@@ -174,9 +174,9 @@ export default function ProviderDashboard() {
           <div>
             <span className="label-overline">Today · {fmtDate(todayISO())}</span>
             {providerLoading ? (
-              <div className="mt-1 h-8 w-48 sm:w-64 rounded bg-brand-surface animate-pulse" />
+              <div className="mt-1 h-7 w-48 sm:w-64 rounded bg-brand-surface animate-pulse" />
             ) : (
-              <h1 className="font-display font-black text-2xl sm:text-4xl mt-0.5 sm:mt-1">
+              <h1 className="font-display font-black text-xl sm:text-2xl mt-0.5">
                 Good day, {(provider?.name || "there").split(" ")[0]}
               </h1>
             )}
@@ -214,7 +214,7 @@ export default function ProviderDashboard() {
       </div>
 
       {showChecklist ? (
-        <div data-testid="onboarding-checklist" className="card-tinted p-4 sm:p-5 border border-brand-amber/30 bg-amber-50/40 animate-fade-in-up">
+        <div data-testid="onboarding-checklist" className="card-tinted p-3 border border-brand-amber/30 bg-amber-50/40 animate-fade-in-up">
           <div className="flex items-start justify-between gap-3 mb-3">
             <div>
               <h2 className="font-display font-bold text-lg sm:text-xl">Get set up</h2>
@@ -256,7 +256,7 @@ export default function ProviderDashboard() {
       {summaryLoading && !summary ? (
         <KpiSkeleton testid="dashboard-kpi-skeleton" />
       ) : (
-        <div className={`grid gap-3 sm:gap-4 ${showMoney ? "grid-cols-2 lg:grid-cols-4" : "grid-cols-2"}`}>
+        <div className={`grid gap-3 ${showMoney ? "grid-cols-2 lg:grid-cols-4" : "grid-cols-2"}`}>
           <StatCard
             testid="stat-deliveries"
             icon={Truck}
@@ -297,10 +297,10 @@ export default function ProviderDashboard() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
-        <div className="lg:col-span-2 card-tinted p-4 sm:p-5">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-display font-bold text-lg sm:text-xl">Today's route</h2>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <div className="lg:col-span-2 card-tinted p-3">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="font-display font-bold text-lg">Today's route</h2>
             <button data-testid="go-deliveries" onClick={() => router.push("/provider/deliveries")} className="text-sm text-primary inline-flex items-center gap-1 cursor-pointer hover:underline">
               Open list <ArrowRight size={14} />
             </button>
@@ -308,7 +308,7 @@ export default function ProviderDashboard() {
           {deliveriesLoading ? (
             <InlineLoader testid="dashboard-route-loader" label="Loading route…" />
           ) : todayDeliveries.length === 0 ? (
-            <div className="p-6 text-center text-sm text-muted-foreground">No deliveries today. Add customers with delivery days that include today.</div>
+            <div className="p-4 text-center text-sm text-muted-foreground">No deliveries today. Add customers with delivery days that include today.</div>
           ) : (
             <ul className="flex flex-col divide-y divide-brand-border animate-fade-in-up">
               {todayDeliveries.map((d) => (
@@ -365,8 +365,8 @@ export default function ProviderDashboard() {
           ) : null}
         </div>
 
-        <div className={`card-tinted p-4 sm:p-5 ${summaryLoading && !summary ? "opacity-70" : ""}`}>
-          <h2 className="font-display font-bold text-xl mb-3">At a glance</h2>
+        <div className={`card-tinted p-3 ${summaryLoading && !summary ? "opacity-70" : ""}`}>
+          <h2 className="font-display font-bold text-lg mb-2">At a glance</h2>
           {summaryLoading && !summary ? (
             <div className="space-y-3 animate-pulse" data-testid="glance-skeleton">
               {[0, 1, 2, 3].map((i) => (

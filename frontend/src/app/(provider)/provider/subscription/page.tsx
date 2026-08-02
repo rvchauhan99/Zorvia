@@ -204,10 +204,10 @@ function SubscriptionInner() {
       : `${customerCount} / ${maxCustomers} customers`;
 
   return (
-    <div className="flex flex-col gap-4 sm:gap-6 animate-fade-in-up max-w-4xl">
+    <div className="flex flex-col gap-3 animate-fade-in-up max-w-4xl">
       <div>
         <span className="label-overline">Billing</span>
-        <h1 className="font-display font-black text-2xl sm:text-4xl mt-0.5 sm:mt-1">Your subscription</h1>
+        <h1 className="font-display font-black text-xl sm:text-2xl mt-0.5">Your subscription</h1>
         <p className="text-sm text-muted-foreground mt-1" data-testid="customer-usage">
           {usageLabel}
           {data.tier_label ? ` · ${data.tier_label}` : status === "trialing" ? " · Trial (Professional features)" : null}
@@ -217,7 +217,7 @@ function SubscriptionInner() {
       {pending ? (
         <div
           data-testid="manual-pending-banner"
-          className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 sm:p-5 flex items-start gap-3"
+          className="rounded-xl border border-amber-200 bg-amber-50/60 p-3 sm:p-4 flex items-start gap-3"
         >
           <Warning size={24} className="text-amber-700 shrink-0 mt-0.5" weight="fill" />
           <div className="min-w-0">
@@ -233,7 +233,7 @@ function SubscriptionInner() {
       {checkoutBanner?.kind === "success" ? (
         <div
           data-testid="checkout-success-banner"
-          className="checkout-banner-in relative overflow-hidden rounded-2xl border border-secondary/25 p-4 sm:p-5 flex items-start gap-3 sm:gap-4 bg-linear-to-br from-secondary/15 via-primary/10 to-brand-cream shadow-[0_8px_28px_rgba(42,157,122,0.12)]"
+          className="checkout-banner-in relative overflow-hidden rounded-xl border border-secondary/25 p-3 sm:p-4 flex items-start gap-3 bg-linear-to-br from-secondary/15 via-primary/10 to-brand-cream shadow-[0_8px_28px_rgba(42,157,122,0.12)]"
         >
           <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top_right,rgba(42,157,122,0.18),transparent_55%)]" />
           <div className="checkout-check-pop relative shrink-0 size-11 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center shadow-sm">
@@ -267,7 +267,7 @@ function SubscriptionInner() {
       {checkoutBanner?.kind === "cancel" ? (
         <div
           data-testid="checkout-cancel-banner"
-          className="checkout-banner-in relative overflow-hidden rounded-2xl border border-accent/30 p-4 sm:p-5 flex items-start gap-3 sm:gap-4 bg-linear-to-br from-accent/15 via-muted to-brand-cream"
+          className="checkout-banner-in relative overflow-hidden rounded-xl border border-accent/30 p-3 sm:p-4 flex items-start gap-3 bg-linear-to-br from-accent/15 via-muted to-brand-cream"
         >
           <div className="relative shrink-0 size-11 rounded-full bg-accent/20 text-foreground flex items-center justify-center">
             <Warning size={24} weight="fill" className="text-accent" />
@@ -289,7 +289,7 @@ function SubscriptionInner() {
         </div>
       ) : null}
 
-      <div className={`card-tinted p-4 sm:p-5 flex items-center gap-3 sm:gap-4 ${status === "expired" ? "border-primary" : ""}`}>
+      <div className={`card-tinted p-3 sm:p-4 flex items-center gap-3 ${status === "expired" ? "border-primary" : ""}`}>
         {status === "trialing" ? (
           <>
             <Sparkle size={28} className="text-secondary" weight="fill" />
@@ -339,7 +339,7 @@ function SubscriptionInner() {
       </div>
 
       {isManual && data.platform_interac_email ? (
-        <div className="card-tinted p-4 sm:p-5" data-testid="manual-interac-instructions">
+        <div className="card-tinted p-3 sm:p-4" data-testid="manual-interac-instructions">
           <div className="label-overline">Pay via Interac e-Transfer</div>
           <div className="font-display font-bold text-lg mt-1">{data.platform_interac_name || "MealHQ"}</div>
           <button
@@ -397,7 +397,7 @@ function SubscriptionInner() {
             return (
               <div
                 key={p.id}
-                className={`card-tinted p-4 sm:p-6 flex flex-col gap-3 relative ${
+                className={`card-tinted p-3 sm:p-4 flex flex-col gap-3 relative ${
                   isRecommended ? "border-primary ring-2 ring-primary/20" : ""
                 }`}
                 data-testid={`plan-card-${p.tier}`}

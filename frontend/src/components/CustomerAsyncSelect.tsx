@@ -23,7 +23,7 @@ type Props = {
 };
 
 const inputClass =
-  "h-11 px-4 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all w-full";
+  "h-11 px-4 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all w-full text-sm";
 
 export default function CustomerAsyncSelect({
   value,
@@ -164,7 +164,7 @@ export default function CustomerAsyncSelect({
           id={listId}
           role="listbox"
           data-testid={`${testid}-list`}
-          className="absolute z-20 top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto rounded-xl border border-brand-border bg-white shadow-lg divide-y divide-brand-border"
+          className="absolute z-30 top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto rounded-xl border border-brand-border bg-white shadow-lg divide-y divide-brand-border"
         >
           {loading ? (
             <div className="p-3 text-sm text-muted-foreground">Loading…</div>

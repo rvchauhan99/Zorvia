@@ -51,7 +51,7 @@ export default function InboxDetailPage() {
 
   return (
     <AdminShell title="Message">
-      <div className="max-w-3xl flex flex-col gap-4">
+      <div className="max-w-3xl flex flex-col gap-3">
         <Link href="/inbox" className="text-sm text-teal-700 hover:underline w-fit">
           ← Back to inbox
         </Link>
@@ -59,7 +59,7 @@ export default function InboxDetailPage() {
           <div className="text-sm text-neutral-500">Loading…</div>
         ) : (
           <>
-            <div className="bg-white border border-neutral-200 rounded-2xl p-5 flex flex-col gap-3">
+            <div className="bg-white border border-neutral-200 rounded-2xl p-4 flex flex-col gap-3">
               <div className="text-xs uppercase tracking-widest text-neutral-500">Subject</div>
               <div className="text-xl font-bold" data-testid="inbox-subject">
                 {msg.subject}
@@ -70,7 +70,7 @@ export default function InboxDetailPage() {
               <div className="text-xs capitalize text-neutral-500" data-testid="inbox-status">
                 {msg.status} · {(msg.created_at || "").slice(0, 19)}
               </div>
-              <div className="mt-2 whitespace-pre-wrap text-sm leading-relaxed border-t border-neutral-100 pt-4">
+              <div className="mt-2 whitespace-pre-wrap text-sm leading-relaxed border-t border-neutral-100 pt-3">
                 {msg.message}
               </div>
             </div>

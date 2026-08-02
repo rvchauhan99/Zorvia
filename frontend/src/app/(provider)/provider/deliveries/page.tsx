@@ -16,6 +16,7 @@ import { InlineLoader } from "@/components/loaders";
 import MarkDeliveredSheet from "@/components/MarkDeliveredSheet";
 import { DeliveryProofThumbButton, DeliveryProofSheet, type DeliveryProofTarget } from "@/components/DeliveryProofViewer";
 import CursorPaginationBar from "@/components/CursorPaginationBar";
+import SearchableSelect from "@/components/SearchableSelect";
 import { markDeliveryWithProof } from "@/lib/deliveries";
 import { asPageEnvelope, OPS_DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
@@ -375,11 +376,11 @@ export default function Deliveries() {
   ];
 
   return (
-    <div className="flex flex-col gap-3 sm:gap-5 animate-fade-in-up">
+    <div className="flex flex-col gap-3 animate-fade-in-up">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 sm:gap-3">
         <div>
           <span className="label-overline">Route · by order / area</span>
-          <h1 className="font-display font-black text-2xl sm:text-4xl mt-0.5 sm:mt-1">Deliveries</h1>
+          <h1 className="font-display font-black text-xl sm:text-2xl mt-0.5">Deliveries</h1>
           {!loading && (summary.total || 0) > 0 ? (
             <p className="text-xs text-muted-foreground mt-1" data-testid="deliveries-meals-total">
               {summary.total} stop{summary.total === 1 ? "" : "s"} · {mealsToday} meal{mealsToday === 1 ? "" : "s"}
@@ -460,29 +461,33 @@ export default function Deliveries() {
         />
         <div className="flex flex-wrap gap-2" data-testid="delivery-extra-filters">
           {!isDriver ? (
-            <select
-              data-testid="delivery-driver-filter"
-              value={driverId}
-              onChange={(e) => setDriverId(e.target.value)}
-              className="h-10 px-3 rounded-xl bg-white border border-brand-border text-sm"
-            >
-              <option value="">All drivers</option>
-              {drivers.map((d) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
-              ))}
-            </select>
+            <div className="min-w-[160px] max-w-xs flex-1 sm:flex-none">
+              <SearchableSelect
+                testid="delivery-driver-filter"
+                value={driverId}
+                onChange={setDriverId}
+                allowEmpty
+                emptyLabel="All drivers"
+                options={drivers.map((d) => ({ value: d.id, label: d.name }))}
+                inputClassName="h-10 px-3 rounded-xl bg-white border border-brand-border text-sm"
+                placeholder="Search driver…"
+              />
+            </div>
           ) : null}
-          <select
-            data-testid="delivery-slot-filter"
-            value={mealSlot}
-            onChange={(e) => setMealSlot(e.target.value)}
-            className="h-10 px-3 rounded-xl bg-white border border-brand-border text-sm"
-          >
-            <option value="all">All slots</option>
-            <option value="lunch">Lunch</option>
-            <option value="dinner">Dinner</option>
-            <option value="uncategorized">Uncategorized</option>
-          </select>
+          <div className="min-w-[140px] max-w-xs flex-1 sm:flex-none">
+            <SearchableSelect
+              testid="delivery-slot-filter"
+              value={mealSlot}
+              onChange={setMealSlot}
+              options={[
+                { value: "all", label: "All slots" },
+                { value: "lunch", label: "Lunch" },
+                { value: "dinner", label: "Dinner" },
+              ]}
+              inputClassName="h-10 px-3 rounded-xl bg-white border border-brand-border text-sm"
+              placeholder="Search slot…"
+            />
+          </div>
         </div>
         <StatusFilterCards
           testid="delivery-filters"
@@ -496,7 +501,7 @@ export default function Deliveries() {
         {loading ? (
           <InlineLoader testid="deliveries-loading" />
         ) : filtered.length === 0 ? (
-          <div className="p-6 sm:p-8 text-center text-muted-foreground text-sm">
+          <div className="p-4 text-center text-muted-foreground text-sm">
             {items.length === 0
               ? `No deliveries for ${fmtDate(date)}. Nothing scheduled.`
               : filter === "pending"
@@ -506,7 +511,7 @@ export default function Deliveries() {
         ) : (
           <ul className="divide-y divide-brand-border">
             {filtered.map((d, i) => (
-              <li key={d.id} data-testid={`del-row-${d.id}`} className="p-3 sm:p-4 flex flex-col gap-2 sm:gap-3 sm:flex-row sm:items-center hover:bg-brand-surface/60 transition-colors">
+              <li key={d.id} data-testid={`del-row-${d.id}`} className="px-3 py-2.5 flex flex-col gap-2 sm:flex-row sm:items-center hover:bg-brand-surface/60 transition-colors">
                 {canMutate ? (
                   <div className="flex flex-row sm:flex-col gap-1 shrink-0">
                     <button
@@ -535,7 +540,7 @@ export default function Deliveries() {
                       {d.route_order != null ? `#${d.route_order + 1}` : "—"} · {fsa(d.postal_code)}
                     </span>
                     <span className="font-medium truncate">{d.customer_name}</span>
-                    {d.meal_slot && d.meal_slot !== "uncategorized" ? (
+                    {d.meal_slot === "lunch" || d.meal_slot === "dinner" ? (
                       <span
                         className="text-[10px] uppercase tracking-wide font-semibold shrink-0 px-1.5 py-0.5 rounded bg-brand-surface text-muted-foreground"
                         data-testid={`del-slot-${d.id}`}
@@ -701,7 +706,7 @@ export default function Deliveries() {
         mealSlots={
           extraTarget?.meal_slot
             ? [extraTarget.meal_slot]
-            : ["uncategorized"]
+            : ["dinner"]
         }
         defaultMealSlot={extraTarget?.meal_slot || null}
         allowPriceOverride

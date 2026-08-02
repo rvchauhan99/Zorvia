@@ -62,7 +62,7 @@ export default function ConsumerShell({ children }: { children: React.ReactNode 
           </div>
         </div>
       </header>
-      <main className="max-w-2xl mx-auto px-4 py-6 pb-[calc(6rem+env(safe-area-inset-bottom,0px))]">
+      <main className="max-w-2xl mx-auto px-3 py-3 sm:px-4 sm:py-4 pb-[calc(5rem+env(safe-area-inset-bottom,0px))]">
         {children}
       </main>
       <nav

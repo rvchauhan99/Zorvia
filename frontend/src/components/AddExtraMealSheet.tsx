@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import AppSheet from "@/components/AppSheet";
 import CustomerAsyncSelect, { type CustomerAsyncOption } from "@/components/CustomerAsyncSelect";
+import SearchableSelect from "@/components/SearchableSelect";
 import { fmtCAD, todayISO } from "@/lib/format";
 import { projectDaySummary, type DaySummary } from "@/lib/adjustPreview";
 import type { MealTypeOption } from "@/components/ExtraMealsSheet";
@@ -103,7 +104,7 @@ export default function AddExtraMealSheet({
         if (cancelled) return;
         const slots: string[] = Array.isArray(data?.meal_slots) && data.meal_slots.length
           ? data.meal_slots
-          : ["uncategorized"];
+          : ["dinner"];
         setMealSlots(slots);
         setMealSlot(slots.length === 1 ? slots[0] : slots.includes("lunch") ? "lunch" : slots[0]);
         const tid = String(data?.meal_type_id || "regular");
@@ -132,7 +133,7 @@ export default function AddExtraMealSheet({
           (d: any) =>
             d.customer_id === cid &&
             (d.status === "pending") &&
-            (!slot || (d.meal_slot || "uncategorized") === slot),
+            (!slot || (d.meal_slot || "dinner") === slot),
         );
         if (row) {
           setQty(Math.max(1, Number(row.quantity) || 1));
@@ -151,7 +152,7 @@ export default function AddExtraMealSheet({
   const clampedQty = Math.min(MAX_QTY, Math.max(1, qty));
   const unit = Number(priceStr) || 0;
   const typeName = mealTypes.find((t) => t.id === mealTypeId)?.name || mealTypeId || "Meal";
-  const resolvedSlot = mealSlot || (mealSlots.length === 1 ? mealSlots[0] : "uncategorized") || "uncategorized";
+  const resolvedSlot = mealSlot || (mealSlots.length === 1 ? mealSlots[0] : "dinner") || "dinner";
 
   async function showSummary(e: React.FormEvent) {
     e.preventDefault();
@@ -223,7 +224,7 @@ export default function AddExtraMealSheet({
 
   const customerLine =
     daySummary?.pack_list?.find(
-      (p) => p.customer_id === cid && String(p.meal_slot || "uncategorized") === resolvedSlot,
+      (p) => p.customer_id === cid && String(p.meal_slot || "dinner") === resolvedSlot,
     ) ||
     daySummary?.pack_list?.find((p) => p.customer_id === cid) ||
     daySummary?.pack_list?.[0];
@@ -321,7 +322,7 @@ export default function AddExtraMealSheet({
             <div className="rounded-xl border border-brand-border px-4 py-3">
               <div className="label-overline">{customerLine.customer_name || customerLineName || "Customer"}</div>
               <div className="text-sm font-medium mt-0.5">
-                {customerLine.meal_type_name || "Meal"} · {slotLabel(String(customerLine.meal_slot || "uncategorized"))} ·{" "}
+                {customerLine.meal_type_name || "Meal"} · {slotLabel(String(customerLine.meal_slot || "dinner"))} ·{" "}
                 {customerLine.quantity ?? 1}×
               </div>
             </div>
@@ -377,41 +378,37 @@ export default function AddExtraMealSheet({
           {needsSlot ? (
             <label className="flex flex-col gap-1.5">
               <span className="label-overline">Meal slot</span>
-              <select
-                data-testid="add-adjust-slot"
-                className="h-11 px-3 rounded-xl border border-brand-border bg-white text-sm"
+              <SearchableSelect
+                testid="add-adjust-slot"
+                inputClassName="h-11 px-3 rounded-xl border border-brand-border bg-white text-sm"
                 value={mealSlot}
-                onChange={(e) => setMealSlot(e.target.value)}
+                onChange={setMealSlot}
                 disabled={locked}
-              >
-                {mealSlots.map((s) => (
-                  <option key={s} value={s}>{slotLabel(s)}</option>
-                ))}
-              </select>
+                options={mealSlots.map((s) => ({ value: s, label: slotLabel(s) }))}
+                placeholder="Search slot…"
+              />
             </label>
           ) : null}
 
           {mealTypes.length > 0 ? (
             <label className="flex flex-col gap-1.5">
               <span className="label-overline">Meal type</span>
-              <select
-                data-testid="add-adjust-meal-type"
-                className="h-11 px-3 rounded-xl border border-brand-border bg-white text-sm"
+              <SearchableSelect
+                testid="add-adjust-meal-type"
+                inputClassName="h-11 px-3 rounded-xl border border-brand-border bg-white text-sm"
                 value={mealTypeId}
-                onChange={(e) => {
-                  const next = e.target.value;
+                onChange={(next) => {
                   setMealTypeId(next);
                   const t = mealTypes.find((x) => x.id === next);
                   if (t) setPriceStr(String(t.price));
                 }}
                 disabled={locked}
-              >
-                {mealTypes.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name} ({fmtCAD(t.price)})
-                  </option>
-                ))}
-              </select>
+                options={mealTypes.map((t) => ({
+                  value: t.id,
+                  label: `${t.name} (${fmtCAD(t.price)})`,
+                }))}
+                placeholder="Search meal type…"
+              />
             </label>
           ) : null}
 

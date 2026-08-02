@@ -40,7 +40,7 @@ export default function ReportsPage() {
 
   return (
     <AdminShell title="Reports">
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3">
         <div className="flex gap-2 flex-wrap">
           {(
             [
@@ -86,7 +86,7 @@ export default function ReportsPage() {
         {loading || !data ? (
           <div className="text-sm text-neutral-500">Loading report…</div>
         ) : tab === "saas" ? (
-          <div className="flex flex-col gap-4" data-testid="report-saas">
+          <div className="flex flex-col gap-3" data-testid="report-saas">
             <div className="flex justify-end">
               <button
                 type="button"
@@ -117,11 +117,11 @@ export default function ReportsPage() {
                 <div className="text-2xl font-bold mt-1">{data.count}</div>
               </div>
             </div>
-            <div className="bg-white border border-neutral-200 rounded-2xl p-5">
+            <div className="bg-white border border-neutral-200 rounded-2xl p-4">
               <div className="font-semibold mb-3">By day</div>
               <MiniBars items={data.by_day || []} valueKey="amount" />
             </div>
-            <div className="bg-white border border-neutral-200 rounded-2xl p-5">
+            <div className="bg-white border border-neutral-200 rounded-2xl p-4">
               <div className="font-semibold mb-3">By plan</div>
               <ul className="text-sm divide-y divide-neutral-100">
                 {Object.entries(data.by_plan || {}).map(([plan, amt]) => (
@@ -134,18 +134,18 @@ export default function ReportsPage() {
             </div>
           </div>
         ) : tab === "growth" ? (
-          <div className="flex flex-col gap-4" data-testid="report-growth">
+          <div className="flex flex-col gap-3" data-testid="report-growth">
             <div className="bg-white border border-neutral-200 rounded-2xl p-4">
               <div className="text-xs uppercase tracking-widest text-neutral-500">Signups</div>
               <div className="text-2xl font-bold mt-1">{data.signups}</div>
             </div>
-            <div className="bg-white border border-neutral-200 rounded-2xl p-5">
+            <div className="bg-white border border-neutral-200 rounded-2xl p-4">
               <div className="font-semibold mb-3">Signups by day</div>
               <MiniBars items={data.by_day || []} valueKey="count" />
             </div>
           </div>
         ) : (
-          <div className="flex flex-col gap-4" data-testid="report-usage">
+          <div className="flex flex-col gap-3" data-testid="report-usage">
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
               <div className="bg-white border border-neutral-200 rounded-2xl p-4">
                 <div className="text-xs uppercase tracking-widest text-neutral-500">
@@ -180,7 +180,7 @@ export default function ReportsPage() {
                 <div className="text-2xl font-bold mt-1">{data.pending_meal_payments}</div>
               </div>
             </div>
-            <div className="bg-white border border-neutral-200 rounded-2xl p-5">
+            <div className="bg-white border border-neutral-200 rounded-2xl p-4">
               <div className="font-semibold mb-3">Deliveries by status</div>
               <ul className="text-sm divide-y divide-neutral-100">
                 {Object.entries(data.deliveries_by_status || {}).map(([st, n]) => (

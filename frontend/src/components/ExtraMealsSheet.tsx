@@ -5,6 +5,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import AppSheet from "@/components/AppSheet";
+import SearchableSelect from "@/components/SearchableSelect";
 import { fmtCAD, todayISO } from "@/lib/format";
 import {
   projectConsumerDaySummary,
@@ -123,7 +124,7 @@ export default function ExtraMealsSheet({
     : Number(mealTypes.find((t) => t.id === mealTypeId)?.price ?? mealPrice) || 0;
   const lineTotal = unit * clampedQty;
   const typeName = mealTypes.find((t) => t.id === mealTypeId)?.name || mealTypeId || "Meal";
-  const resolvedSlot = mealSlot || (mealSlots.length === 1 ? mealSlots[0] : "uncategorized") || "uncategorized";
+  const resolvedSlot = mealSlot || (mealSlots.length === 1 ? mealSlots[0] : "dinner") || "dinner";
 
   const customerLine = useMemo(() => {
     if (!daySummary?.pack_list?.length) return null;
@@ -131,7 +132,7 @@ export default function ExtraMealsSheet({
       const slot = resolvedSlot;
       return (
         daySummary.pack_list.find(
-          (p) => p.customer_id === customerId && String(p.meal_slot || "uncategorized") === slot,
+          (p) => p.customer_id === customerId && String(p.meal_slot || "dinner") === slot,
         ) ||
         daySummary.pack_list.find((p) => p.customer_id === customerId) ||
         daySummary.pack_list[0]
@@ -309,7 +310,7 @@ export default function ExtraMealsSheet({
                 {summaryMode === "consumer" ? "Your stop" : customerLine.customer_name || customerName || "Customer"}
               </div>
               <div className="text-sm font-medium mt-0.5">
-                {customerLine.meal_type_name || "Meal"} · {slotLabel(String(customerLine.meal_slot || "uncategorized"))} ·{" "}
+                {customerLine.meal_type_name || "Meal"} · {slotLabel(String(customerLine.meal_slot || "dinner"))} ·{" "}
                 {customerLine.quantity ?? 1}×
               </div>
             </div>
@@ -346,41 +347,39 @@ export default function ExtraMealsSheet({
           {needsSlot ? (
             <label className="flex flex-col gap-1.5">
               <span className="label-overline">Meal slot</span>
-              <select
-                data-testid="adjust-slot"
-                className="h-11 px-3 rounded-xl border border-brand-border bg-white text-sm"
+              <SearchableSelect
+                testid="adjust-slot"
+                inputClassName="h-11 px-3 rounded-xl border border-brand-border bg-white text-sm"
                 value={mealSlot}
-                onChange={(e) => setMealSlot(e.target.value)}
-                required
+                onChange={setMealSlot}
                 disabled={locked}
-              >
-                {(mealSlots.length ? mealSlots : ["lunch", "dinner"]).map((s) => (
-                  <option key={s} value={s}>{slotLabel(s)}</option>
-                ))}
-              </select>
+                options={(mealSlots.length ? mealSlots : ["lunch", "dinner"]).map((s) => ({
+                  value: s,
+                  label: slotLabel(s),
+                }))}
+                placeholder="Search slot…"
+              />
             </label>
           ) : null}
           {mealTypes.length > 0 ? (
             <label className="flex flex-col gap-1.5">
               <span className="label-overline">Meal type</span>
-              <select
-                data-testid="adjust-meal-type"
-                className="h-11 px-3 rounded-xl border border-brand-border bg-white text-sm"
+              <SearchableSelect
+                testid="adjust-meal-type"
+                inputClassName="h-11 px-3 rounded-xl border border-brand-border bg-white text-sm"
                 value={mealTypeId}
-                onChange={(e) => {
-                  const next = e.target.value;
+                onChange={(next) => {
                   setMealTypeId(next);
                   const t = mealTypes.find((x) => x.id === next);
                   if (t) setPriceStr(String(t.price));
                 }}
                 disabled={locked}
-              >
-                {mealTypes.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name} ({fmtCAD(t.price)})
-                  </option>
-                ))}
-              </select>
+                options={mealTypes.map((t) => ({
+                  value: t.id,
+                  label: `${t.name} (${fmtCAD(t.price)})`,
+                }))}
+                placeholder="Search meal type…"
+              />
             </label>
           ) : null}
           <label className="flex flex-col gap-1.5">

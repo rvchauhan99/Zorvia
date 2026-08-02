@@ -24,7 +24,10 @@ import { canMutateAdmin } from "@/lib/roles";
 import ImageSourceField from "@/components/ImageSourceField";
 import { PageLoader } from "@/components/loaders";
 import { fetchWhatsappFeaturesEnabled } from "@/lib/whatsapp-features";
-import { CA_PROVINCES, formatCaPostal, isValidCaPostal } from "@/lib/ca-provinces";
+import { formatCaPostal, isValidCaPostal } from "@/lib/ca-provinces";
+import { CA_TIMEZONE_OPTIONS_LONG } from "@/lib/ca-timezones";
+import CaAddressFields from "@/components/CaAddressFields";
+import SearchableSelect from "@/components/SearchableSelect";
 
 type TabId = "general" | "operations" | "billing" | "notifications" | "team";
 
@@ -326,11 +329,11 @@ export default function Settings() {
   ] as const;
 
   return (
-    <div className="flex flex-col gap-6 animate-fade-in-up pb-28">
+    <div className="flex flex-col gap-4 animate-fade-in-up pb-20">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
         <div className="shrink-0">
           <span className="label-overline">Configuration</span>
-          <h1 className="font-display font-black text-3xl sm:text-4xl mt-1">Settings</h1>
+          <h1 className="font-display font-black text-xl sm:text-2xl mt-0.5">Settings</h1>
         </div>
 
         <nav
@@ -377,18 +380,18 @@ export default function Settings() {
         </nav>
       </div>
 
-      <main className="flex flex-col gap-6">
+      <main className="flex flex-col gap-4">
           {/* GENERAL TAB */}
           {activeTab === "general" && (
-            <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-4">
               {/* Kitchen Basic Profile */}
-              <div className="card-tinted p-5 sm:p-6 flex flex-col gap-5">
+              <div className="card-tinted p-3 sm:p-4 flex flex-col gap-3">
                 <div>
                   <h2 className="font-display font-bold text-xl">Kitchen Identity</h2>
                   <p className="text-sm text-muted-foreground mt-0.5">Your kitchen details and default contact info.</p>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <label className="flex flex-col gap-1.5">
                     <span className="label-overline">Business name</span>
                     <input data-testid="s-name" className={inputClass} value={prov.name || ""} onChange={(e) => upd("name", e.target.value)} />
@@ -399,62 +402,37 @@ export default function Settings() {
                     <input data-testid="s-interac" type="email" className={inputClass} value={prov.interac_email || ""} onChange={(e) => upd("interac_email", e.target.value)} />
                   </label>
 
-                  <label className="flex flex-col gap-1.5 sm:col-span-2">
-                    <span className="label-overline">Street address</span>
-                    <input data-testid="s-address" className={inputClass} value={prov.address || ""} onChange={(e) => upd("address", e.target.value)} />
-                  </label>
-
-                  <label className="flex flex-col gap-1.5">
-                    <span className="label-overline">Apartment / unit</span>
-                    <input data-testid="s-apt" className={inputClass} value={prov.apartment || ""} onChange={(e) => upd("apartment", e.target.value)} />
-                  </label>
-
-                  <label className="flex flex-col gap-1.5">
-                    <span className="label-overline">City</span>
-                    <input data-testid="s-city" className={inputClass} value={prov.city || ""} onChange={(e) => upd("city", e.target.value)} />
-                  </label>
-
-                  <label className="flex flex-col gap-1.5">
-                    <span className="label-overline">Province / territory</span>
-                    <select
-                      data-testid="s-province"
-                      className={inputClass}
-                      value={prov.province || "ON"}
-                      onChange={(e) => upd("province", e.target.value)}
-                    >
-                      {CA_PROVINCES.map((p) => (
-                        <option key={p.code} value={p.code}>{p.code} — {p.name}</option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="flex flex-col gap-1.5">
-                    <span className="label-overline">Postal code</span>
-                    <input
-                      data-testid="s-postal"
-                      className={`${inputClass} uppercase`}
-                      value={prov.postal_code || ""}
-                      onChange={(e) => upd("postal_code", e.target.value.toUpperCase())}
-                      placeholder="M5H 2M9"
-                    />
-                  </label>
+                  <CaAddressFields
+                    testidPrefix="s"
+                    inputClassName={inputClass}
+                    values={{
+                      province: prov.province || "ON",
+                      city: prov.city || "",
+                      postal_code: prov.postal_code || "",
+                      address: prov.address || "",
+                      apartment: prov.apartment || "",
+                    }}
+                    onChange={(patch) => {
+                      setProv((p: any) => ({ ...p, ...patch }));
+                    }}
+                  />
 
                   <label className="flex flex-col gap-1.5 sm:col-span-2">
                     <span className="label-overline">Timezone</span>
-                    <select data-testid="s-tz" className={inputClass} value={prov.settings?.timezone || "America/Toronto"} onChange={(e) => updSettings("timezone", e.target.value)}>
-                      <option value="America/Toronto">America/Toronto (EST/EDT)</option>
-                      <option value="America/Vancouver">America/Vancouver (PST/PDT)</option>
-                      <option value="America/Edmonton">America/Edmonton (MST/MDT)</option>
-                      <option value="America/Winnipeg">America/Winnipeg (CST/CDT)</option>
-                      <option value="America/Halifax">America/Halifax (AST/ADT)</option>
-                      <option value="America/St_Johns">America/St_Johns (NST/NDT)</option>
-                    </select>
+                    <SearchableSelect
+                      testid="s-tz"
+                      inputClassName={inputClass}
+                      value={prov.settings?.timezone || "America/Toronto"}
+                      onChange={(v) => updSettings("timezone", v)}
+                      options={[...CA_TIMEZONE_OPTIONS_LONG]}
+                      placeholder="Search timezone…"
+                    />
                   </label>
                 </div>
               </div>
 
               {/* Kitchen Logo Section */}
-              <div className="card-tinted p-5 sm:p-6 flex flex-col gap-4" data-testid="kitchen-logo-section">
+              <div className="card-tinted p-3 sm:p-4 flex flex-col gap-4" data-testid="kitchen-logo-section">
                 <div>
                   <h2 className="font-display font-bold text-xl">Kitchen Branding</h2>
                   <p className="text-sm text-muted-foreground mt-0.5">Upload a square logo (512×512 PNG/JPEG) to display on customer portals and menus.</p>
@@ -481,7 +459,7 @@ export default function Settings() {
               </div>
 
               {/* Signup Code */}
-              <div className="card-tinted p-5 sm:p-6 flex flex-col gap-3">
+              <div className="card-tinted p-3 sm:p-4 flex flex-col gap-3">
                 <div>
                   <h2 className="font-display font-bold text-xl">Customer Registration Code</h2>
                   <p className="text-xs text-muted-foreground mt-0.5">Share this code with new consumers to allow self-signup.</p>
@@ -505,9 +483,9 @@ export default function Settings() {
 
           {/* OPERATIONS TAB */}
           {activeTab === "operations" && (
-            <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-4">
               {/* Meal Types */}
-              <div className="card-tinted p-5 sm:p-6 flex flex-col gap-4" data-testid="s-meal-types">
+              <div className="card-tinted p-3 sm:p-4 flex flex-col gap-3" data-testid="s-meal-types">
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <h2 className="font-display font-bold text-xl">Meal Types & Pricing</h2>
@@ -578,7 +556,7 @@ export default function Settings() {
               </div>
 
               {/* Cutoff & Tax Rules */}
-              <div className="card-tinted p-5 sm:p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="card-tinted p-3 sm:p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="flex flex-col gap-1.5">
                   <span className="label-overline">Cancellation Cutoff (Hours)</span>
                   <input data-testid="s-cutoff" type="number" className={inputClass} value={prov.settings?.cutoff_hours ?? 4} onChange={(e) => updSettings("cutoff_hours", e.target.value)} />
@@ -602,7 +580,7 @@ export default function Settings() {
               </div>
 
               {/* Closed Dates / Holidays */}
-              <div className="card-tinted p-5 sm:p-6 flex flex-col gap-4" data-testid="closed-dates-section">
+              <div className="card-tinted p-3 sm:p-4 flex flex-col gap-4" data-testid="closed-dates-section">
                 <div>
                   <h2 className="font-display font-bold text-xl">Closed Dates & Holidays</h2>
                   <p className="text-xs text-muted-foreground mt-0.5">No deliveries will be scheduled or charged on these specified dates.</p>
@@ -659,12 +637,12 @@ export default function Settings() {
 
           {/* MONTHLY BILLING TAB */}
           {activeTab === "billing" && (
-            <div className="flex flex-col gap-6" data-testid="monthly-billing-section">
-              <div className="card-tinted p-5 sm:p-6 flex flex-col gap-5">
+            <div className="flex flex-col gap-4" data-testid="monthly-billing-section">
+              <div className="card-tinted p-3 sm:p-4 flex flex-col gap-4">
                 <div>
                   <h2 className="font-display font-bold text-xl">Subscription Policy</h2>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Choose how this kitchen bills customers: per-meal (default) or a flat monthly subscription policy.
+                    Kitchen default for customers set to Inherit. Each customer can override to Per-meal, Adjustable Monthly, or Fixed Monthly in CRM.
                   </p>
                 </div>
 
@@ -672,9 +650,10 @@ export default function Settings() {
                 <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-xs text-foreground/80 flex flex-col gap-2.5" data-testid="monthly-billing-guide">
                   <p className="font-semibold text-primary">How this policy works</p>
                   <ul className="list-disc pl-4 space-y-1 text-muted-foreground">
+                    <li><strong className="text-foreground">Default (Inherit):</strong> New customers use this kitchen setting until you override them in CRM.</li>
                     <li><strong className="text-foreground">Adjustable monthly:</strong> Flat rate fee with skip recalculations & free skip allowances.</li>
                     <li><strong className="text-foreground">Fixed monthly:</strong> Constant fee each month regardless of skips or extra delivery days.</li>
-                    <li><strong className="text-foreground">Collection day:</strong> Default payment collection day (1–31) each month.</li>
+                    <li><strong className="text-foreground">Plan templates:</strong> Shared kitchen plans used by monthly customers (Inherit or override).</li>
                   </ul>
                 </div>
 
@@ -686,17 +665,16 @@ export default function Settings() {
                     className="h-5 w-5 rounded accent-primary border-brand-border cursor-pointer"
                   />
                   <div>
-                    <span className="font-bold text-sm text-foreground">Enable monthly subscription policy</span>
-                    <span className="block text-xs text-muted-foreground">Turns on flat monthly billing for all customers (replaces per-meal accrual)</span>
-                    <span className="block text-xs text-amber-600 mt-1">Monthly flat billing does not retroactively prorate existing balances when enabled mid-month. Joining date is honoured, but month charges are calculated per collection month rules (no proration in v1).</span>
+                    <span className="font-bold text-sm text-foreground">Default customers to monthly subscription</span>
+                    <span className="block text-xs text-muted-foreground">When on, Inherit customers use monthly billing. When off, Inherit customers stay per-meal. You can still override individual customers in CRM.</span>
+                    <span className="block text-xs text-amber-600 mt-1">Monthly flat billing does not retroactively prorate existing balances when switched mid-month. Joining date is honoured; month charges follow collection month rules (no proration in v1).</span>
                   </div>
                 </label>
 
-                {mb.enabled && (
-                  <div className="flex flex-col gap-5 pt-2">
+                <div className="flex flex-col gap-4 pt-2">
                     {/* Policy Variant Selection */}
                     <div className="flex flex-col gap-2" data-testid="monthly-billing-variant">
-                      <span className="label-overline">Policy variant</span>
+                      <span className="label-overline">Default policy variant (for Inherit + monthly)</span>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <label
                           className={`flex flex-col p-3.5 rounded-xl border cursor-pointer transition-all ${
@@ -816,7 +794,7 @@ export default function Settings() {
 
                     {/* Cancellation Rules */}
                     {mb.policy_variant !== "monthly_fixed" && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-brand-border pt-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 border-t border-brand-border pt-3">
                         <label className="flex flex-col gap-1.5">
                           <span className="label-overline">Free Cancellations / Month</span>
                           <input
@@ -851,16 +829,15 @@ export default function Settings() {
                         </label>
                       </div>
                     )}
-                  </div>
-                )}
+                </div>
               </div>
             </div>
           )}
 
           {/* NOTIFICATIONS TAB */}
           {activeTab === "notifications" && (
-            <div className="flex flex-col gap-6">
-              <div className="card-tinted p-5 sm:p-6 flex flex-col gap-4">
+            <div className="flex flex-col gap-4">
+              <div className="card-tinted p-3 sm:p-4 flex flex-col gap-3">
                 <div>
                   <h2 className="font-display font-bold text-xl">Communication & Alerts</h2>
                   <p className="text-xs text-muted-foreground mt-0.5">Manage automated alerts sent to your customers.</p>
@@ -905,9 +882,9 @@ export default function Settings() {
 
           {/* TEAM & SECURITY TAB */}
           {activeTab === "team" && (
-            <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-4">
               {/* Staff List & Creation */}
-              <div className="card-tinted p-5 sm:p-6 flex flex-col gap-4" data-testid="staff-section">
+              <div className="card-tinted p-3 sm:p-4 flex flex-col gap-3" data-testid="staff-section">
                 <div>
                   <h2 className="font-display font-bold text-xl">Staff Accounts</h2>
                   <p className="text-xs text-muted-foreground mt-0.5">Manage permissions for Drivers, Viewers, and Admins.</p>
@@ -933,11 +910,18 @@ export default function Settings() {
                     <input data-testid="staff-name" required placeholder="Full Name" className={inputClass} value={staffForm.name} onChange={(e) => setStaffForm({ ...staffForm, name: e.target.value })} />
                     <input data-testid="staff-email" required type="email" placeholder="Email Address" className={inputClass} value={staffForm.email} onChange={(e) => setStaffForm({ ...staffForm, email: e.target.value })} />
                     <input data-testid="staff-password" required type="password" minLength={6} placeholder="Password" className={inputClass} value={staffForm.password} onChange={(e) => setStaffForm({ ...staffForm, password: e.target.value })} />
-                    <select data-testid="staff-role" className={inputClass} value={staffForm.role} onChange={(e) => setStaffForm({ ...staffForm, role: e.target.value })}>
-                      <option value="driver">Driver (Deliveries only)</option>
-                      <option value="viewer">Viewer (Read-only)</option>
-                      <option value="admin">Admin (Full Access)</option>
-                    </select>
+                    <SearchableSelect
+                      testid="staff-role"
+                      inputClassName={inputClass}
+                      value={staffForm.role}
+                      onChange={(v) => setStaffForm({ ...staffForm, role: v })}
+                      options={[
+                        { value: "driver", label: "Driver (Deliveries only)" },
+                        { value: "viewer", label: "Viewer (Read-only)" },
+                        { value: "admin", label: "Admin (Full Access)" },
+                      ]}
+                      placeholder="Search role…"
+                    />
                   </div>
                   <button data-testid="staff-create" type="submit" disabled={staffBusy} className="pill-btn btn-outline h-10 text-xs gap-1.5 cursor-pointer disabled:opacity-60 self-start">
                     <UserPlus size={16} /> {staffBusy ? "Creating…" : "Create Staff Account"}
@@ -946,7 +930,7 @@ export default function Settings() {
               </div>
 
               {/* Password Change */}
-              <div className="card-tinted p-5 sm:p-6 flex flex-col gap-4" data-testid="change-password-section">
+              <div className="card-tinted p-3 sm:p-4 flex flex-col gap-3" data-testid="change-password-section">
                 <div>
                   <h2 className="font-display font-bold text-xl">{hasPassword ? "Security & Password" : "Set Password"}</h2>
                   <p className="text-xs text-muted-foreground mt-0.5">

@@ -132,12 +132,9 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
 
   const loadBillingNav = useCallback(() => {
     if (session?.user_type !== "provider" || isDriver) return;
-    api.get("/providers/me")
-      .then(({ data }) => {
-        const mb = data?.settings?.monthly_billing;
-        setMonthlyBillingNav(!!mb?.enabled);
-      })
-      .catch(() => setMonthlyBillingNav(false));
+    // Always show Customer subscriptions — kitchens may use per-customer monthly overrides
+    // even when the kitchen default is per-meal.
+    setMonthlyBillingNav(true);
   }, [session, isDriver]);
 
   useEffect(() => {
@@ -340,8 +337,8 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
         </div>
       </aside>
 
-      <main className="lg:pl-64 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] lg:pb-8">
-        <div className="lg:hidden sticky top-0 z-30 backdrop-blur-xl bg-white/85 border-b border-brand-border pt-[env(safe-area-inset-top,0px)] px-4 py-2 flex items-center justify-between">
+      <main className="lg:pl-64 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] lg:pb-6">
+        <div className="lg:hidden sticky top-0 z-30 backdrop-blur-xl bg-white/85 border-b border-brand-border pt-[env(safe-area-inset-top,0px)] px-3 py-2 flex items-center justify-between">
           <img
             src="/brand/mealhq-logo-horizontal.png"
             alt="MealHQ"
@@ -352,11 +349,11 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
             {!isDesktop ? <NotificationBell testid="provider-notification-bell-mobile" /> : null}
           </div>
         </div>
-        <div className="max-w-6xl mx-auto px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
+        <div className="max-w-6xl mx-auto px-3 py-3 sm:px-4 sm:py-4 lg:px-6 lg:py-6">
           {banner ? (
             <div
               data-testid={`trial-banner-${banner.tone}`}
-              className={`mb-5 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 ${
+              className={`mb-3 rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 ${
                 banner.tone === "expired"
                   ? "bg-primary/10 border border-primary/30 text-foreground"
                   : banner.tone === "renew"

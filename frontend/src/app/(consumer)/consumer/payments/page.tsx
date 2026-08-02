@@ -107,11 +107,11 @@ export default function ConsumerPayments() {
   }
 
   return (
-    <div className="flex flex-col gap-5 animate-fade-in-up">
+    <div className="flex flex-col gap-3 animate-fade-in-up">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <span className="label-overline">Interac e-Transfer</span>
-          <h1 className="font-display font-black text-3xl mt-1">Payments</h1>
+          <h1 className="font-display font-black text-xl sm:text-2xl mt-1">Payments</h1>
         </div>
         <button
           data-testid="pay-download-statement"
@@ -123,7 +123,7 @@ export default function ConsumerPayments() {
       </div>
 
       {me?.provider ? (
-        <div className="card-tinted p-5">
+        <div className="card-tinted p-4">
           <div className="label-overline">Send Interac e-Transfer to</div>
           <div className="font-display font-bold text-lg mt-1">{me.provider.interac_email || "—"}</div>
           <div className="text-xs text-muted-foreground mt-1">{me.provider.name} · Outstanding: <span className="font-semibold text-primary">{fmtCAD(me.outstanding || 0)}</span></div>
@@ -137,7 +137,7 @@ export default function ConsumerPayments() {
         </div>
       ) : null}
 
-      <form onSubmit={submit} className="card-tinted p-5 flex flex-col gap-4">
+      <form onSubmit={submit} className="card-tinted p-4 flex flex-col gap-3">
         <h2 className="font-display font-bold text-lg">Submit a payment reference</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="flex flex-col gap-1.5">
@@ -168,9 +168,9 @@ export default function ConsumerPayments() {
         <h2 className="font-display font-bold text-xl mb-3">Your submissions</h2>
         <ul className="card-tinted divide-y divide-brand-border overflow-hidden">
           {payments.length === 0 ? (
-            <li className="p-6 text-center text-muted-foreground text-sm">No submissions yet.</li>
+            <li className="p-4 text-center text-muted-foreground text-sm">No submissions yet.</li>
           ) : payments.map((p) => (
-            <li key={p.id} data-testid={`c-pay-${p.id}`} className="p-4 flex items-center gap-3 hover:bg-brand-surface/60 transition-colors">
+            <li key={p.id} data-testid={`c-pay-${p.id}`} className="px-3 py-2.5 flex items-center gap-3 hover:bg-brand-surface/60 transition-colors">
               <div className="flex-1 min-w-0">
                 <div className="font-display font-bold">{fmtCAD(p.amount)}</div>
                 <div className="text-xs text-muted-foreground truncate">Ref: <span className="font-mono">{p.reference}</span> · {fmtDateTime(p.submitted_at)}</div>

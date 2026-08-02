@@ -42,7 +42,6 @@ export default function MonthlyDuesPage() {
   const canMutate = canMutateAdmin(session);
   const [loading, setLoading] = useState(true);
   const [allowed, setAllowed] = useState(false);
-  const [policyVariant, setPolicyVariant] = useState<string | null>(null);
   const [rows, setRows] = useState<DueRow[]>([]);
   const [totals, setTotals] = useState<{ due_amount?: number; overdue_amount?: number; overdue_count?: number; customer_count?: number } | null>(null);
   const [renewCustomer, setRenewCustomer] = useState<{ id: string; name: string } | null>(null);
@@ -52,24 +51,12 @@ export default function MonthlyDuesPage() {
   const load = useCallback(async (opts: { cursor?: string | null } = {}) => {
     setLoading(true);
     try {
-      const { data: prov } = await api.get("/providers/me");
-      const mb = prov?.settings?.monthly_billing;
-      const monthlyOn = !!mb?.enabled;
-      if (!monthlyOn) {
-        setAllowed(false);
-        setPolicyVariant(null);
-        setRows([]);
-        setTotals(null);
-        return;
-      }
-      setAllowed(true);
-      setPolicyVariant(mb?.policy_variant || "monthly_adjustable");
       const params = new URLSearchParams({ page_size: String(paging.pageSize) });
       if (opts.cursor) params.set("cursor", opts.cursor);
       const { data } = await api.get(`/reports/monthly-dues?${params.toString()}`);
+      setAllowed(true);
       setRows(Array.isArray(data?.rows) ? data.rows : []);
       setTotals(data?.totals || null);
-      if (data?.policy_variant) setPolicyVariant(data.policy_variant);
       paging.applyPageResult({
         next_cursor: data?.next_cursor ?? null,
         has_more: Boolean(data?.has_more),
@@ -80,6 +67,7 @@ export default function MonthlyDuesPage() {
       if (e?.response?.status === 400) {
         setAllowed(false);
         setRows([]);
+        setTotals(null);
       } else {
         toast.error(typeof detail === "string" ? detail : "Failed to load customer subscriptions");
       }
@@ -104,7 +92,8 @@ export default function MonthlyDuesPage() {
     void load({ cursor: c });
   }, [paging.currentPageIndex, paging.cursorHistory, load]);
 
-  const isAdjustable = policyVariant === "monthly_adjustable";
+  // Drive blurb from row policies (report billing_mode may be "mixed")
+  const isAdjustable = rows.some((r) => r.policy_variant === "monthly_adjustable");
 
   if (loading && !rows.length && !totals) {
     return <PageLoader testid="monthly-dues-loading" label="Loading customer subscriptions…" />;
@@ -115,27 +104,25 @@ export default function MonthlyDuesPage() {
       <div className="flex flex-col gap-3 animate-fade-in-up" data-testid="monthly-dues-unavailable">
         <div>
           <span className="label-overline">Billing</span>
-          <h1 className="font-display font-black text-2xl sm:text-3xl mt-0.5">Customer subscriptions</h1>
+          <h1 className="font-display font-black text-xl sm:text-2xl mt-0.5">Customer subscriptions</h1>
         </div>
-        <div className="card-tinted p-6 text-sm text-muted-foreground">
-          Customer subscriptions is available when Settings → Subscription Policy has{" "}
-          <strong className="text-foreground">monthly billing</strong> enabled (Fixed or Adjustable).
-          Overdue-only dues for Fixed stay under Reports → Outstanding.
+        <div className="card-tinted p-4 text-sm text-muted-foreground">
+          No monthly-policy customers yet. Set kitchen default in Settings → Subscription Policy, or override in CRM. Fixed overdue also appears under Reports → Outstanding.
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-3 sm:gap-5 animate-fade-in-up" data-testid="monthly-dues-page">
+    <div className="flex flex-col gap-3 animate-fade-in-up" data-testid="monthly-dues-page">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <span className="label-overline">Billing</span>
-          <h1 className="font-display font-black text-2xl sm:text-3xl mt-0.5">Customer subscriptions</h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <h1 className="font-display font-black text-xl sm:text-2xl mt-0.5">Customer subscriptions</h1>
+          <p className="text-xs text-muted-foreground mt-1 truncate">
             {isAdjustable
-              ? "All monthly customers with renewal dates. This month shows the recalculated charge. Quick Renew lets you settle at plan fee or adjustable amount when they differ; credit updates from verified payments."
-              : "All Fixed Monthly customers with renewal dates. Overdue first, then nearest renewal. Quick Renew anytime — early full-fee payments advance next renewal; partial advances stay as credit."}
+              ? "Monthly customers with renewal dates — settle at plan or adjustable amount via Quick Renew."
+              : "Fixed Monthly customers — overdue first; Quick Renew anytime (early full-fee advances renewal)."}
           </p>
         </div>
         <button
@@ -150,16 +137,16 @@ export default function MonthlyDuesPage() {
 
       {showMoney && totals ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <div className="card-tinted p-4">
+          <div className="card-tinted p-3">
             <div className="label-overline">On list</div>
             <div className="font-display font-bold text-xl mt-1">{totals.customer_count || 0}</div>
           </div>
-          <div className="card-tinted p-4">
+          <div className="card-tinted p-3">
             <div className="label-overline">Overdue</div>
             <div className="font-display font-bold text-xl text-destructive mt-1">{fmtCAD(totals.overdue_amount || 0)}</div>
             <div className="text-xs text-muted-foreground mt-0.5">{totals.overdue_count || 0} customers</div>
           </div>
-          <div className="card-tinted p-4 col-span-2 sm:col-span-1">
+          <div className="card-tinted p-3 col-span-2 sm:col-span-1">
             <div className="label-overline">Due total</div>
             <div className="font-display font-bold text-xl text-primary mt-1">{fmtCAD(totals.due_amount || 0)}</div>
           </div>
@@ -170,7 +157,7 @@ export default function MonthlyDuesPage() {
         {loading ? (
           <InlineLoader testid="monthly-dues-inline-loading" label="Refreshing…" />
         ) : rows.length === 0 ? (
-          <div className="p-8 text-center text-muted-foreground text-sm" data-testid="monthly-dues-empty">
+          <div className="p-4 text-center text-muted-foreground text-sm" data-testid="monthly-dues-empty">
             No active customers yet.
           </div>
         ) : (
@@ -182,7 +169,7 @@ export default function MonthlyDuesPage() {
                 return (
                   <li
                     key={r.customer_id}
-                    className={`p-4 flex flex-col gap-3 ${r.is_overdue ? "bg-destructive/5" : ""}`}
+                    className={`px-3 py-2.5 flex flex-col gap-2 ${r.is_overdue ? "bg-destructive/5" : ""}`}
                     data-testid={`monthly-dues-row-${r.customer_id}`}
                   >
                     <div className="flex items-start justify-between gap-3">
