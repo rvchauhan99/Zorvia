@@ -1,10 +1,9 @@
 {
   "name": "zorvia",
   "private": true,
-  "description": "Zorvia (Tiffin OS) — monorepo scripts",
+  "description": "MealHQ public frontends (frontend + admin-frontend). API: rvchauhan99/mealhq-api",
   "scripts": {
-    "dev": "npm run dev --prefix backend",
-    "dev:backend": "npm run dev --prefix backend",
+    "dev": "npm run dev --prefix frontend",
     "dev:frontend": "npm run dev --prefix frontend",
     "dev:admin": "npm run dev --prefix admin-frontend",
     "start": "npm run start --prefix frontend",

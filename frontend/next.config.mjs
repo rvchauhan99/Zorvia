@@ -23,7 +23,6 @@ const nextConfig = {
           "**/node_modules/**",
           "**/.git/**",
           "**/.next/**",
-          path.join(frontendRoot, "../backend/**"),
           path.join(frontendRoot, "../admin-frontend/**"),
           path.join(frontendRoot, "../**/.cursor/**"),
         ],

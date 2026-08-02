@@ -1,39 +1,41 @@
-# AGENTS.md — MealHQ (monorepo may still use zorvia-* infra IDs)
+# AGENTS.md — MealHQ frontends (`Zorvia`)
 
-You are working in the **MealHQ** product monorepo (user-facing brand and API title: **MealHQ**). Infra may still use names like `zorvia-app` / `zorvia-api` / `DB_NAME=zorvia` — do not confuse those with the product brand.
+Public Next.js monorepo for **MealHQ** UIs. Brand: **MealHQ**. Infra IDs may still use `zorvia-*`.
 
-## Read order (do this before exploring the whole codebase)
+**Backend is a separate private repo:** [`rvchauhan99/mealhq-api`](https://github.com/rvchauhan99/mealhq-api). Do not assume a local `backend/` folder in this repo.
 
-1. [`docs/PLATFORM_BLUEPRINT.md`](docs/PLATFORM_BLUEPRINT.md) — requirements, flowcharts, decisions, known issues  
-2. [`docs/FUNCTIONAL.md`](docs/FUNCTIONAL.md) — product behavior and journeys  
-3. [`docs/TECHNICAL.md`](docs/TECHNICAL.md) — APIs, data model, env, runbook  
-4. [`docs/MONTHLY_BILLING.md`](docs/MONTHLY_BILLING.md) — optional tenant monthly billing (providers)  
-5. [`docs/ROUTE_PLANNING.md`](docs/ROUTE_PLANNING.md) — local lat/lng route order + optional ORS geocode  
-6. [`memory/INDEX.md`](memory/INDEX.md) — short memory map  
-7. [`design_guidelines.json`](design_guidelines.json) — when touching UI
+## Layout
 
-Do **not** re-derive platform architecture from scratch each session if these docs cover the question.
+- `frontend/` — provider + consumer App Router (TypeScript)
+- `admin-frontend/` — platform admin (`/api/platform/*`)
+- `docs/` — FE-safe product/SEO docs
+- `design_guidelines.json` — UI rules when editing visuals
+
+## Read order
+
+1. [`docs/FUNCTIONAL.md`](docs/FUNCTIONAL.md)
+2. [`docs/SEO.md`](docs/SEO.md)
+3. [`design_guidelines.json`](design_guidelines.json)
+4. API contracts / Cloud Run / env for the server: see **mealhq-api** docs (`TECHNICAL.md`, `DEPLOY_CLOUD_RUN.md`, `PLATFORM_BLUEPRINT.md`)
 
 ## Non-negotiables
 
-- Do **not** deploy to production (Cloud Run / Vercel) or create git commits / PRs unless the user explicitly asks in that message.
-- Tenancy: `tenant_id = provider_id`; always scope queries.
-- Do not invent Phase 2 features (notification inbox UI, WhatsApp **chat inbox**) unless the user asks. Menu WhatsApp **outbound share** is shipped (upload anytime; consumers see current/latest). WhatsApp is **prepaid** (not in subscription): Interac top-up + admin settle; one successful share per menu. Product UI/APIs gated by `WHATSAPP_FEATURES_ENABLED` (default off until Meta verification).
-- Waves A–D are **shipped** (staff/roles, Stripe-optional billing, audit log, GST/HST, brand rename).
-- Subscription activate: `BILLING_PROVIDER=none` self-activates; `stripe` uses Checkout + webhook; `manual` uses Interac + optimistic activate + `admin-frontend` review.
-- Integrations must degrade gracefully (Resend stub, R2 → base64, Firebase → 501 / disabled buttons, Stripe → 501 when mode=stripe without keys).
-- Platform admin UI lives in `admin-frontend/` (separate deploy); same FastAPI backend under `/api/platform/*` — dashboard, tenants, notes, inbox, SaaS review, reports, CSV exports, trial digest.
-- Never commit secrets (`.env`, `backend/secrets/`, service account JSON).
+- Do **not** deploy to production (Vercel) or create git commits / PRs unless the user explicitly asks.
 - Preserve existing `data-testid` attributes.
-- Prefer TypeScript for the Next.js frontend (`frontend/`).
+- Prefer TypeScript in `frontend/`.
+- Never commit secrets (`.env`, Firebase private keys).
+- Do not invent Phase 2 features (notification inbox UI, WhatsApp chat inbox) unless asked. WhatsApp product UI is gated by backend `WHATSAPP_FEATURES_ENABLED`.
+- Admin UI calls the same Cloud Run API under `/api/platform/*`.
 
-## Stack reminders
+## Local dev
 
-- Backend: FastAPI in `backend/`, run with `npm run dev` (root) or `cd backend && npm run dev`
-- Frontend: Next.js in `frontend/`, `npm run dev` (in `frontend/`) or `npm run dev:frontend` from root; restart after `NEXT_PUBLIC_*` changes
-- Tests: `python -m pytest tests/backend_test.py -n 0` from `backend/`
-- Firebase project: `mealhq-ca` (Google Sign-In); Cloud Run API remains on GCP `zorvia-app`
+```bash
+npm run dev:frontend   # :3000 — rewrites /api → BACKEND_URL or http://127.0.0.1:8000
+npm run dev:admin      # :3001
+```
+
+Run the API from a sibling clone of `mealhq-api`.
 
 ## When you change behavior
 
-Update `docs/PLATFORM_BLUEPRINT.md` and the matching FUNCTIONAL or TECHNICAL section in the same PR/change set.
+Update FE docs here; if API behavior changes, update docs in **mealhq-api** in the same change set.
