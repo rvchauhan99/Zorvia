@@ -1,38 +1,35 @@
 ---
-description: MealHQ platform memory — always apply; read docs before re-exploring
+description: MealHQ frontend repo memory — always apply; API is private mealhq-api
 alwaysApply: true
 ---
 
-# MealHQ platform rule
+# MealHQ platform rule (public frontends)
 
-Before broad codebase exploration, prefer project docs:
+This repo is **frontend-only** (`frontend/` + `admin-frontend/`). Backend lives in private **`rvchauhan99/mealhq-api`**.
 
-- `docs/PLATFORM_BLUEPRINT.md` (primary — requirements, mermaid flows, ADRs, known issues)
-- `docs/FUNCTIONAL.md` (product / journeys / business rules)
-- `docs/TECHNICAL.md` (API, modules, env, runbook)
-- `memory/INDEX.md` and `memory/PRD.md` (short pointers)
+Before broad exploration, prefer:
+
+- `docs/FUNCTIONAL.md` (product / journeys)
+- `docs/SEO.md` / `docs/README.md`
 - `AGENTS.md` (agent contract)
+- `design_guidelines.json` (UI)
+- API/schema/deploy docs: sibling clone of `mealhq-api` (`docs/PLATFORM_BLUEPRINT.md`, `TECHNICAL.md`, etc.)
 
 ## Product
 
-- Brand: **MealHQ** (user-facing + API title). Infra IDs may still be `zorvia-*` (GCP, DB name, secrets).
+- Brand: **MealHQ**. Infra IDs may still be `zorvia-*`.
 - Multi-tenant tiffin SaaS: provider admin + consumer; `tenant_id = provider_id`.
-- Frontend: **Next.js** App Router (TypeScript) in `frontend/`. Platform admin: `admin-frontend/` (dashboard, tenants, inbox, SaaS review, reports).
+- Frontend: Next.js App Router in `frontend/`. Platform admin: `admin-frontend/`.
 
 ## Do not reinvent
 
-- Waves A–D shipped (staff/roles, Stripe-optional billing, audit, GST/HST, brand rename).
-- SaaS activate: `BILLING_PROVIDER=none` | `stripe` | `manual` (Interac + optimistic activate + admin review).
-- Notifications inbox **API** exists; inbox **UI** still deferred.
-- Menu (anytime upload + history; consumer sees current/latest): in-app + email + Meta WhatsApp Cloud API share (platform number); see `docs/WHATSAPP_SETUP.md`. WhatsApp is **prepaid** (not in subscription; Interac top-up + admin settle; one successful share per menu). Product UI/APIs gated by `WHATSAPP_FEATURES_ENABLED` (default off). Chat inbox still deferred.
-- Activity logs have writers + More-page UI (Wave D).
-- Firebase: `FIREBASE_SERVICE_ACCOUNT_PATH` or `_JSON` + frontend `NEXT_PUBLIC_FIREBASE_*` (`mealhq-ca`).
+- Waves A–D shipped. Inbox UI deferred. WhatsApp chat inbox deferred; outbound share gated by backend flag.
+- Firebase client: `NEXT_PUBLIC_FIREBASE_*` (`mealhq-ca`).
 
 ## Engineering constraints
 
-- Never commit `.env` or `backend/secrets/`.
-- Do **not** deploy to production (Cloud Run / Vercel) or create git commits unless the user explicitly asks.
+- Never commit `.env` or secrets.
+- Do **not** deploy to production (Vercel) or create git commits unless the user explicitly asks.
 - Preserve `data-testid`.
-- Keep Resend / R2 / Firebase / Stripe / WhatsApp graceful when unset.
-- Update docs when behavior changes.
-- UI: follow `design_guidelines.json` when editing frontend visuals.
+- UI: follow `design_guidelines.json`.
+- Do not reintroduce a `backend/` folder here — change API code in `mealhq-api`.
