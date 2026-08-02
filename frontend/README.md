@@ -1,36 +1,21 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Frontend (`frontend/`)
 
-## Getting Started
+MealHQ provider + consumer Next.js app. Sibling: `admin-frontend/`. API: private [`mealhq-api`](https://github.com/rvchauhan99/mealhq-api).
 
-First, run the development server:
+## Local
 
 ```bash
+cp .env.example .env
+# NEXT_PUBLIC_BACKEND_URL=http://127.0.0.1:8000  (run mealhq-api locally)
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Vercel
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- Connect GitHub repo **`rvchauhan99/Zorvia`** (public)
+- **Root Directory:** `frontend`
+- Env: `NEXT_PUBLIC_BACKEND_URL` / `BACKEND_URL` → Cloud Run URL (`https://zorvia-api-….run.app`)
+- Keep `NEXT_PUBLIC_FIREBASE_*` for Google Sign-In
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+After `next build` on Vercel, `scripts/vercel-link-monorepo-root.js` still links `.next` / `node_modules` to the repo root when a parent `package.json` exists.
