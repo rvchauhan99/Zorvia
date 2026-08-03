@@ -31,6 +31,7 @@ import CursorPaginationBar from "@/components/CursorPaginationBar";
 import SearchableSelect from "@/components/SearchableSelect";
 import { OPS_DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
+import RouteOverview from "./RouteOverview";
 
 type MealSlot = "lunch" | "dinner";
 
@@ -191,6 +192,7 @@ export default function RoutePlanningPage() {
   const [selectedCity, setSelectedCity] = useState<string>("");
   const [planningDate, setPlanningDate] = useState(todayIsoLocal);
   const [startModal, setStartModal] = useState<StartModalState | null>(null);
+  const [pageTab, setPageTab] = useState<"route" | "planning">("route");
   const stopsPaging = useCursorPagination({ initialPageSize: OPS_DEFAULT_PAGE_SIZE });
   const bootstrapKeyRef = useRef("");
   const bootstrappingRef = useRef(false);
@@ -199,10 +201,14 @@ export default function RoutePlanningPage() {
     setLoading(true);
     try {
       const params: Record<string, string> = { meal_slot: slot, planning_date: planningDate };
-      if (selectedCity) params.city = selectedCity;
+      if (pageTab === "route") {
+        params.city = "all";
+      } else if (selectedCity) {
+        params.city = selectedCity;
+      }
       const { data } = await api.get("/route-planning", { params });
       setPlan(data);
-      if (!selectedCity && data?.city) {
+      if (pageTab === "planning" && !selectedCity && data?.city) {
         setSelectedCity(data.city);
       }
       setSelected(new Set());
@@ -212,7 +218,7 @@ export default function RoutePlanningPage() {
     } finally {
       setLoading(false);
     }
-  }, [slot, selectedCity, planningDate]);
+  }, [slot, selectedCity, planningDate, pageTab]);
 
   useEffect(() => {
     void load();
@@ -373,8 +379,9 @@ export default function RoutePlanningPage() {
     [admin, selectedCity, slot, planningDate, load]
   );
 
-  // When city has no start but has geocoded stops, bootstrap + optimize once.
+  // When city has no start but has geocoded stops, bootstrap + optimize once (Planning only).
   useEffect(() => {
+    if (pageTab !== "planning") return;
     if (!admin || loading || busy || !plan || !selectedCity) return;
     if (plan.effective_start) return;
     const cityStops = Array.isArray(plan.stops) ? plan.stops : [];
@@ -395,7 +402,7 @@ export default function RoutePlanningPage() {
         bootstrappingRef.current = false;
       }
     })();
-  }, [admin, loading, busy, plan, selectedCity, slot, planningDate, runOptimize]);
+  }, [pageTab, admin, loading, busy, plan, selectedCity, slot, planningDate, runOptimize]);
 
   const runGeocode = async () => {
     if (!admin) return;
@@ -420,12 +427,16 @@ export default function RoutePlanningPage() {
     setBusy(true);
     try {
       if (startModal.mode === "default") {
+        // New default always wins over any temporary override for this city
+        await api.delete("/route-planning/city-start-override", {
+          params: { city: selectedCity },
+        }).catch(() => undefined);
         await api.post("/route-planning/city-start", {
           city: selectedCity,
           type: "customer",
           customer_id: startModal.customerId,
         });
-        toast.success("Default start saved — optimizing route…");
+        toast.success("Default start saved (temporary cleared) — optimizing…");
       } else {
         await api.post("/route-planning/city-start-override", {
           city: selectedCity,
@@ -454,11 +465,14 @@ export default function RoutePlanningPage() {
     if (!selectedCity) return;
     setBusy(true);
     try {
+      await api.delete("/route-planning/city-start-override", {
+        params: { city: selectedCity },
+      }).catch(() => undefined);
       await api.post("/route-planning/city-start", {
         city: selectedCity,
         type: "kitchen",
       });
-      toast.success("Kitchen set as start — optimizing route…");
+      toast.success("Kitchen set as start (temporary cleared) — optimizing…");
       setBusy(false);
       bootstrapKeyRef.current = `${selectedCity}|${slot}|${planningDate}`;
       await runOptimize({ quiet: true });
@@ -715,6 +729,61 @@ export default function RoutePlanningPage() {
         </label>
       </div>
 
+      {/* ── PAGE TABS: Route | Planning ── */}
+      <div className="flex flex-wrap gap-1.5" data-testid="route-page-tabs">
+        <button
+          type="button"
+          data-testid="route-page-tab-route"
+          className={`pill-btn h-9 text-xs px-4 ${pageTab === "route" ? "btn-primary" : "btn-outline"}`}
+          onClick={() => setPageTab("route")}
+        >
+          Route
+        </button>
+        <button
+          type="button"
+          data-testid="route-page-tab-planning"
+          className={`pill-btn h-9 text-xs px-4 ${pageTab === "planning" ? "btn-primary" : "btn-outline"}`}
+          onClick={() => {
+            if (!selectedCity && cities.length > 0) {
+              setSelectedCity(cities[0].name);
+            }
+            setPageTab("planning");
+          }}
+        >
+          Planning
+        </button>
+      </div>
+
+      {pageTab === "route" ? (
+        <>
+          {!loading && (
+            <div className="grid grid-cols-4 gap-2" data-testid="route-view-stats-bar">
+              <div className="stat-card !p-2.5 !gap-0.5 !rounded-xl">
+                <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Total</span>
+                <span className="text-lg font-display font-black leading-tight">{totalStops}</span>
+              </div>
+              <div className="stat-card !p-2.5 !gap-0.5 !rounded-xl">
+                <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Assigned</span>
+                <span className="text-lg font-display font-black text-secondary leading-tight">{assignedStops}</span>
+              </div>
+              <div className="stat-card !p-2.5 !gap-0.5 !rounded-xl">
+                <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Unassigned</span>
+                <span className="text-lg font-display font-black text-amber-600 leading-tight">{unassignedStops}</span>
+              </div>
+              <div className="stat-card !p-2.5 !gap-0.5 !rounded-xl">
+                <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Cities</span>
+                <span className="text-lg font-display font-black leading-tight">{cities.length}</span>
+              </div>
+            </div>
+          )}
+          {loading ? (
+            <InlineLoader label="Loading routes…" />
+          ) : (
+            <RouteOverview stops={stops} />
+          )}
+        </>
+      ) : (
+      <>
       {cities.length > 0 && (
         <div className="flex flex-wrap gap-1.5" data-testid="route-city-chips">
           {cities.map((c) => (
@@ -1464,6 +1533,8 @@ export default function RoutePlanningPage() {
           </div>
         </div>
       )}
+      </>
+      )}
 
       {/* ══════════════════════════════════════════════════════ */}
       {/* OPTIMIZE WARNING MODAL                                */}
@@ -1485,7 +1556,8 @@ export default function RoutePlanningPage() {
                     (<span className="text-foreground">{effectiveStart.label}</span>)
                   </>
                 ) : null}
-                . Driver assignments for those stops are reset to the unassigned pool.
+                . Driver assignments are <strong className="text-foreground">kept</strong>; only
+                sequences update to match the new route. Deliveries for this date sync to the same order.
               </p>
               <p>Other cities are left unchanged. Continue?</p>
             </div>
@@ -1527,6 +1599,9 @@ export default function RoutePlanningPage() {
             <p className="text-sm text-muted-foreground">
               Use <strong className="text-foreground">{startModal.customerName}</strong> as the start for{" "}
               <strong className="text-foreground">{selectedCity}</strong>.
+              {startModal.mode === "default" ? (
+                <> Saving as default clears any temporary start for this city.</>
+              ) : null}
             </p>
             <div className="flex flex-col gap-2">
               <label className="flex items-center gap-2 text-sm cursor-pointer">
