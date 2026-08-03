@@ -11,6 +11,7 @@ import { InlineLoader } from "@/components/loaders";
 import { AreaChart } from "@/components/analytics/AreaChart";
 import CursorPaginationBar from "@/components/CursorPaginationBar";
 import SearchableSelect from "@/components/SearchableSelect";
+import CityFilterSelect from "@/components/CityFilterSelect";
 import { DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
 
@@ -59,6 +60,7 @@ export default function Reports() {
   const [dueCollectionDay, setDueCollectionDay] = useState("");
   const [dueMonth, setDueMonth] = useState(todayISO().slice(0, 7));
   const [areaPrefix, setAreaPrefix] = useState("");
+  const [filterCity, setFilterCity] = useState("");
   const [loading, setLoading] = useState(false);
   const paging = useCursorPagination({ initialPageSize: DEFAULT_PAGE_SIZE });
   const moneyTab = tab === "outstanding" || tab === "customer-credit" || tab === "collections" || tab === "statement";
@@ -82,6 +84,7 @@ export default function Reports() {
     setDebouncedQ("");
     setMinAmount("");
     setAreaPrefix("");
+    setFilterCity("");
     setStatementActivityOnly(false);
     setCollectionsView("received");
   }
@@ -95,6 +98,7 @@ export default function Reports() {
     if (minAmount.trim() !== "" && !Number.isNaN(Number(minAmount))) {
       params.set("min_amount", String(Number(minAmount)));
     }
+    if (filterCity) params.set("city", filterCity);
     if (cursor) params.set("cursor", cursor);
     return params.toString();
   }
@@ -114,9 +118,17 @@ export default function Reports() {
         if (collectionsView === "due") {
           const params = new URLSearchParams({ month: dueMonth, due_date: dueDate });
           if (dueCollectionDay) params.set("collection_day", dueCollectionDay);
+          if (filterCity) params.set("city", filterCity);
           url = `/reports/payment-due?${params.toString()}`;
         } else {
-          url = `/reports/collections${range.start ? `?start=${range.start}&end=${range.end}` : ""}`;
+          const params = new URLSearchParams();
+          if (range.start) {
+            params.set("start", range.start);
+            params.set("end", range.end);
+          }
+          if (filterCity) params.set("city", filterCity);
+          const qs = params.toString();
+          url = `/reports/collections${qs ? `?${qs}` : ""}`;
         }
       }
       else if (tab === "active") url = "/reports/active-customers";
@@ -124,11 +136,13 @@ export default function Reports() {
         const params = new URLSearchParams({ month: statementMonth, page_size: String(paging.pageSize) });
         if (debouncedQ) params.set("q", debouncedQ);
         if (statementActivityOnly) params.set("activity_only", "true");
+        if (filterCity) params.set("city", filterCity);
         if (opts.cursor) params.set("cursor", opts.cursor);
         url = `/reports/statement?${params.toString()}`;
       } else {
         const params = new URLSearchParams({ page_size: String(paging.pageSize) });
         if (areaPrefix.trim()) params.set("area", areaPrefix.trim());
+        if (filterCity) params.set("city", filterCity);
         if (opts.cursor) params.set("cursor", opts.cursor);
         url = `/reports/area-summary?${params.toString()}`;
       }
@@ -159,7 +173,7 @@ export default function Reports() {
     paging.resetToFirstPage();
     load({ cursor: null });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset+fetch on filter identity
-  }, [tab, range.start, range.end, statementMonth, showMoney, debouncedQ, minAmount, statementActivityOnly, areaPrefix, collectionsView, dueDate, dueCollectionDay, dueMonth, paging.pageSize]);
+  }, [tab, range.start, range.end, statementMonth, showMoney, debouncedQ, minAmount, statementActivityOnly, areaPrefix, filterCity, collectionsView, dueDate, dueCollectionDay, dueMonth, paging.pageSize]);
 
   function pagingBar(testidPrefix: string) {
     return (
@@ -274,6 +288,15 @@ export default function Reports() {
           >
             Amounts due
           </button>
+          <div className="flex items-center gap-2 min-w-[160px]">
+            <span className="label-overline shrink-0">City</span>
+            <CityFilterSelect
+              value={filterCity}
+              onChange={setFilterCity}
+              testid="collections-city-filter"
+              className="w-[180px]"
+            />
+          </div>
         </div>
       ) : null}
 
@@ -333,6 +356,15 @@ export default function Reports() {
               className="h-10 px-3 rounded-xl bg-white border border-brand-border transition-all w-28"
             />
           </label>
+          <div className="flex items-center gap-2 min-w-[160px]">
+            <span className="label-overline shrink-0">City</span>
+            <CityFilterSelect
+              value={filterCity}
+              onChange={setFilterCity}
+              testid="reports-city-filter"
+              className="w-[180px]"
+            />
+          </div>
         </div>
       ) : null}
 
@@ -358,6 +390,15 @@ export default function Reports() {
               className="h-10 px-3 rounded-xl bg-white border border-brand-border transition-all w-full min-w-0"
             />
           </label>
+          <div className="flex items-center gap-2 min-w-[160px]">
+            <span className="label-overline shrink-0">City</span>
+            <CityFilterSelect
+              value={filterCity}
+              onChange={setFilterCity}
+              testid="statement-city-filter"
+              className="w-[180px]"
+            />
+          </div>
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -383,6 +424,15 @@ export default function Reports() {
               className="h-10 px-3 rounded-xl bg-white border border-brand-border transition-all w-28 uppercase"
             />
           </label>
+          <div className="flex items-center gap-2 min-w-[160px]">
+            <span className="label-overline shrink-0">City</span>
+            <CityFilterSelect
+              value={filterCity}
+              onChange={setFilterCity}
+              testid="area-city-filter"
+              className="w-[180px]"
+            />
+          </div>
         </div>
       ) : null}
 

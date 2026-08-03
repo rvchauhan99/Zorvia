@@ -11,6 +11,7 @@ import { fmtCAD } from "@/lib/format";
 import { InlineLoader, PageLoader } from "@/components/loaders";
 import RecordPaymentSheet from "@/components/RecordPaymentSheet";
 import CursorPaginationBar from "@/components/CursorPaginationBar";
+import CityFilterSelect from "@/components/CityFilterSelect";
 import { DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
 
@@ -45,6 +46,7 @@ export default function MonthlyDuesPage() {
   const [rows, setRows] = useState<DueRow[]>([]);
   const [totals, setTotals] = useState<{ due_amount?: number; overdue_amount?: number; overdue_count?: number; customer_count?: number } | null>(null);
   const [renewCustomer, setRenewCustomer] = useState<{ id: string; name: string } | null>(null);
+  const [filterCity, setFilterCity] = useState("");
   // Default to 100 so paid-up / new customers are visible without extra paging
   const paging = useCursorPagination({ initialPageSize: 100 });
 
@@ -53,6 +55,7 @@ export default function MonthlyDuesPage() {
     try {
       const params = new URLSearchParams({ page_size: String(paging.pageSize) });
       if (opts.cursor) params.set("cursor", opts.cursor);
+      if (filterCity) params.set("city", filterCity);
       const { data } = await api.get(`/reports/monthly-dues?${params.toString()}`);
       setAllowed(true);
       setRows(Array.isArray(data?.rows) ? data.rows : []);
@@ -75,7 +78,7 @@ export default function MonthlyDuesPage() {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- paging.applyPageResult is stable
-  }, [paging.pageSize]);
+  }, [paging.pageSize, filterCity]);
 
   useEffect(() => {
     if (isDriver(session)) {
@@ -125,14 +128,25 @@ export default function MonthlyDuesPage() {
               : "Fixed Monthly customers — overdue first; Quick Renew anytime (early full-fee advances renewal)."}
           </p>
         </div>
-        <button
-          type="button"
-          data-testid="monthly-dues-refresh"
-          onClick={reloadCurrentPage}
-          className="h-10 px-4 rounded-full border border-brand-border bg-white text-sm font-medium inline-flex items-center gap-1.5 cursor-pointer hover:bg-brand-surface"
-        >
-          <ArrowClockwise size={16} /> Refresh
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <CityFilterSelect
+            value={filterCity}
+            onChange={(next) => {
+              setFilterCity(next);
+              paging.resetToFirstPage();
+            }}
+            testid="monthly-dues-city-filter"
+            className="w-[180px]"
+          />
+          <button
+            type="button"
+            data-testid="monthly-dues-refresh"
+            onClick={reloadCurrentPage}
+            className="h-10 px-4 rounded-full border border-brand-border bg-white text-sm font-medium inline-flex items-center gap-1.5 cursor-pointer hover:bg-brand-surface"
+          >
+            <ArrowClockwise size={16} /> Refresh
+          </button>
+        </div>
       </div>
 
       {showMoney && totals ? (

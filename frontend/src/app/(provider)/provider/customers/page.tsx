@@ -33,6 +33,7 @@ import {
   unionDaysFromSlotSchedules,
 } from "@/lib/mealSlots";
 import SearchableSelect from "@/components/SearchableSelect";
+import CityFilterSelect from "@/components/CityFilterSelect";
 import ImportCustomersSheet from "@/components/ImportCustomersSheet";
 import { formatCaPostal, isValidCaPostal } from "@/lib/ca-provinces";
 import CaAddressFields from "@/components/CaAddressFields";
@@ -331,6 +332,7 @@ export default function Customers() {
   const [debouncedQ, setDebouncedQ] = useState("");
   const [filterDriverId, setFilterDriverId] = useState("");
   const [filterMealTypeId, setFilterMealTypeId] = useState("");
+  const [filterCity, setFilterCity] = useState("");
   const [filterCounts, setFilterCounts] = useState({
     all: 0, pending: 0, paused: 0, inactive: 0, high_balance: 0,
   });
@@ -477,6 +479,7 @@ export default function Customers() {
       if (debouncedQ) params.set("q", debouncedQ);
       if (filterDriverId) params.set("driver_id", filterDriverId);
       if (filterMealTypeId) params.set("meal_type_id", filterMealTypeId);
+      if (filterCity) params.set("city", filterCity);
       if (opts?.cursor) params.set("cursor", opts.cursor);
       const { data } = await api.get(`/customers?${params.toString()}`);
       const page = asPageEnvelope<any>(data);
@@ -535,7 +538,7 @@ export default function Customers() {
     paging.resetToFirstPage();
     load({ cursor: null });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset+fetch on filter identity
-  }, [debouncedQ, filter, filterDriverId, filterMealTypeId, paging.pageSize]);
+  }, [debouncedQ, filter, filterDriverId, filterMealTypeId, filterCity, paging.pageSize]);
   useEffect(() => { loadCounts(); }, []);
   useEffect(() => { loadStaff(); }, []);
 
@@ -1104,6 +1107,11 @@ export default function Customers() {
               placeholder="Search meal type…"
             />
           </div>
+          <CityFilterSelect
+            value={filterCity}
+            onChange={setFilterCity}
+            testid="customers-city-filter"
+          />
         </div>
       </div>
 

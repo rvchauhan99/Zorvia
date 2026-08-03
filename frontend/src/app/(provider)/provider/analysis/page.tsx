@@ -11,6 +11,7 @@ import { fmtCAD } from "@/lib/format";
 import { insightsParams, type BusinessInsights, type MealSlotFilter, type PeriodKey } from "@/lib/analytics";
 import { KpiCard } from "@/components/analytics/KpiCard";
 import { PeriodToggle } from "@/components/analytics/PeriodToggle";
+import CityFilterSelect from "@/components/CityFilterSelect";
 import { HighlightsPanel } from "@/components/analytics/HighlightsPanel";
 import { DeliveryTrendChart } from "@/components/analytics/DeliveryTrendChart";
 import { CollectionsChart } from "@/components/analytics/CollectionsChart";
@@ -95,6 +96,7 @@ export default function AnalysisPage() {
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState(todayISO());
   const [mealSlot, setMealSlot] = useState<MealSlotFilter>("all");
+  const [filterCity, setFilterCity] = useState("");
   const [data, setData] = useState<BusinessInsights | null>(null);
   const [loading, setLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
@@ -104,11 +106,13 @@ export default function AnalysisPage() {
     start?: string;
     end?: string;
     meal_slot?: MealSlotFilter;
+    city?: string;
   }) {
     const nextPeriod = opts?.period ?? period;
     const start = opts?.start ?? customStart;
     const end = opts?.end ?? customEnd;
     const slot = opts?.meal_slot ?? mealSlot;
+    const city = opts?.city ?? filterCity;
     if (nextPeriod === "custom" && (!start || !end)) {
       toast.error("Choose From and To dates for a custom range");
       return;
@@ -116,7 +120,7 @@ export default function AnalysisPage() {
     setLoading(true);
     try {
       const { data } = await api.get<BusinessInsights>("/reports/business-insights", {
-        params: insightsParams({ period: nextPeriod, start, end, meal_slot: slot }),
+        params: insightsParams({ period: nextPeriod, start, end, meal_slot: slot, city }),
       });
       setData(data);
     } catch (e) {
@@ -179,6 +183,15 @@ export default function AnalysisPage() {
             onCustomRangeChange={changeCustomRange}
             mealSlot={mealSlot}
             onMealSlotChange={changeMealSlot}
+          />
+          <CityFilterSelect
+            value={filterCity}
+            onChange={(next) => {
+              setFilterCity(next);
+              load({ city: next });
+            }}
+            testid="analysis-city-filter"
+            className="w-full sm:w-[180px]"
           />
           {data ? (
             <span className="text-xs text-muted-foreground" data-testid="analysis-period-range">

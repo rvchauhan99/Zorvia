@@ -166,7 +166,7 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 - Monthly statement (`GET /reports/statement?month=YYYY-MM`) — optional `q`, `activity_only`  
 - CSV export supported in UI for report tabs  
 
-**Large-tenant list filters:** Deliveries support server `q` / `driver_id` / `meal_slot` (drivers auto-scoped); Customers CRM adds `driver_id` / `meal_type_id`; Payments add From/To + customer picker; Kitchen pack list supports search + driver.
+**Large-tenant list filters:** Deliveries support server `q` / `driver_id` / `meal_slot` / `city` (drivers auto-scoped; city joins customer.city); Customers CRM adds `driver_id` / `meal_type_id` / `city` (+ `GET /customers/cities` facet); Payments add From/To + customer picker + `city`; Kitchen pack list supports search + driver + `city`. Reports (outstanding, statement, monthly-dues, payment-due, area, collections, business-insights) accept optional `city`. City values use customer display labels (same as route planning).
 
 ### 4.6b Consumer profile
 
@@ -358,8 +358,8 @@ WhatsApp menu shares are **not** included in the SaaS subscription.
 | Bulk confirms | Mark all delivered + Verify selected require AppSheet confirmation before applying |
 | Action button colors | `btn-danger` for delete/reject/cancel-delivery; `btn-secondary` for deliver/verify; `btn-outline` for dismiss Cancel |
 | CSV import + invites | Guided import sheet: pick billing policy → download policy sample → upload; `lunch_qty` / `dinner_qty` (0 = off); required `driver_name` (Settings staff). **Per-meal:** `delivery_days`. **Monthly:** required `monthly_plan`. Phone/email unique per kitchen (row fails if duplicate in DB or same file). Local validation first, then unique-address ORS only for passed rows (fail → row error) + auto best-gap sequence. Policy from UI; async job + REST poll; error CSV. CRM add wizard unchanged; invite HTML → `/consumer-signup?code=` |
-| Customer route master | Optional `driver_id` + `delivery_sequence`; unique per driver pool; insert/move at N auto-shifts later stops; new deliveries inherit `route_order` + driver |
-| Route planning | `/provider/route-planning`; ORS geocode (optional) + local lat/lng optimize; unassigned → driver pools via **assign by sequence** (ranges / even-split) or checkbox append; create auto-insert + lat/lng preview; CSV import geocodes unique addresses + best-gap place — [`ROUTE_PLANNING.md`](ROUTE_PLANNING.md) |
+| Customer route master | Optional `driver_id` + `delivery_sequence`; unique per driver pool; insert/move at N auto-shifts later stops; new deliveries inherit **0-based** `route_order` (`sequence − 1`) + driver |
+| Route planning | `/provider/route-planning`; ORS geocode (optional) + local lat/lng optimize; no start → bootstrap first geocoded stop then optimize; start change auto-optimizes; day deliveries sync `route_order`/`driver` for `planning_date`; unassigned → driver pools via **assign by sequence** / checkbox append — see mealhq-api [`ROUTE_PLANNING.md`](https://github.com/rvchauhan99/mealhq-api/blob/main/docs/ROUTE_PLANNING.md) |
 | SMS stub | `send_sms` + `sms_notifications` setting; cancel confirmation |
 | Menu | Upload image anytime; history kept; consumer sees current (latest); email notify (Resend); WhatsApp share (Meta Cloud API) — see `docs/WHATSAPP_SETUP.md` |
 | WhatsApp credit | Prepaid wallet separate from SaaS plan; packages CAD 25/50/100 via Interac; admin approve adds credit; share deducts `WHATSAPP_COST_PER_MSG_CAD` per successful send; one successful share per menu; share disabled when balance &lt; blast estimate. Product gated by `WHATSAPP_FEATURES_ENABLED` (default off). |

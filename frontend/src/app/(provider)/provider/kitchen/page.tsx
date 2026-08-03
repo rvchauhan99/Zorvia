@@ -21,6 +21,7 @@ import { mealSlotBadgeLabel } from "@/lib/mealSlots";
 import { InlineLoader } from "@/components/loaders";
 import CursorPaginationBar from "@/components/CursorPaginationBar";
 import SearchableSelect from "@/components/SearchableSelect";
+import CityFilterSelect from "@/components/CityFilterSelect";
 import { OPS_DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
 
@@ -100,6 +101,7 @@ export default function KitchenPage() {
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
   const [driverId, setDriverId] = useState("");
+  const [filterCity, setFilterCity] = useState("");
   const [drivers, setDrivers] = useState<{ id: string; name: string }[]>([]);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -122,6 +124,7 @@ export default function KitchenPage() {
         if (debouncedQ) params.q = debouncedQ;
         if (!isDriver && driverId) params.driver_id = driverId;
         if (slotFilter !== "all") params.meal_slot = slotFilter;
+        if (filterCity) params.city = filterCity;
         if (opts.cursor) params.cursor = opts.cursor;
         const { data: summary } = await api.get(`/reports/kitchen-summary`, { params });
         setData(summary);
@@ -138,14 +141,14 @@ export default function KitchenPage() {
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps
     },
-    [date, debouncedQ, driverId, slotFilter, isDriver, paging.pageSize]
+    [date, debouncedQ, driverId, slotFilter, filterCity, isDriver, paging.pageSize]
   );
 
   useEffect(() => {
     paging.resetToFirstPage();
     load({ cursor: null });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date, debouncedQ, driverId, slotFilter, isDriver, paging.pageSize]);
+  }, [date, debouncedQ, driverId, slotFilter, filterCity, isDriver, paging.pageSize]);
 
   useEffect(() => {
     if (isDriver) return;
@@ -208,6 +211,7 @@ export default function KitchenPage() {
       if (debouncedQ) params.q = debouncedQ;
       if (!isDriver && driverId) params.driver_id = driverId;
       if (slotFilter !== "all") params.meal_slot = slotFilter;
+      if (filterCity) params.city = filterCity;
       const { data: blob } = await api.get("/reports/kitchen-print.pdf", {
         params,
         responseType: "blob",
@@ -358,6 +362,12 @@ export default function KitchenPage() {
               />
             </div>
           )}
+          <CityFilterSelect
+            value={filterCity}
+            onChange={setFilterCity}
+            testid="kitchen-city-filter"
+            className="min-w-[160px] flex-1 sm:flex-none sm:w-[180px]"
+          />
         </div>
 
         {/* Slot filter pill tabs */}

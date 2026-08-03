@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
@@ -39,6 +39,9 @@ type Stop = {
   name?: string;
   address?: string;
   apartment?: string;
+  city?: string;
+  city_key?: string;
+  province?: string;
   postal_code?: string;
   driver_id?: string | null;
   driver_name?: string | null;
@@ -46,6 +49,16 @@ type Stop = {
   geocode_status?: string | null;
   lat?: number | null;
   lng?: number | null;
+};
+
+type CityChip = { name: string; key: string; count: number };
+
+type StartModalState = {
+  customerId: string;
+  customerName: string;
+  mode: "default" | "temporary";
+  duration: "today" | "days";
+  days: number;
 };
 
 type PoolSection = {
@@ -64,8 +77,16 @@ type BulkRangeRow = {
 
 const COLLAPSE_THRESHOLD = 80;
 
+function todayIsoLocal() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function stopAddress(s: Stop) {
-  return [s.address, s.apartment, s.postal_code].filter(Boolean).join(", ");
+  return [s.address, s.apartment, s.city, s.postal_code].filter(Boolean).join(", ");
 }
 
 function kitchenAddressLine(kitchen: {
@@ -167,13 +188,23 @@ export default function RoutePlanningPage() {
   const [assignTab, setAssignTab] = useState<"quick" | "sequence">("quick");
   const [activePoolKey, setActivePoolKey] = useState<string | null>(null);
   const [showOptimizeWarning, setShowOptimizeWarning] = useState(false);
+  const [selectedCity, setSelectedCity] = useState<string>("");
+  const [planningDate, setPlanningDate] = useState(todayIsoLocal);
+  const [startModal, setStartModal] = useState<StartModalState | null>(null);
   const stopsPaging = useCursorPagination({ initialPageSize: OPS_DEFAULT_PAGE_SIZE });
+  const bootstrapKeyRef = useRef("");
+  const bootstrappingRef = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await api.get("/route-planning", { params: { meal_slot: slot } });
+      const params: Record<string, string> = { meal_slot: slot, planning_date: planningDate };
+      if (selectedCity) params.city = selectedCity;
+      const { data } = await api.get("/route-planning", { params });
       setPlan(data);
+      if (!selectedCity && data?.city) {
+        setSelectedCity(data.city);
+      }
       setSelected(new Set());
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || "Failed to load route plan");
@@ -181,7 +212,7 @@ export default function RoutePlanningPage() {
     } finally {
       setLoading(false);
     }
-  }, [slot]);
+  }, [slot, selectedCity, planningDate]);
 
   useEffect(() => {
     void load();
@@ -308,36 +339,148 @@ export default function RoutePlanningPage() {
     });
   };
 
-  const runOptimize = async () => {
-    if (!admin) return;
-    setBusy(true);
-    try {
-      const { data } = await api.post("/route-planning/optimize", { meal_slot: slot });
-      toast.success(
-        `Optimized ${data?.ordered_ids?.length ?? 0} stops` +
-          (data?.skipped?.length ? ` (${data.skipped.length} skipped)` : "")
-      );
-      await load();
-    } catch (e: any) {
-      toast.error(e?.response?.data?.detail || "Optimize failed");
-    } finally {
-      setBusy(false);
-    }
-  };
+  const runOptimize = useCallback(
+    async (opts?: { quiet?: boolean }) => {
+      if (!admin) return false;
+      if (!selectedCity) {
+        if (!opts?.quiet) toast.error("Select a city first");
+        return false;
+      }
+      setBusy(true);
+      try {
+        const { data } = await api.post("/route-planning/optimize", {
+          meal_slot: slot,
+          city: selectedCity,
+          planning_date: planningDate,
+        });
+        const n = data?.ordered_ids?.length ?? 0;
+        const boot = data?.bootstrapped_start ? " · first stop as start" : "";
+        const skip = data?.skipped?.length ? ` (${data.skipped.length} skipped)` : "";
+        toast.success(
+          opts?.quiet
+            ? `Route optimized for ${selectedCity}${boot}${skip}`
+            : `Optimized ${n} stops in ${selectedCity}${boot}${skip}`
+        );
+        await load();
+        return true;
+      } catch (e: any) {
+        toast.error(e?.response?.data?.detail || "Optimize failed");
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [admin, selectedCity, slot, planningDate, load]
+  );
+
+  // When city has no start but has geocoded stops, bootstrap + optimize once.
+  useEffect(() => {
+    if (!admin || loading || busy || !plan || !selectedCity) return;
+    if (plan.effective_start) return;
+    const cityStops = Array.isArray(plan.stops) ? plan.stops : [];
+    const hasGeo = cityStops.some(
+      (s: Stop) => s.lat != null && s.lng != null && Number.isFinite(Number(s.lat)) && Number.isFinite(Number(s.lng))
+    );
+    if (!hasGeo) return;
+    const key = `${selectedCity}|${slot}|${planningDate}`;
+    if (bootstrapKeyRef.current === key || bootstrappingRef.current) return;
+    bootstrapKeyRef.current = key;
+    bootstrappingRef.current = true;
+    void (async () => {
+      try {
+        toast.message("Using first stop as start, then optimizing…");
+        const ok = await runOptimize({ quiet: true });
+        if (!ok) bootstrapKeyRef.current = "";
+      } finally {
+        bootstrappingRef.current = false;
+      }
+    })();
+  }, [admin, loading, busy, plan, selectedCity, slot, planningDate, runOptimize]);
 
   const runGeocode = async () => {
     if (!admin) return;
     setBusy(true);
     try {
       const { data } = await api.post("/route-planning/geocode-missing", null, {
-        params: { meal_slot: slot, limit: 40 },
+        params: { meal_slot: slot, city: selectedCity || undefined, limit: 40 },
       });
       const n = data?.customers?.length ?? 0;
       toast.success(n ? `Geocoded ${n} address(es)` : "Nothing to geocode");
+      bootstrapKeyRef.current = "";
       await load();
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || "Geocode failed");
     } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveStartFromModal = async () => {
+    if (!startModal || !selectedCity) return;
+    setBusy(true);
+    try {
+      if (startModal.mode === "default") {
+        await api.post("/route-planning/city-start", {
+          city: selectedCity,
+          type: "customer",
+          customer_id: startModal.customerId,
+        });
+        toast.success("Default start saved — optimizing route…");
+      } else {
+        await api.post("/route-planning/city-start-override", {
+          city: selectedCity,
+          customer_id: startModal.customerId,
+          mode: startModal.duration,
+          days: startModal.duration === "days" ? startModal.days : undefined,
+          planning_date: planningDate,
+        });
+        toast.success(
+          startModal.duration === "today"
+            ? "Temporary start set — optimizing route…"
+            : `Temporary start set for ${startModal.days} days — optimizing…`
+        );
+      }
+      setStartModal(null);
+      setBusy(false);
+      bootstrapKeyRef.current = `${selectedCity}|${slot}|${planningDate}`;
+      await runOptimize({ quiet: true });
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || "Could not set start point");
+      setBusy(false);
+    }
+  };
+
+  const setKitchenAsDefault = async () => {
+    if (!selectedCity) return;
+    setBusy(true);
+    try {
+      await api.post("/route-planning/city-start", {
+        city: selectedCity,
+        type: "kitchen",
+      });
+      toast.success("Kitchen set as start — optimizing route…");
+      setBusy(false);
+      bootstrapKeyRef.current = `${selectedCity}|${slot}|${planningDate}`;
+      await runOptimize({ quiet: true });
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || "Could not set kitchen start");
+      setBusy(false);
+    }
+  };
+
+  const clearTemporaryStart = async () => {
+    if (!selectedCity) return;
+    setBusy(true);
+    try {
+      await api.delete("/route-planning/city-start-override", {
+        params: { city: selectedCity },
+      });
+      toast.success("Temporary start cleared — re-optimizing…");
+      bootstrapKeyRef.current = "";
+      setBusy(false);
+      await runOptimize({ quiet: true });
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || "Could not clear temporary start");
       setBusy(false);
     }
   };
@@ -368,6 +511,7 @@ export default function RoutePlanningPage() {
         customer_ids: Array.from(selected),
         driver_id: assignDriverId || null,
         meal_slot: slot,
+        planning_date: planningDate,
       });
       toast.success(assignDriverId ? "Assigned to driver (appended to route)" : "Moved to unassigned pool");
       await load();
@@ -405,6 +549,7 @@ export default function RoutePlanningPage() {
         meal_slot: slot,
         source_driver_id: bulkSourceSection?.driverId ?? null,
         ranges,
+        planning_date: planningDate,
       });
       const parts = (data?.by_range || [])
         .map((r: any) => `#${r.sequence_from}–${r.sequence_to}: ${r.count}`)
@@ -454,6 +599,7 @@ export default function RoutePlanningPage() {
         meal_slot: slot,
         ordered_ids: next.map((s) => s.id),
         driver_id: section.driverId,
+        planning_date: planningDate,
       });
       await load();
     } catch (e: any) {
@@ -465,8 +611,19 @@ export default function RoutePlanningPage() {
 
   const kitchen = plan?.kitchen || {};
   const kitchenLine = kitchenAddressLine(kitchen);
+  const effectiveStart = plan?.effective_start || null;
+  const activeOverride = plan?.active_override || null;
+  const cities: CityChip[] = Array.isArray(plan?.cities) ? plan.cities : [];
+  const originLine =
+    (effectiveStart?.label as string | undefined) ||
+    kitchenLine ||
+    "";
   const configured = !!plan?.routing_configured;
   const autoCollapse = stops.length > COLLAPSE_THRESHOLD;
+  const kitchenCityMatches =
+    !!selectedCity &&
+    !!kitchen.city &&
+    String(kitchen.city).trim().toLowerCase() === String(selectedCity).trim().toLowerCase();
 
   // Derived stats for summary bar
   const totalStops = stops.length;
@@ -534,7 +691,7 @@ export default function RoutePlanningPage() {
       </div>
 
       {/* ── MEAL SLOT TABS ── */}
-      <div className="flex flex-wrap gap-1.5" data-testid="route-slot-tabs">
+      <div className="flex flex-wrap gap-1.5 items-center" data-testid="route-slot-tabs">
         {(["lunch", "dinner"] as MealSlot[]).map((s) => (
           <button
             key={s}
@@ -546,7 +703,36 @@ export default function RoutePlanningPage() {
             {mealSlotBadgeLabel(s)}
           </button>
         ))}
+        <label className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="hidden sm:inline">As of</span>
+          <input
+            type="date"
+            data-testid="route-planning-date"
+            className="h-8 rounded-lg border border-brand-border bg-white px-2 text-xs"
+            value={planningDate}
+            onChange={(e) => setPlanningDate(e.target.value || todayIsoLocal())}
+          />
+        </label>
       </div>
+
+      {cities.length > 0 && (
+        <div className="flex flex-wrap gap-1.5" data-testid="route-city-chips">
+          {cities.map((c) => (
+            <button
+              key={c.key}
+              type="button"
+              data-testid={`route-city-${c.key}`}
+              onClick={() => setSelectedCity(c.name)}
+              className={`pill-btn h-8 text-[11px] px-3.5 ${
+                selectedCity === c.name ? "btn-primary" : "btn-outline"
+              }`}
+            >
+              {c.name}
+              <span className="opacity-70 ml-1">{c.count}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* ── SUMMARY STATS ── */}
       {!loading && (
@@ -596,18 +782,27 @@ export default function RoutePlanningPage() {
                   <MapPin size={16} className="text-primary" weight="fill" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium text-xs">Kitchen start</p>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {kitchenLine || "No address set — add one in Settings"}
+                  <p className="font-medium text-xs">
+                    {selectedCity ? `${selectedCity} start` : "City start"}
                   </p>
-                  <div className="flex items-center gap-1.5 mt-1">
-                    {kitchen.geocode_status === "ok" ? (
+                  <p className="text-xs text-muted-foreground truncate" data-testid="route-effective-start-label">
+                    {effectiveStart?.label ||
+                      "No start set — first geocoded stop is used automatically, or tap Start on a stop"}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                    {effectiveStart ? (
                       <CheckCircle size={14} weight="fill" className="text-secondary shrink-0" />
                     ) : (
                       <WarningCircle size={14} weight="fill" className="text-amber-500 shrink-0" />
                     )}
                     <span className="text-xs text-muted-foreground">
-                      {kitchen.geocode_status === "ok" ? "Location verified" : kitchen.geocode_status || "Not geocoded"}
+                      {effectiveStart?.source === "override"
+                        ? `Temporary through ${activeOverride?.ends_on || "—"}`
+                        : effectiveStart?.source === "default"
+                          ? "Saved default"
+                          : effectiveStart?.source === "kitchen_fallback"
+                            ? "Kitchen (same city)"
+                            : "Will use first stop, or tap Start / Geocode missing"}
                     </span>
                   </div>
                 </div>
@@ -620,11 +815,33 @@ export default function RoutePlanningPage() {
                 >
                   Address geocoding needs a free OpenRouteService API key (
                   <code className="text-[11px]">OPENROUTESERVICE_API_KEY</code>). Optimize still works when
-                  kitchen and customers already have lat/lng. Manual sequences always work.
+                  start and customers already have lat/lng. Manual sequences always work.
                 </div>
               )}
 
               <div className="flex flex-wrap gap-1.5 items-center">
+                {kitchenCityMatches && (
+                  <button
+                    type="button"
+                    data-testid="route-set-kitchen-start"
+                    disabled={busy || !selectedCity}
+                    onClick={() => void setKitchenAsDefault()}
+                    className="pill-btn btn-outline h-8 text-[11px] px-3.5 gap-1 disabled:opacity-50"
+                  >
+                    Use kitchen default
+                  </button>
+                )}
+                {activeOverride && (
+                  <button
+                    type="button"
+                    data-testid="route-clear-temp-start"
+                    disabled={busy}
+                    onClick={() => void clearTemporaryStart()}
+                    className="pill-btn btn-outline h-8 text-[11px] px-3.5 gap-1 disabled:opacity-50"
+                  >
+                    Clear temporary
+                  </button>
+                )}
                 <button
                   type="button"
                   data-testid="route-geocode-missing"
@@ -637,11 +854,11 @@ export default function RoutePlanningPage() {
                 <button
                   type="button"
                   data-testid="route-optimize"
-                  disabled={busy}
+                  disabled={busy || !selectedCity}
                   onClick={() => setShowOptimizeWarning(true)}
                   className="pill-btn btn-primary h-8 text-[11px] px-3.5 gap-1 disabled:opacity-50"
                 >
-                  <Path size={14} /> Optimize all
+                  <Path size={14} /> Optimize city
                 </button>
               </div>
             </div>
@@ -659,9 +876,9 @@ export default function RoutePlanningPage() {
               )}
             </div>
 
-            <div className="card-tinted overflow-hidden" data-testid="route-bulk-assign">
+            <div className="card-tinted relative z-20" data-testid="route-bulk-assign">
               {/* Tab bar */}
-              <div className="flex border-b border-brand-border">
+              <div className="flex border-b border-brand-border rounded-t-2xl">
                 <button
                   type="button"
                   className={`flex-1 sm:flex-none px-4 py-2 text-xs font-medium transition-colors duration-150 border-b-2 ${
@@ -965,7 +1182,7 @@ export default function RoutePlanningPage() {
                         <a
                           data-testid={`route-pool-maps-${section.key}`}
                           className="text-[10px] text-brand-teal flex items-center gap-0.5 hover:underline underline-offset-2"
-                          href={mapsUrlForStops(kitchenLine || "", section.stops.filter((s) => s.delivery_sequence != null))}
+                          href={mapsUrlForStops(originLine || "", section.stops.filter((s) => s.delivery_sequence != null))}
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}
@@ -993,7 +1210,7 @@ export default function RoutePlanningPage() {
                 <a
                   data-testid="route-open-maps"
                   className="sr-only"
-                  href={mapsUrlForStops(kitchenLine || "", mapsStops)}
+                  href={mapsUrlForStops(originLine || "", mapsStops)}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
@@ -1117,6 +1334,25 @@ export default function RoutePlanningPage() {
                                 </button>
                               )}
 
+                              <button
+                                type="button"
+                                data-testid={`route-use-start-${s.id}`}
+                                disabled={busy || !selectedCity}
+                                title="Use as city start point"
+                                className="pill-btn btn-outline h-6 text-[10px] px-2 shrink-0 disabled:opacity-50"
+                                onClick={() =>
+                                  setStartModal({
+                                    customerId: s.id,
+                                    customerName: s.name || "Customer",
+                                    mode: "temporary",
+                                    duration: "today",
+                                    days: 3,
+                                  })
+                                }
+                              >
+                                Start
+                              </button>
+
                               {/* Reorder buttons */}
                               <div className="flex flex-col shrink-0">
                                 <button
@@ -1234,18 +1470,24 @@ export default function RoutePlanningPage() {
       {/* ══════════════════════════════════════════════════════ */}
       {showOptimizeWarning && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl p-5 sm:p-6 max-w-sm w-full shadow-xl flex flex-col gap-4">
+          <div className="bg-white rounded-2xl p-5 sm:p-6 max-w-sm w-full shadow-xl flex flex-col gap-4" data-testid="route-optimize-modal">
             <div className="flex items-center gap-2 text-amber-600">
               <WarningCircle size={24} weight="fill" />
-              <h3 className="font-bold text-lg text-foreground">Optimize Routes</h3>
+              <h3 className="font-bold text-lg text-foreground">Optimize {selectedCity}</h3>
             </div>
             <div className="text-sm text-muted-foreground flex flex-col gap-2">
               <p>
-                All routes will be marked as unassigned. All driver linkage will be reset.
+                Stops in <strong className="text-foreground">{selectedCity}</strong> will be reordered from
+                the current start point
+                {effectiveStart?.label ? (
+                  <>
+                    {" "}
+                    (<span className="text-foreground">{effectiveStart.label}</span>)
+                  </>
+                ) : null}
+                . Driver assignments for those stops are reset to the unassigned pool.
               </p>
-              <p>
-                You will need to assign all routes to a driver again. Are you sure you want to proceed?
-              </p>
+              <p>Other cities are left unchanged. Continue?</p>
             </div>
             <div className="flex justify-end gap-2 mt-2">
               <button
@@ -1265,7 +1507,105 @@ export default function RoutePlanningPage() {
                 }}
                 disabled={busy}
               >
-                Yes, optimize all
+                Yes, optimize city
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {startModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4 animate-fade-in">
+          <div
+            className="bg-white rounded-2xl p-5 sm:p-6 max-w-sm w-full shadow-xl flex flex-col gap-4"
+            data-testid="route-start-modal"
+          >
+            <div className="flex items-center gap-2">
+              <NavigationArrow size={22} className="text-primary" weight="fill" />
+              <h3 className="font-bold text-lg text-foreground">Set start point</h3>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Use <strong className="text-foreground">{startModal.customerName}</strong> as the start for{" "}
+              <strong className="text-foreground">{selectedCity}</strong>.
+            </p>
+            <div className="flex flex-col gap-2">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="radio"
+                  name="start-mode"
+                  checked={startModal.mode === "default"}
+                  onChange={() => setStartModal({ ...startModal, mode: "default" })}
+                  data-testid="route-start-mode-default"
+                />
+                Default for this city
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="radio"
+                  name="start-mode"
+                  checked={startModal.mode === "temporary"}
+                  onChange={() => setStartModal({ ...startModal, mode: "temporary" })}
+                  data-testid="route-start-mode-temporary"
+                />
+                Temporary (urgent)
+              </label>
+            </div>
+            {startModal.mode === "temporary" && (
+              <div className="flex flex-col gap-2 rounded-xl border border-brand-border bg-brand-surface/40 p-3">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="radio"
+                    name="start-duration"
+                    checked={startModal.duration === "today"}
+                    onChange={() => setStartModal({ ...startModal, duration: "today" })}
+                    data-testid="route-start-duration-today"
+                  />
+                  Today only
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="radio"
+                    name="start-duration"
+                    checked={startModal.duration === "days"}
+                    onChange={() => setStartModal({ ...startModal, duration: "days" })}
+                    data-testid="route-start-duration-days"
+                  />
+                  Next
+                  <input
+                    type="number"
+                    min={2}
+                    max={14}
+                    className="h-8 w-14 rounded-lg border border-brand-border bg-white px-2 text-xs"
+                    value={startModal.days}
+                    onChange={(e) =>
+                      setStartModal({
+                        ...startModal,
+                        days: Math.min(14, Math.max(2, parseInt(e.target.value, 10) || 3)),
+                      })
+                    }
+                    data-testid="route-start-days-input"
+                  />
+                  days
+                </label>
+              </div>
+            )}
+            <div className="flex justify-end gap-2 mt-1">
+              <button
+                type="button"
+                className="pill-btn btn-outline h-9 text-xs px-4"
+                onClick={() => setStartModal(null)}
+                disabled={busy}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="pill-btn btn-primary h-9 text-xs px-4 disabled:opacity-50"
+                onClick={() => void saveStartFromModal()}
+                disabled={busy}
+                data-testid="route-start-save"
+              >
+                Save start
               </button>
             </div>
           </div>

@@ -126,6 +126,7 @@ export type InsightsQuery = {
   start?: string;
   end?: string;
   meal_slot?: MealSlotFilter;
+  city?: string;
 };
 
 export function insightsParams(q: InsightsQuery): Record<string, string> {
@@ -138,6 +139,9 @@ export function insightsParams(q: InsightsQuery): Record<string, string> {
   }
   if (q.meal_slot && q.meal_slot !== "all") {
     params.meal_slot = q.meal_slot;
+  }
+  if (q.city) {
+    params.city = q.city;
   }
   return params;
 }

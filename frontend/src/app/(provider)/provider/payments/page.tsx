@@ -14,6 +14,7 @@ import RecordPaymentSheet from "@/components/RecordPaymentSheet";
 import CustomerAsyncSelect from "@/components/CustomerAsyncSelect";
 import CursorPaginationBar from "@/components/CursorPaginationBar";
 import { StatusFilterCards } from "@/components/StatusFilterCards";
+import CityFilterSelect from "@/components/CityFilterSelect";
 import { InlineLoader } from "@/components/loaders";
 import { CheckCircle, XCircle, Eye, Plus, MagnifyingGlass, CalendarBlank, User } from "@phosphor-icons/react";
 
@@ -27,6 +28,7 @@ export default function Payments() {
   const [debouncedQ, setDebouncedQ] = useState("");
   const [range, setRange] = useState({ start: "", end: "" });
   const [customerFilter, setCustomerFilter] = useState<{ id: string; name: string } | null>(null);
+  const [filterCity, setFilterCity] = useState("");
   const [viewing, setViewing] = useState<any>(null);
   const [rejectFor, setRejectFor] = useState<any>(null);
   const [rejectReason, setRejectReason] = useState("");
@@ -64,6 +66,7 @@ export default function Payments() {
         if (range.start) params.set("start", range.start);
         if (range.end) params.set("end", range.end);
         if (customerFilter?.id) params.set("customer_id", customerFilter.id);
+        if (filterCity) params.set("city", filterCity);
         params.set("limit", String(opts.pageSize ?? paging.pageSize));
         if (opts.cursor) params.set("cursor", opts.cursor);
 
@@ -78,7 +81,7 @@ export default function Payments() {
         setLoading(false);
       }
     },
-    [filter, debouncedQ, range.start, range.end, customerFilter?.id, paging.pageSize, paging.applyPageResult],
+    [filter, debouncedQ, range.start, range.end, customerFilter?.id, filterCity, paging.pageSize, paging.applyPageResult],
   );
 
   const reloadCurrentPage = useCallback(() => {
@@ -91,7 +94,7 @@ export default function Payments() {
     paging.resetToFirstPage();
     fetchPage({ cursor: null });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset+fetch on filter identity
-  }, [filter, debouncedQ, range.start, range.end, customerFilter?.id, paging.pageSize]);
+  }, [filter, debouncedQ, range.start, range.end, customerFilter?.id, filterCity, paging.pageSize]);
 
   const pendingIds = useMemo(
     () => items.filter((p) => p.status === "pending").map((p) => p.id),
@@ -346,6 +349,18 @@ export default function Payments() {
               activeOnly={false}
             />
           </div>
+        </div>
+
+        <div className="min-w-[160px] sm:w-[180px]">
+          <label className="block text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-1.5 pl-1">
+            City
+          </label>
+          <CityFilterSelect
+            value={filterCity}
+            onChange={setFilterCity}
+            testid="payment-city-filter"
+            className="w-full"
+          />
         </div>
       </div>
 

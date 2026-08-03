@@ -17,6 +17,7 @@ import MarkDeliveredSheet from "@/components/MarkDeliveredSheet";
 import { DeliveryProofThumbButton, DeliveryProofSheet, type DeliveryProofTarget } from "@/components/DeliveryProofViewer";
 import CursorPaginationBar from "@/components/CursorPaginationBar";
 import SearchableSelect from "@/components/SearchableSelect";
+import CityFilterSelect from "@/components/CityFilterSelect";
 import { markDeliveryWithProof } from "@/lib/deliveries";
 import { asPageEnvelope, OPS_DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
@@ -72,6 +73,7 @@ export default function Deliveries() {
   const [debouncedQ, setDebouncedQ] = useState("");
   const [driverId, setDriverId] = useState("");
   const [mealSlot, setMealSlot] = useState("all");
+  const [filterCity, setFilterCity] = useState("");
   const [drivers, setDrivers] = useState<{ id: string; name: string; email?: string }[]>([]);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [confirmBulkDeliver, setConfirmBulkDeliver] = useState(false);
@@ -102,12 +104,14 @@ export default function Deliveries() {
       if (debouncedQ) params.q = debouncedQ;
       if (!isDriver && driverId) params.driver_id = driverId;
       if (mealSlot && mealSlot !== "all") params.meal_slot = mealSlot;
+      if (filterCity) params.city = filterCity;
       if (filter && filter !== "all") params.status = filter;
       if (opts.cursor) params.cursor = opts.cursor;
       const sumParams: Record<string, string> = { date };
       if (debouncedQ) sumParams.q = debouncedQ;
       if (!isDriver && driverId) sumParams.driver_id = driverId;
       if (mealSlot && mealSlot !== "all") sumParams.meal_slot = mealSlot;
+      if (filterCity) sumParams.city = filterCity;
 
       const [{ data }, sumRes] = await Promise.all([
         api.get(`/deliveries`, { params }),
@@ -132,14 +136,14 @@ export default function Deliveries() {
     } finally {
       if (!opts.silent) setLoading(false);
     }
-  }, [date, debouncedQ, driverId, mealSlot, isDriver, filter, paging.pageSize, paging.applyPageResult]);
+  }, [date, debouncedQ, driverId, mealSlot, filterCity, isDriver, filter, paging.pageSize, paging.applyPageResult]);
 
   // Reset to page 1 when filters change
   useEffect(() => {
     paging.resetToFirstPage();
     fetchPage({ cursor: null });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset+fetch on filter identity
-  }, [date, debouncedQ, driverId, mealSlot, filter, paging.pageSize]);
+  }, [date, debouncedQ, driverId, mealSlot, filterCity, filter, paging.pageSize]);
 
   const load = useCallback(async (silent = false) => {
     const c = paging.currentPageIndex > 0 ? paging.cursorHistory[paging.currentPageIndex - 1] ?? null : null;
@@ -282,6 +286,7 @@ export default function Deliveries() {
       if (debouncedQ) params.q = debouncedQ;
       if (!isDriver && driverId) params.driver_id = driverId;
       if (mealSlot && mealSlot !== "all") params.meal_slot = mealSlot;
+      if (filterCity) params.city = filterCity;
       const { data } = await api.get(`/deliveries`, { params });
       const pending = Array.isArray(data) ? data : asPageEnvelope<any>(data).items;
       const ids = pending.map((d: any) => d.id).filter(Boolean);
@@ -488,6 +493,11 @@ export default function Deliveries() {
               placeholder="Search slot…"
             />
           </div>
+          <CityFilterSelect
+            value={filterCity}
+            onChange={setFilterCity}
+            testid="delivery-city-filter"
+          />
         </div>
         <StatusFilterCards
           testid="delivery-filters"
