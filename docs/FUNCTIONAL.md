@@ -106,6 +106,7 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 | Statuses | `pending`, `delivered`, `missed`, `cancelled`, `paused` |
 | Status filter UI | Compact horizontal chips with counts (mobile scroll); **default filter = Pending** |
 | Provider mark | One-tap delivered / missed / cancelled (**today or past only**; not future) |
+| Customer notes | CRM notes on kitchen pack list + print; deliveries list shows live `customer_notes` (searchable); ops delivery notes shown when different |
 | Delivery proof photo | Optional camera/gallery on **single** mark delivered (`/provider/deliveries` + dashboard quick Deliver); stored as `delivery_image_url` (R2 `deliveries/` prefix or base64 fallback); **Mark all delivered** skips photo |
 | Delivery proof view | Thumbnail + **View** on deliveries list (Delivered/All tabs), customer 360 Deliveries tab, and dashboard delivered rows; in-app sheet with full image + open in new tab |
 | Consumer cancel | Upcoming `pending` only; blocked for past dates; within `cutoff_hours` before assumed **local noon** (provider timezone) |
@@ -357,7 +358,7 @@ WhatsApp menu shares are **not** included in the SaaS subscription.
 | Delivery filters | Compact status chips + search; route reorder on `sm+` only |
 | Bulk confirms | Mark all delivered + Verify selected require AppSheet confirmation before applying |
 | Action button colors | `btn-danger` for delete/reject/cancel-delivery; `btn-secondary` for deliver/verify; `btn-outline` for dismiss Cancel |
-| CSV import + invites | Guided import sheet: pick billing policy → download policy sample → upload; `lunch_qty` / `dinner_qty` (0 = off); required `driver_name` (Settings staff). **Per-meal:** `delivery_days`. **Monthly:** required `monthly_plan`. Phone/email unique per kitchen (row fails if duplicate in DB or same file). Local validation first, then unique-address ORS only for passed rows (fail → row error) + auto best-gap sequence. Policy from UI; async job + REST poll; error CSV. CRM add wizard unchanged; invite HTML → `/consumer-signup?code=` |
+| CSV import + invites | Guided import sheet: pick billing policy → download policy sample → upload; `lunch_qty` / `dinner_qty` (0 = off); optional `notes` (CRM delivery notes); required `driver_name` (Settings staff). **Per-meal:** `delivery_days`. **Monthly:** required `monthly_plan`. Phone/email unique per kitchen (row fails if duplicate in DB or same file). Local validation first, then unique-address ORS only for passed rows (fail → row error) + auto best-gap sequence. Policy from UI; async job + REST poll; error CSV. CRM add wizard unchanged; invite HTML → `/consumer-signup?code=` |
 | Customer route master | Optional `driver_id` + `delivery_sequence`; unique per driver pool; insert/move at N auto-shifts later stops; new deliveries inherit **0-based** `route_order` (`sequence − 1`) + driver |
 | Route planning | `/provider/route-planning` — **Route** (view City×Driver, no Plan button) + **Planning**; optimize keeps drivers and resequences from start; day deliveries sync latest `route_order` — see mealhq-api [`ROUTE_PLANNING.md`](https://github.com/rvchauhan99/mealhq-api/blob/main/docs/ROUTE_PLANNING.md) |
 | SMS stub | `send_sms` + `sms_notifications` setting; cancel confirmation |

@@ -471,7 +471,7 @@ export default function Deliveries() {
           data-testid="delivery-search"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search name, address, postal…"
+          placeholder="Search name, address, notes…"
           className="h-10 w-full px-3 rounded-xl bg-white border border-brand-border text-sm outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
         />
         <div className="flex flex-wrap gap-2" data-testid="delivery-extra-filters">
@@ -586,20 +586,40 @@ export default function Deliveries() {
                   <div className="text-xs text-muted-foreground truncate mt-0.5">
                     {d.address}{d.apartment ? ` · ${d.apartment}` : ""}{d.postal_code ? ` · ${d.postal_code}` : ""}
                   </div>
-                  <div className="flex items-center gap-2 mt-1">
-                    <a
-                      href={mapsUrl(d)}
-                      target="_blank"
-                      rel="noreferrer"
-                      data-testid={`maps-${d.id}`}
-                      className="min-h-[44px] min-w-[44px] px-2 -ml-2 rounded-full text-sm text-primary inline-flex items-center gap-1.5 hover:bg-brand-surface"
-                      aria-label="Open in Maps"
-                    >
-                      <MapPin size={16} />
-                      <span className="sm:hidden">Maps</span>
-                      <span className="hidden sm:inline">Open in Maps</span>
-                    </a>
-                    {d.notes ? <span className="text-xs text-muted-foreground italic truncate">&quot;{d.notes}&quot;</span> : null}
+                  <div className="flex flex-col gap-0.5 mt-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={mapsUrl(d)}
+                        target="_blank"
+                        rel="noreferrer"
+                        data-testid={`maps-${d.id}`}
+                        className="min-h-[44px] min-w-[44px] px-2 -ml-2 rounded-full text-sm text-primary inline-flex items-center gap-1.5 hover:bg-brand-surface shrink-0"
+                        aria-label="Open in Maps"
+                      >
+                        <MapPin size={16} />
+                        <span className="sm:hidden">Maps</span>
+                        <span className="hidden sm:inline">Open in Maps</span>
+                      </a>
+                      {(d.customer_notes || "").trim() ? (
+                        <span
+                          className="text-xs text-muted-foreground italic truncate min-w-0"
+                          data-testid={`del-customer-notes-${d.id}`}
+                          title={String(d.customer_notes).trim()}
+                        >
+                          &quot;{String(d.customer_notes).trim()}&quot;
+                        </span>
+                      ) : null}
+                    </div>
+                    {(d.notes || "").trim() &&
+                    String(d.notes).trim() !== String(d.customer_notes || "").trim() ? (
+                      <span
+                        className="text-[11px] text-muted-foreground/80 italic truncate pl-1"
+                        data-testid={`del-ops-notes-${d.id}`}
+                        title={String(d.notes).trim()}
+                      >
+                        Ops: {String(d.notes).trim()}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
                 <div
