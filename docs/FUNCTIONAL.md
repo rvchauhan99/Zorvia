@@ -140,7 +140,7 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 | Collection day | Provider `default_collection_day` (1–31, required when kitchen default monthly); per-customer `payment_collection_day` when effective policy is monthly. |
 | Outstanding | Per-meal cohort: delivered×tax − payments. Monthly cohort: Σ month charges − payments. Batch splits by effective policy. **Listing:** per-meal and Adjustable = balances `> 0`; Fixed = overdue only. Report `billing_mode` may be `mixed`. |
 | Reports | `GET /reports/payment-due` / `monthly-dues` include monthly-effective customers (default or override). |
-| Monthly dues UI | `/provider/monthly-dues` — monthly-effective customers; History / Quick Renew; Adjustable settlement blurb when any row is `monthly_adjustable` (works when report mode is `mixed`). |
+| Monthly dues UI | `/provider/monthly-dues` — monthly-effective customers; expand **How this month was calculated** (tier, cancelled/delivered units, rates, explainer); History / Quick Renew; Adjustable settlement blurb when any row is `monthly_adjustable` (works when report mode is `mixed`). |
 | Settlement | Adjustable only, when plan fee ≠ pre-tax month charge: choose **Plan** or **Adjustable** on Quick Renew, Record payment, and Approve/Verify. Persists `settlement_basis` on the payment; Verify also supports Keep submitted. Tier + cancel/delivered shown in the settle UI. |
 | Statement | Per-row billing mode; monthly rows include plan, tier, collection due date |
 
@@ -157,7 +157,7 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 - Daily deliveries  
 - Collections (payments received by submission date)  
 - **Payment due** (`GET /reports/payment-due`) — monthly kitchens: who owes what by collection due date  
-- **Customer subscriptions** (`GET /reports/monthly-dues`, Fixed **or** Adjustable) — all active customers, overdue-first then nearest renewal; Amount = plan fee; This month = recalc charge; credit + prepaid-aware renewal; Quick Renew with settlement choice when Adjustable amounts differ  
+- **Customer subscriptions** (`GET /reports/monthly-dues`, Fixed **or** Adjustable) — all active customers, overdue-first then nearest renewal; Amount = plan fee; This month = recalc charge with expandable this-month calc (units, tier, `charge_explainer`); credit + prepaid-aware renewal; Quick Renew with settlement choice when Adjustable amounts differ  
 - **Customer credit** (`GET /reports/outstanding?balance=credit`) — advances for all policies; Fixed rows include next renewal when prepaid  
 - Active customers  
 - Area summary (optional FSA prefix)  

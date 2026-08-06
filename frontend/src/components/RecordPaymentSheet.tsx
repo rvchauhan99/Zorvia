@@ -7,6 +7,7 @@ import { fmtCAD } from "@/lib/format";
 import AppSheet from "@/components/AppSheet";
 import CustomerAsyncSelect, { type CustomerAsyncOption } from "@/components/CustomerAsyncSelect";
 import ImageSourceField from "@/components/ImageSourceField";
+import { monthlyTierLabel as tierLabel } from "@/lib/monthlyBillingCopy";
 
 type Props = {
   open: boolean;
@@ -20,14 +21,6 @@ type SettlementBasis = "plan" | "adjustable";
 
 const input =
   "h-11 px-4 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all w-full";
-
-function tierLabel(tier?: string | null) {
-  if (!tier) return null;
-  if (tier === "recalc_daily") return "recalc daily";
-  if (tier === "flat_with_deductions") return "flat with deductions";
-  if (tier === "fixed_monthly") return "fixed monthly";
-  return String(tier).replace(/_/g, " ");
-}
 
 export default function RecordPaymentSheet({ open, onClose, onRecorded, lockedCustomer = null }: Props) {
   const [customer, setCustomer] = useState<CustomerAsyncOption | null>(null);
