@@ -675,7 +675,7 @@ export default function Customers() {
         }
         return {
           ...types,
-          [slot]: Object.fromEntries(days.map((d) => [String(d), tid])),
+          [slot]: Object.fromEntries(days.map((d: number) => [String(d), tid])),
         };
       };
       if (dual && scheduleMode === "same") {
