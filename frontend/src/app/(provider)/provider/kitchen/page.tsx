@@ -16,7 +16,7 @@ import {
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { isDriver as sessionIsDriver } from "@/lib/roles";
-import { fmtDate, todayISO } from "@/lib/format";
+import { fmtDate, todayISO, fmtMealTypeLinesBreakdown } from "@/lib/format";
 import { mealSlotBadgeLabel } from "@/lib/mealSlots";
 import { InlineLoader } from "@/components/loaders";
 import CursorPaginationBar from "@/components/CursorPaginationBar";
@@ -658,7 +658,7 @@ export default function KitchenPage() {
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5 text-sm shrink-0">
                       <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-primary/[0.08] text-primary border border-primary/15">
-                        {row.meal_type_name}
+                        {fmtMealTypeLinesBreakdown(row) || row.meal_type_name}
                       </span>
                       <SlotBadge slot={row.meal_slot} />
                       <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-brand-surface border border-brand-border text-foreground tabular-nums">

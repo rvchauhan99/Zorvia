@@ -98,6 +98,7 @@ export default function AddExtraMealSheet({
           quantity: s.quantity,
           meal_type_id: s.meal_type_id || undefined,
           meal_price: s.meal_price ?? undefined,
+          meal_type_lines: s.meal_type_lines?.length ? s.meal_type_lines : undefined,
         })),
       });
       toast.success("Meal adjusted");

@@ -8,6 +8,19 @@ import {
   isDualSlots,
   normalizeMealSlots,
 } from "@/lib/mealSlots";
+import {
+  type MealTypeLine,
+  type MealTypeOption,
+  type SlotMealTypeLines,
+  MAX_MEAL_TYPE_LINES,
+  MAX_LINE_TOTAL_QTY,
+  defaultLine,
+  linesTotalQty,
+  linesTotalAmount,
+  normalizeLines,
+  priceForTypeId,
+  uniformLinesForSlot,
+} from "@/lib/mealTypeLines";
 
 export type ScheduleMode = "same" | "custom";
 
@@ -59,51 +72,160 @@ export function detectSlotScheduleMode(
   return "same";
 }
 
-type MealTypeOption = { id: string; name: string };
-
 type Props = {
   mode: ScheduleMode;
   onModeChange: (mode: ScheduleMode) => void;
   mealSlots: MealSlot[];
   onMealSlotsChange: (slots: MealSlot[]) => void;
   deliveryDays: number[];
-  /** Single-slot schedule (legacy meal_schedule mirror). */
-  mealSchedule: Record<string, number>;
-  mealQuantity: number;
-  /** Dual-slot same-mode quantities. */
-  lunchQuantity: number;
-  dinnerQuantity: number;
-  slotSchedules: Record<string, Record<string, number>>;
-  mealPrice: string | number;
   onToggleDay: (day: number) => void;
-  onQuantityChange: (qty: number) => void;
-  onLunchQuantityChange: (qty: number) => void;
-  onDinnerQuantityChange: (qty: number) => void;
-  onDayQuantityChange: (day: number, qty: number) => void;
-  onSlotDayQuantityChange: (slot: "lunch" | "dinner", day: number, qty: number) => void;
-  /** Default CRM meal type (overrides leave empty / "Same as default"). */
-  defaultMealTypeId?: string;
-  mealTypeOptions?: MealTypeOption[];
-  /** Sparse overrides: slot → weekday → meal_type_id */
-  slotMealTypes?: Record<string, Record<string, string>>;
-  onUniformSlotMealTypeChange?: (slot: "lunch" | "dinner", typeId: string) => void;
-  onSlotDayMealTypeChange?: (slot: "lunch" | "dinner", day: number, typeId: string) => void;
+  mealTypeOptions: MealTypeOption[];
+  slotMealTypeLines: SlotMealTypeLines;
+  /** Same-every-day: write lines to all selected delivery days for the slot. */
+  onUniformSlotLinesChange: (slot: "lunch" | "dinner", lines: MealTypeLine[]) => void;
+  /** Custom / per-day lines for a slot×weekday. Empty lines = no stop. */
+  onSlotDayLinesChange: (slot: "lunch" | "dinner", day: number, lines: MealTypeLine[]) => void;
   inputClassName?: string;
   disabled?: boolean;
 };
 
-/** Common override across days, or "" if none / mixed. */
-export function uniformSlotMealType(
-  slotMealTypes: Record<string, Record<string, string>> | null | undefined,
-  slot: string,
-  days: number[],
-): string {
-  if (!days.length) return "";
-  const map = slotMealTypes?.[slot] || {};
-  const vals = days.map((d) => (map[String(d)] || "").trim()).filter(Boolean);
-  if (!vals.length) return "";
-  if (vals.length < days.length) return "";
-  return new Set(vals).size === 1 ? vals[0] : "";
+function LinesEditor({
+  lines,
+  onChange,
+  mealTypeOptions,
+  inputClassName,
+  disabled,
+  testidPrefix,
+  allowEmpty = false,
+}: {
+  lines: MealTypeLine[];
+  onChange: (next: MealTypeLine[]) => void;
+  mealTypeOptions: MealTypeOption[];
+  inputClassName: string;
+  disabled?: boolean;
+  testidPrefix: string;
+  allowEmpty?: boolean;
+}) {
+  const total = linesTotalQty(lines);
+  const amount = linesTotalAmount(lines);
+
+  function updateAt(idx: number, patch: Partial<MealTypeLine>) {
+    const next = lines.map((ln, i) => (i === idx ? { ...ln, ...patch } : ln));
+    onChange(normalizeLines(next));
+  }
+
+  function removeAt(idx: number) {
+    onChange(lines.filter((_, i) => i !== idx));
+  }
+
+  function addLine() {
+    if (lines.length >= MAX_MEAL_TYPE_LINES) return;
+    const remaining = MAX_LINE_TOTAL_QTY - total;
+    if (remaining < 1) return;
+    const used = new Set(lines.map((ln) => ln.meal_type_id));
+    const nextType =
+      mealTypeOptions.find((t) => !used.has(t.id)) || mealTypeOptions[0] || { id: "regular", name: "Regular", price: 12 };
+    onChange(
+      normalizeLines([
+        ...lines,
+        defaultLine({
+          typeId: nextType.id,
+          qty: Math.min(1, remaining),
+          price: nextType.price,
+          mealTypeOptions,
+        }),
+      ]),
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2" data-testid={`${testidPrefix}-lines`}>
+      {lines.map((ln, idx) => (
+        <div
+          key={`${ln.meal_type_id}-${idx}`}
+          className="flex flex-wrap items-end gap-2 rounded-xl border border-brand-border/60 p-2"
+          data-testid={`${testidPrefix}-line-${idx}`}
+        >
+          <label className="flex flex-col gap-1 min-w-[120px] flex-1">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Type</span>
+            <select
+              data-testid={`${testidPrefix}-type-${idx}`}
+              disabled={disabled}
+              value={ln.meal_type_id}
+              onChange={(e) => {
+                const tid = e.target.value;
+                updateAt(idx, {
+                  meal_type_id: tid,
+                  unit_price: priceForTypeId(mealTypeOptions, tid, ln.unit_price),
+                });
+              }}
+              className={`${inputClassName} text-xs sm:text-sm`}
+            >
+              {(mealTypeOptions.length ? mealTypeOptions : [{ id: ln.meal_type_id, name: ln.meal_type_id, price: ln.unit_price }]).map(
+                (t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ),
+              )}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 w-[72px]">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Qty</span>
+            <input
+              type="number"
+              min={1}
+              max={MAX_LINE_TOTAL_QTY}
+              data-testid={`${testidPrefix}-qty-${idx}`}
+              disabled={disabled}
+              value={ln.quantity}
+              onChange={(e) => updateAt(idx, { quantity: Math.max(1, Math.min(MAX_LINE_TOTAL_QTY, Number(e.target.value) || 1)) })}
+              className={inputClassName}
+            />
+          </label>
+          <label className="flex flex-col gap-1 w-[88px]">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Price</span>
+            <input
+              type="number"
+              min={0.01}
+              step={0.01}
+              data-testid={`${testidPrefix}-price-${idx}`}
+              disabled={disabled}
+              value={ln.unit_price}
+              onChange={(e) => updateAt(idx, { unit_price: Number(e.target.value) || 0 })}
+              className={inputClassName}
+            />
+          </label>
+          {(lines.length > 1 || allowEmpty) ? (
+            <button
+              type="button"
+              data-testid={`${testidPrefix}-remove-${idx}`}
+              disabled={disabled}
+              onClick={() => removeAt(idx)}
+              className="h-11 min-h-[44px] px-2.5 rounded-full text-xs font-medium border border-brand-border bg-white text-muted-foreground cursor-pointer hover:bg-brand-surface"
+            >
+              Remove
+            </button>
+          ) : null}
+        </div>
+      ))}
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          data-testid={`${testidPrefix}-add-type`}
+          disabled={disabled || lines.length >= MAX_MEAL_TYPE_LINES || total >= MAX_LINE_TOTAL_QTY}
+          onClick={addLine}
+          className="h-9 min-h-[36px] px-3 rounded-full text-xs font-semibold border border-brand-border bg-white cursor-pointer hover:bg-brand-surface disabled:opacity-40"
+        >
+          + Add type
+        </button>
+        <span className="text-xs text-muted-foreground" data-testid={`${testidPrefix}-total`}>
+          Total {total} meal{total === 1 ? "" : "s"}
+          {amount > 0 ? ` · ${fmtCAD(amount)}` : ""}
+        </span>
+      </div>
+    </div>
+  );
 }
 
 export default function MealScheduleFields({
@@ -112,98 +234,61 @@ export default function MealScheduleFields({
   mealSlots,
   onMealSlotsChange,
   deliveryDays,
-  mealSchedule,
-  mealQuantity,
-  lunchQuantity,
-  dinnerQuantity,
-  slotSchedules,
-  mealPrice,
   onToggleDay,
-  onQuantityChange,
-  onLunchQuantityChange,
-  onDinnerQuantityChange,
-  onDayQuantityChange,
-  onSlotDayQuantityChange,
-  defaultMealTypeId = "regular",
   mealTypeOptions,
-  slotMealTypes = {},
-  onUniformSlotMealTypeChange,
-  onSlotDayMealTypeChange,
+  slotMealTypeLines,
+  onUniformSlotLinesChange,
+  onSlotDayLinesChange,
   inputClassName = "",
   disabled,
 }: Props) {
   const dual = isDualSlots(mealSlots);
   const slots = normalizeMealSlots(mealSlots);
-  const typeUi = Array.isArray(mealTypeOptions) && mealTypeOptions.length > 0 && !!onSlotDayMealTypeChange;
-
-  const typeSelect = (
-    value: string,
-    onChange: (tid: string) => void,
-    testid: string,
-  ) => (
-    <select
-      data-testid={testid}
-      disabled={disabled}
-      value={value || ""}
-      onChange={(e) => onChange(e.target.value)}
-      className={`${inputClassName} text-xs sm:text-sm`}
-    >
-      <option value="">Same as default</option>
-      {(mealTypeOptions || []).map((t) => (
-        <option key={t.id} value={t.id}>
-          {t.name}
-        </option>
-      ))}
-    </select>
-  );
+  const categorized = slots.filter((s) => s === "lunch" || s === "dinner") as Array<"lunch" | "dinner">;
 
   const preview = useMemo(() => {
-    const price = Number(mealPrice);
-    const priceLabel = Number.isFinite(price) && price > 0 ? `${fmtCAD(price)}/meal` : "default price/meal";
     if (!deliveryDays.length && !dual) return "Select at least one day";
 
-    if (dual) {
-      if (mode === "same") {
-        if (!deliveryDays.length) return "Select at least one day";
-        const labels = WEEKDAYS.filter((d) => deliveryDays.includes(d.i)).map((d) => d.s).join(", ");
-        const total = lunchQuantity + dinnerQuantity;
-        return `${labels} · Lunch ×${lunchQuantity} + Dinner ×${dinnerQuantity} = ${total} meals/day · ${priceLabel}`;
-      }
-      const parts = WEEKDAYS.map((d) => {
-        const lq = slotSchedules.lunch?.[String(d.i)] || 0;
-        const dq = slotSchedules.dinner?.[String(d.i)] || 0;
-        if (lq < 1 && dq < 1) return null;
-        const bits = [];
-        if (lq >= 1) bits.push(`L×${lq}`);
-        if (dq >= 1) bits.push(`D×${dq}`);
-        return `${d.s} ${bits.join("+")}`;
-      }).filter(Boolean);
-      return parts.length ? `${parts.join(", ")} · ${priceLabel}` : "Set lunch/dinner quantities per day";
+    const labelFor = (slot: "lunch" | "dinner", lines: MealTypeLine[]) => {
+      if (!lines.length) return null;
+      const bits = lines.map((ln) => {
+        const name = mealTypeOptions.find((t) => t.id === ln.meal_type_id)?.name || ln.meal_type_id;
+        return `${name}×${ln.quantity}`;
+      });
+      return `${MEAL_SLOT_LABELS[slot]} ${bits.join("+")} (${linesTotalQty(lines)})`;
+    };
+
+    if (mode === "same") {
+      if (!deliveryDays.length) return "Select at least one day";
+      const labels = WEEKDAYS.filter((d) => deliveryDays.includes(d.i)).map((d) => d.s).join(", ");
+      const parts = categorized
+        .map((slot) => labelFor(slot, uniformLinesForSlot(slotMealTypeLines, slot, deliveryDays)))
+        .filter(Boolean);
+      if (!parts.length) return `${labels} · add at least one meal type`;
+      return `${labels} · ${parts.join(" · ")}`;
     }
 
-    if (!deliveryDays.length) return "Select at least one day";
-    if (mode === "same") {
-      const labels = WEEKDAYS.filter((d) => deliveryDays.includes(d.i)).map((d) => d.s).join(", ");
-      const slotLabel = slots[0] === "dinner" && !dual ? "" : `${MEAL_SLOT_LABELS[slots[0]]} · `;
-      return `${labels} · ${slotLabel}${mealQuantity} meal${mealQuantity === 1 ? "" : "s"}/day · ${priceLabel}`;
+    if (dual) {
+      const parts = WEEKDAYS.map((d) => {
+        const lunch = normalizeLines(slotMealTypeLines.lunch?.[String(d.i)] || []);
+        const dinner = normalizeLines(slotMealTypeLines.dinner?.[String(d.i)] || []);
+        if (!lunch.length && !dinner.length) return null;
+        const bits: string[] = [];
+        if (lunch.length) bits.push(`L×${linesTotalQty(lunch)}`);
+        if (dinner.length) bits.push(`D×${linesTotalQty(dinner)}`);
+        return `${d.s} ${bits.join("+")}`;
+      }).filter(Boolean);
+      return parts.length ? parts.join(", ") : "Set type×qty×price lines per day";
     }
+
+    const slot = categorized[0] || "dinner";
     const parts = WEEKDAYS.filter((d) => deliveryDays.includes(d.i)).map((d) => {
-      const q = mealSchedule[String(d.i)] || 1;
-      return `${d.s} ×${q}`;
-    });
-    return `${parts.join(", ")} · ${priceLabel}`;
-  }, [
-    mode,
-    deliveryDays,
-    mealQuantity,
-    mealSchedule,
-    mealPrice,
-    dual,
-    lunchQuantity,
-    dinnerQuantity,
-    slotSchedules,
-    slots,
-  ]);
+      const lines = normalizeLines(slotMealTypeLines[slot]?.[String(d.i)] || []);
+      const q = linesTotalQty(lines);
+      return q >= 1 ? `${d.s} ×${q}` : null;
+    }).filter(Boolean);
+    return parts.length ? parts.join(", ") : "Select days and set meal lines";
+  }, [mode, deliveryDays, dual, categorized, slotMealTypeLines, mealTypeOptions]);
 
   function toggleSlot(slot: "lunch" | "dinner") {
     const has = mealSlots.includes(slot);
@@ -218,6 +303,17 @@ export default function MealScheduleFields({
       next = normalizeMealSlots(cats);
     }
     onMealSlotsChange(next);
+  }
+
+  function seedIfEmpty(slot: "lunch" | "dinner", existing: MealTypeLine[]): MealTypeLine[] {
+    if (existing.length) return existing;
+    return [
+      defaultLine({
+        typeId: mealTypeOptions[0]?.id || "regular",
+        qty: 1,
+        mealTypeOptions,
+      }),
+    ];
   }
 
   return (
@@ -307,211 +403,133 @@ export default function MealScheduleFields({
         </div>
       )}
 
-      {mode === "same" && !dual ? (
-        <label className="flex flex-col gap-1.5 max-w-[160px]">
-          <span className="label-overline">Meals / day</span>
-          <input
-            type="number"
-            min={1}
-            max={20}
-            data-testid="cf-meal-quantity"
-            disabled={disabled}
-            value={mealQuantity}
-            onChange={(e) => onQuantityChange(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
-            className={inputClassName}
-          />
-        </label>
-      ) : null}
+      {mode === "same"
+        ? categorized.map((slot) => {
+            const lines = seedIfEmpty(
+              slot,
+              uniformLinesForSlot(slotMealTypeLines, slot, deliveryDays),
+            );
+            return (
+              <div key={slot} className="flex flex-col gap-1.5">
+                <span className="label-overline">
+                  {dual ? `${MEAL_SLOT_LABELS[slot]} meals` : "Meals / day"}
+                </span>
+                <LinesEditor
+                  lines={lines}
+                  onChange={(next) => onUniformSlotLinesChange(slot, next)}
+                  mealTypeOptions={mealTypeOptions}
+                  inputClassName={inputClassName}
+                  disabled={disabled || !deliveryDays.length}
+                  testidPrefix={`cf-${slot}`}
+                />
+              </div>
+            );
+          })
+        : null}
 
-      {mode === "same" && dual ? (
-        <div className="flex flex-col gap-3">
-          <div className="flex gap-3 flex-wrap">
-            <label className="flex flex-col gap-1.5 max-w-[140px]">
-              <span className="label-overline">Lunch / day</span>
-              <input
-                type="number"
-                min={1}
-                max={20}
-                data-testid="cf-lunch-quantity"
-                disabled={disabled}
-                value={lunchQuantity}
-                onChange={(e) =>
-                  onLunchQuantityChange(Math.max(1, Math.min(20, Number(e.target.value) || 1)))
-                }
-                className={inputClassName}
-              />
-            </label>
-            <label className="flex flex-col gap-1.5 max-w-[140px]">
-              <span className="label-overline">Dinner / day</span>
-              <input
-                type="number"
-                min={1}
-                max={20}
-                data-testid="cf-dinner-quantity"
-                disabled={disabled}
-                value={dinnerQuantity}
-                onChange={(e) =>
-                  onDinnerQuantityChange(Math.max(1, Math.min(20, Number(e.target.value) || 1)))
-                }
-                className={inputClassName}
-              />
-            </label>
-            <div className="flex flex-col justify-end pb-1 text-sm text-muted-foreground">
-              Total {lunchQuantity + dinnerQuantity} / day
-            </div>
-          </div>
-          {typeUi && onUniformSlotMealTypeChange ? (
-            <div className="flex gap-3 flex-wrap">
-              <label className="flex flex-col gap-1.5 min-w-[160px] flex-1 max-w-[220px]">
-                <span className="label-overline">Lunch type</span>
-                {typeSelect(
-                  uniformSlotMealType(slotMealTypes, "lunch", deliveryDays),
-                  (tid) => onUniformSlotMealTypeChange("lunch", tid),
-                  "cf-lunch-meal-type",
-                )}
-              </label>
-              <label className="flex flex-col gap-1.5 min-w-[160px] flex-1 max-w-[220px]">
-                <span className="label-overline">Dinner type</span>
-                {typeSelect(
-                  uniformSlotMealType(slotMealTypes, "dinner", deliveryDays),
-                  (tid) => onUniformSlotMealTypeChange("dinner", tid),
-                  "cf-dinner-meal-type",
-                )}
-              </label>
-              <p className="text-xs text-muted-foreground self-end pb-2">
-                Leave “Same as default” to use {defaultMealTypeId}.
-              </p>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-
-      {mode === "same" && !dual && typeUi && onUniformSlotMealTypeChange && (slots[0] === "lunch" || slots[0] === "dinner") ? (
-        <label className="flex flex-col gap-1.5 max-w-[220px]">
-          <span className="label-overline">{MEAL_SLOT_LABELS[slots[0]]} type</span>
-          {typeSelect(
-            uniformSlotMealType(slotMealTypes, slots[0], deliveryDays),
-            (tid) => onUniformSlotMealTypeChange(slots[0] as "lunch" | "dinner", tid),
-            `cf-${slots[0]}-meal-type`,
-          )}
-        </label>
-      ) : null}
-
-      {mode === "custom" && !dual ? (
+      {mode === "custom" && !dual && categorized[0] ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {WEEKDAYS.filter((d) => deliveryDays.includes(d.i)).map((d) => (
-            <div key={d.i} className="flex flex-col gap-1 rounded-xl border border-brand-border/60 p-2">
-              <span className="text-xs text-muted-foreground">{d.s}</span>
-              <input
-                type="number"
-                min={1}
-                max={20}
-                data-testid={`cf-day-qty-${d.s}`}
-                disabled={disabled}
-                value={mealSchedule[String(d.i)] || 1}
-                onChange={(e) =>
-                  onDayQuantityChange(d.i, Math.max(1, Math.min(20, Number(e.target.value) || 1)))
-                }
-                className={inputClassName}
-              />
-              {typeUi && (slots[0] === "lunch" || slots[0] === "dinner") ? (
-                typeSelect(
-                  (slotMealTypes[slots[0]]?.[String(d.i)] || "").trim(),
-                  (tid) => onSlotDayMealTypeChange!(slots[0] as "lunch" | "dinner", d.i, tid),
-                  `cf-${slots[0]}-type-${d.s}`,
-                )
-              ) : null}
-            </div>
-          ))}
+          {WEEKDAYS.filter((d) => deliveryDays.includes(d.i)).map((d) => {
+            const slot = categorized[0];
+            const lines = normalizeLines(slotMealTypeLines[slot]?.[String(d.i)] || []);
+            return (
+              <div key={d.i} className="flex flex-col gap-1.5 rounded-xl border border-brand-border/60 p-2">
+                <span className="text-xs text-muted-foreground font-medium">{d.s}</span>
+                <LinesEditor
+                  lines={lines.length ? lines : seedIfEmpty(slot, [])}
+                  onChange={(next) => onSlotDayLinesChange(slot, d.i, next)}
+                  mealTypeOptions={mealTypeOptions}
+                  inputClassName={inputClassName}
+                  disabled={disabled}
+                  testidPrefix={`cf-${slot}-${d.s}`}
+                />
+              </div>
+            );
+          })}
           {!deliveryDays.length ? (
-            <p className="text-xs text-muted-foreground col-span-full">Select days to set quantities.</p>
+            <p className="text-xs text-muted-foreground col-span-full">Select days to set meal lines.</p>
           ) : null}
         </div>
       ) : null}
 
       {mode === "custom" && dual ? (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm" data-testid="cf-dual-custom-qty">
-            <thead>
-              <tr className="text-left text-muted-foreground">
-                <th className="py-1 pr-2 font-medium">Day</th>
-                <th className="py-1 pr-2 font-medium">Lunch</th>
-                {typeUi ? <th className="py-1 pr-2 font-medium">L type</th> : null}
-                <th className="py-1 font-medium">Dinner</th>
-                {typeUi ? <th className="py-1 font-medium">D type</th> : null}
-              </tr>
-            </thead>
-            <tbody>
-              {WEEKDAYS.map((d) => {
-                const lq = slotSchedules.lunch?.[String(d.i)] || 0;
-                const dq = slotSchedules.dinner?.[String(d.i)] || 0;
-                return (
-                  <tr key={d.i} className="border-t border-brand-border/60">
-                    <td className="py-1.5 pr-2">{d.s}</td>
-                    <td className="py-1.5 pr-2">
-                      <input
-                        type="number"
-                        min={0}
-                        max={20}
-                        data-testid={`cf-lunch-qty-${d.s}`}
+        <div className="flex flex-col gap-3" data-testid="cf-dual-custom-qty">
+          {WEEKDAYS.map((d) => {
+            const lunch = normalizeLines(slotMealTypeLines.lunch?.[String(d.i)] || []);
+            const dinner = normalizeLines(slotMealTypeLines.dinner?.[String(d.i)] || []);
+            const active = lunch.length > 0 || dinner.length > 0;
+            return (
+              <div
+                key={d.i}
+                className={`rounded-xl border p-3 flex flex-col gap-3 ${
+                  active ? "border-brand-border" : "border-brand-border/50 bg-brand-surface/30"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-semibold">{d.s}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {active
+                      ? `L ${linesTotalQty(lunch)} · D ${linesTotalQty(dinner)}`
+                      : "Off — add lines to schedule"}
+                  </span>
+                </div>
+                <div>
+                  <span className="label-overline">Lunch</span>
+                  <div className="mt-1">
+                    {lunch.length ? (
+                      <LinesEditor
+                        lines={lunch}
+                        onChange={(next) => onSlotDayLinesChange("lunch", d.i, next)}
+                        mealTypeOptions={mealTypeOptions}
+                        inputClassName={inputClassName}
                         disabled={disabled}
-                        value={lq}
-                        onChange={(e) => {
-                          const v = Math.max(0, Math.min(20, Number(e.target.value) || 0));
-                          onSlotDayQuantityChange("lunch", d.i, v);
-                        }}
-                        className={inputClassName}
+                        testidPrefix={`cf-lunch-${d.s}`}
+                        allowEmpty
                       />
-                    </td>
-                    {typeUi ? (
-                      <td className="py-1.5 pr-2 min-w-[120px]">
-                        {lq >= 1
-                          ? typeSelect(
-                              (slotMealTypes.lunch?.[String(d.i)] || "").trim(),
-                              (tid) => onSlotDayMealTypeChange!("lunch", d.i, tid),
-                              `cf-lunch-type-${d.s}`,
-                            )
-                          : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
-                      </td>
-                    ) : null}
-                    <td className="py-1.5 pr-2">
-                      <input
-                        type="number"
-                        min={0}
-                        max={20}
-                        data-testid={`cf-dinner-qty-${d.s}`}
+                    ) : (
+                      <button
+                        type="button"
+                        data-testid={`cf-lunch-${d.s}-enable`}
                         disabled={disabled}
-                        value={dq}
-                        onChange={(e) => {
-                          const v = Math.max(0, Math.min(20, Number(e.target.value) || 0));
-                          onSlotDayQuantityChange("dinner", d.i, v);
-                        }}
-                        className={inputClassName}
+                        onClick={() => onSlotDayLinesChange("lunch", d.i, seedIfEmpty("lunch", []))}
+                        className="mt-1 h-9 px-3 rounded-full text-xs font-semibold border border-brand-border bg-white cursor-pointer"
+                      >
+                        + Add lunch
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <span className="label-overline">Dinner</span>
+                  <div className="mt-1">
+                    {dinner.length ? (
+                      <LinesEditor
+                        lines={dinner}
+                        onChange={(next) => onSlotDayLinesChange("dinner", d.i, next)}
+                        mealTypeOptions={mealTypeOptions}
+                        inputClassName={inputClassName}
+                        disabled={disabled}
+                        testidPrefix={`cf-dinner-${d.s}`}
+                        allowEmpty
                       />
-                    </td>
-                    {typeUi ? (
-                      <td className="py-1.5 min-w-[120px]">
-                        {dq >= 1
-                          ? typeSelect(
-                              (slotMealTypes.dinner?.[String(d.i)] || "").trim(),
-                              (tid) => onSlotDayMealTypeChange!("dinner", d.i, tid),
-                              `cf-dinner-type-${d.s}`,
-                            )
-                          : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
-                      </td>
-                    ) : null}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <p className="text-xs text-muted-foreground mt-1">
-            0 = no stop for that slot on that day.
-            {typeUi ? " Type “Same as default” uses the Default meal type above." : ""}
+                    ) : (
+                      <button
+                        type="button"
+                        data-testid={`cf-dinner-${d.s}-enable`}
+                        disabled={disabled}
+                        onClick={() => onSlotDayLinesChange("dinner", d.i, seedIfEmpty("dinner", []))}
+                        className="mt-1 h-9 px-3 rounded-full text-xs font-semibold border border-brand-border bg-white cursor-pointer"
+                      >
+                        + Add dinner
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          <p className="text-xs text-muted-foreground">
+            Clear all lines for a slot on a day to skip that stop.
           </p>
         </div>
       ) : null}

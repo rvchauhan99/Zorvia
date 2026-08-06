@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canMutateDeliveries, canMutateAdmin, isDriver as sessionIsDriver } from "@/lib/roles";
-import { fmtDate, todayISO, fmtMealCount, deliveryQty, fmtExtraBadge } from "@/lib/format";
+import { fmtDate, todayISO, fmtMealCount, deliveryQty, fmtExtraBadge, fmtMealTypeLinesBreakdown } from "@/lib/format";
 import { mealSlotBadgeLabel } from "@/lib/mealSlots";
 import StatusPill from "@/components/StatusPill";
 import AppSheet from "@/components/AppSheet";
@@ -333,6 +333,11 @@ export default function Deliveries() {
       quantity: number;
       meal_type_id?: string | null;
       meal_price?: number | null;
+      meal_type_lines?: Array<{
+        meal_type_id: string;
+        quantity: number;
+        meal_price?: number | null;
+      }>;
     }>;
   }) {
     if (!extraTarget || !canAddExtra) return;
@@ -346,6 +351,7 @@ export default function Deliveries() {
           quantity: s.quantity,
           meal_type_id: s.meal_type_id || undefined,
           meal_price: s.meal_price ?? undefined,
+          meal_type_lines: s.meal_type_lines?.length ? s.meal_type_lines : undefined,
         })),
       });
       toast.success("Meal adjusted");
@@ -572,6 +578,11 @@ export default function Deliveries() {
                       ) : null}
                     </span>
                   </div>
+                  {fmtMealTypeLinesBreakdown(d) ? (
+                    <div className="text-[11px] text-muted-foreground mt-0.5" data-testid={`del-lines-${d.id}`}>
+                      {fmtMealTypeLinesBreakdown(d)}
+                    </div>
+                  ) : null}
                   <div className="text-xs text-muted-foreground truncate mt-0.5">
                     {d.address}{d.apartment ? ` · ${d.apartment}` : ""}{d.postal_code ? ` · ${d.postal_code}` : ""}
                   </div>

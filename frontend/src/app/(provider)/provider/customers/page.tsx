@@ -21,8 +21,6 @@ import MealScheduleFields, {
   type ScheduleMode,
   scheduleFromDays,
   daysFromSchedule,
-  detectSlotScheduleMode,
-  uniformQty,
 } from "@/components/MealScheduleFields";
 import {
   type MealSlot,
@@ -30,8 +28,21 @@ import {
   isCategorized,
   isDualSlots,
   normalizeMealSlots,
-  unionDaysFromSlotSchedules,
 } from "@/lib/mealSlots";
+import {
+  type MealTypeLine,
+  type SlotMealTypeLines,
+  broadcastLinesToDays,
+  defaultLine,
+  detectLinesScheduleMode,
+  normalizeLines,
+  parseSlotMealTypeLines,
+  primaryFromTypeLines,
+  serializeSlotMealTypeLines,
+  slotSchedulesFromLines,
+  unionDaysFromLines,
+  uniformLinesForSlot,
+} from "@/lib/mealTypeLines";
 import SearchableSelect from "@/components/SearchableSelect";
 import CityFilterSelect from "@/components/CityFilterSelect";
 import ImportCustomersSheet from "@/components/ImportCustomersSheet";
@@ -40,14 +51,9 @@ import CaAddressFields from "@/components/CaAddressFields";
 
 const empty = {
   name: "", email: "", phone: "", address: "", apartment: "", city: "", province: "ON", country: "CA", postal_code: "",
-  notes: "", delivery_days: [0, 1, 2, 3, 4], meal_type_id: "regular", meal_price: "",
-  meal_schedule: scheduleFromDays([0, 1, 2, 3, 4], 1),
-  meal_quantity: 1,
+  notes: "", delivery_days: [0, 1, 2, 3, 4],
   meal_slots: ["dinner"] as MealSlot[],
-  lunch_quantity: 1,
-  dinner_quantity: 1,
-  slot_schedules: {} as Record<string, Record<string, number>>,
-  slot_meal_types: {} as Record<string, Record<string, string>>,
+  slot_meal_type_lines: {} as SlotMealTypeLines,
   slot_assignments: {
     lunch: { driver_id: "", delivery_sequence: "" },
     dinner: { driver_id: "", delivery_sequence: "" },
@@ -562,8 +568,19 @@ export default function Customers() {
     setEditing(null);
     setRoutePreview(null);
     setFormStep(1);
-    const price = priceForMealType("regular");
-    setForm({ ...empty, joining_date: todayISO(), meal_type_id: "regular", meal_price: String(price) });
+    const days = [0, 1, 2, 3, 4];
+    const seedPrice = priceForMealType("regular");
+    setForm({
+      ...empty,
+      joining_date: todayISO(),
+      delivery_days: days,
+      meal_slots: ["dinner"],
+      slot_meal_type_lines: {
+        dinner: broadcastLinesToDays(days, [
+          defaultLine({ typeId: "regular", qty: 1, price: seedPrice, mealTypeOptions: mealTypes }),
+        ]),
+      },
+    });
     setScheduleMode("same");
     setShowForm(true);
   }
@@ -606,11 +623,20 @@ export default function Customers() {
     if (slots.length === 1 && !ss[slots[0]]) {
       ss[slots[0]] = { ...schedule };
     }
-    const days = isDualSlots(slots)
-      ? unionDaysFromSlotSchedules(ss)
-      : daysFromSchedule(schedule);
-    const lunchSched = ss.lunch || {};
-    const dinnerSched = ss.dinner || {};
+    const linesMap = parseSlotMealTypeLines(c.slot_meal_type_lines, {
+      slots,
+      slotSchedules: ss,
+      mealTypeId: c.meal_type_id || "regular",
+      mealPrice: Number(c.meal_price) || undefined,
+      slotMealTypes:
+        c.slot_meal_types && typeof c.slot_meal_types === "object" ? c.slot_meal_types : {},
+      mealTypeOptions: mealTypes,
+    });
+    const days = unionDaysFromLines(linesMap).length
+      ? unionDaysFromLines(linesMap)
+      : daysFromSchedule(schedule).length
+        ? daysFromSchedule(schedule)
+        : (c.delivery_days || []);
     const sa = c.slot_assignments || {};
     const joining =
       (typeof c.joining_date === "string" && c.joining_date.slice(0, 10)) ||
@@ -621,16 +647,8 @@ export default function Customers() {
       apartment: c.apartment || "", city: c.city || "", province: c.province || "ON", country: c.country || "CA",
       postal_code: c.postal_code || "", notes: c.notes || "",
       delivery_days: days.length ? days : (c.delivery_days || []),
-      meal_type_id: c.meal_type_id || "regular",
-      meal_price: c.meal_price ?? "",
-      meal_schedule: schedule,
-      meal_quantity: uniformQty(slots.length === 1 ? (ss[slots[0]] || schedule) : schedule),
       meal_slots: slots,
-      lunch_quantity: uniformQty(lunchSched) || 1,
-      dinner_quantity: uniformQty(dinnerSched) || 1,
-      slot_schedules: ss,
-      slot_meal_types:
-        c.slot_meal_types && typeof c.slot_meal_types === "object" ? c.slot_meal_types : {},
+      slot_meal_type_lines: linesMap,
       slot_assignments: {
         lunch: {
           driver_id: sa.lunch?.driver_id || "",
@@ -654,7 +672,7 @@ export default function Customers() {
       monthly_plan_id: c.monthly_plan_id || "",
       billing_policy: c.billing_policy || "inherit",
     });
-    setScheduleMode(detectSlotScheduleMode(ss, slots));
+    setScheduleMode(detectLinesScheduleMode(linesMap, slots));
     setShowForm(true);
   }
 
@@ -662,92 +680,78 @@ export default function Customers() {
     setForm((f: any) => {
       const on = f.delivery_days.includes(i);
       const days = on ? f.delivery_days.filter((d: number) => d !== i) : [...f.delivery_days, i];
-      const dual = isDualSlots(f.meal_slots);
-      const defaultId = f.meal_type_id || "regular";
-      const rebroadcast = (slot: "lunch" | "dinner", types: Record<string, Record<string, string>>) => {
-        const vals = Object.values(types[slot] || {}).filter(Boolean);
-        if (!vals.length || new Set(vals).size !== 1) return types;
-        const tid = vals[0];
-        if (!tid || tid === defaultId) {
-          const next = { ...types };
-          delete next[slot];
-          return next;
-        }
-        return {
-          ...types,
-          [slot]: Object.fromEntries(days.map((d: number) => [String(d), tid])),
-        };
-      };
-      if (dual && scheduleMode === "same") {
-        let types = { ...(f.slot_meal_types || {}) };
-        types = rebroadcast("lunch", types);
-        types = rebroadcast("dinner", types);
-        return {
-          ...f,
-          delivery_days: days,
-          slot_schedules: {
-            lunch: scheduleFromDays(days, f.lunch_quantity),
-            dinner: scheduleFromDays(days, f.dinner_quantity),
-          },
-          meal_schedule: scheduleFromDays(days, f.lunch_quantity + f.dinner_quantity),
-          slot_meal_types: types,
-        };
-      }
-      let schedule = { ...f.meal_schedule };
+      const linesMap: SlotMealTypeLines = { ...(f.slot_meal_type_lines || {}) };
+      const slots = normalizeMealSlots(f.meal_slots).filter(
+        (s: string) => s === "lunch" || s === "dinner",
+      ) as Array<"lunch" | "dinner">;
+
       if (on) {
-        delete schedule[String(i)];
+        for (const slot of slots) {
+          const dayMap = { ...(linesMap[slot] || {}) };
+          delete dayMap[String(i)];
+          if (Object.keys(dayMap).length) linesMap[slot] = dayMap;
+          else delete linesMap[slot];
+        }
+      } else if (scheduleMode === "same") {
+        for (const slot of slots) {
+          const existing = uniformLinesForSlot(f.slot_meal_type_lines, slot, f.delivery_days);
+          const seed =
+            existing.length > 0
+              ? existing
+              : [
+                  defaultLine({
+                    typeId: mealTypes[0]?.id || "regular",
+                    qty: 1,
+                    mealTypeOptions: mealTypes,
+                  }),
+                ];
+          linesMap[slot] = broadcastLinesToDays(days, seed);
+        }
       } else {
-        schedule[String(i)] = scheduleMode === "same" ? f.meal_quantity : 1;
-      }
-      if (scheduleMode === "same") {
-        schedule = scheduleFromDays(days, f.meal_quantity);
-      }
-      const slots = normalizeMealSlots(f.meal_slots);
-      const slot_schedules = slots.length === 1 ? { [slots[0]]: schedule } : f.slot_schedules;
-      let types = { ...(f.slot_meal_types || {}) };
-      if (scheduleMode === "same" && (slots[0] === "lunch" || slots[0] === "dinner")) {
-        types = rebroadcast(slots[0], types);
-      } else if (on) {
-        const slotKey = slots[0];
-        if (slotKey && types[slotKey]) {
-          const sm = { ...types[slotKey] };
-          delete sm[String(i)];
-          if (Object.keys(sm).length) types[slotKey] = sm;
-          else delete types[slotKey];
+        for (const slot of slots) {
+          const dayMap = { ...(linesMap[slot] || {}) };
+          dayMap[String(i)] = [
+            defaultLine({
+              typeId: mealTypes[0]?.id || "regular",
+              qty: 1,
+              mealTypeOptions: mealTypes,
+            }),
+          ];
+          linesMap[slot] = dayMap;
         }
       }
-      return { ...f, delivery_days: days, meal_schedule: schedule, slot_schedules, slot_meal_types: types };
+      return { ...f, delivery_days: days, slot_meal_type_lines: linesMap };
     });
   }
 
   function changeMode(mode: ScheduleMode) {
     setScheduleMode(mode);
     setForm((f: any) => {
-      const dual = isDualSlots(f.meal_slots);
+      const slots = normalizeMealSlots(f.meal_slots).filter(
+        (s: string) => s === "lunch" || s === "dinner",
+      ) as Array<"lunch" | "dinner">;
       if (mode === "same") {
-        if (dual) {
-          const lq = f.lunch_quantity || 1;
-          const dq = f.dinner_quantity || 1;
-          return {
-            ...f,
-            lunch_quantity: lq,
-            dinner_quantity: dq,
-            slot_schedules: {
-              lunch: scheduleFromDays(f.delivery_days, lq),
-              dinner: scheduleFromDays(f.delivery_days, dq),
-            },
-            meal_schedule: scheduleFromDays(f.delivery_days, lq + dq),
-          };
+        const days = f.delivery_days.length ? f.delivery_days : [0, 1, 2, 3, 4];
+        const linesMap: SlotMealTypeLines = {};
+        for (const slot of slots) {
+          const existing = uniformLinesForSlot(f.slot_meal_type_lines, slot, days);
+          const seed =
+            existing.length > 0
+              ? existing
+              : normalizeLines(Object.values(f.slot_meal_type_lines?.[slot] || {})[0] || []);
+          const lines =
+            seed.length > 0
+              ? seed
+              : [
+                  defaultLine({
+                    typeId: mealTypes[0]?.id || "regular",
+                    qty: 1,
+                    mealTypeOptions: mealTypes,
+                  }),
+                ];
+          linesMap[slot] = broadcastLinesToDays(days, lines);
         }
-        const qty = uniformQty(f.meal_schedule) || f.meal_quantity || 1;
-        const schedule = scheduleFromDays(f.delivery_days, qty);
-        const slots = normalizeMealSlots(f.meal_slots);
-        return {
-          ...f,
-          meal_quantity: qty,
-          meal_schedule: schedule,
-          slot_schedules: slots.length === 1 ? { [slots[0]]: schedule } : f.slot_schedules,
-        };
+        return { ...f, delivery_days: days, slot_meal_type_lines: linesMap };
       }
       return f;
     });
@@ -756,129 +760,54 @@ export default function Customers() {
   function changeMealSlots(slots: MealSlot[]) {
     setForm((f: any) => {
       const next = normalizeMealSlots(slots);
-      if (isDualSlots(next)) {
-        const days = f.delivery_days.length ? f.delivery_days : [0, 1, 2, 3, 4];
-        const lq = f.lunch_quantity || 1;
-        const dq = f.dinner_quantity || 1;
-        return {
-          ...f,
-          meal_slots: next,
-          delivery_days: days,
-          lunch_quantity: lq,
-          dinner_quantity: dq,
-          slot_schedules: {
-            lunch: scheduleFromDays(days, lq),
-            dinner: scheduleFromDays(days, dq),
-          },
-          meal_schedule: scheduleFromDays(days, lq + dq),
-        };
+      const days = f.delivery_days.length ? f.delivery_days : [0, 1, 2, 3, 4];
+      const cats = next.filter((s: string) => s === "lunch" || s === "dinner") as Array<"lunch" | "dinner">;
+      const linesMap: SlotMealTypeLines = {};
+      for (const slot of cats) {
+        const existing = f.slot_meal_type_lines?.[slot];
+        if (existing && Object.keys(existing).length) {
+          linesMap[slot] = existing;
+        } else {
+          linesMap[slot] = broadcastLinesToDays(days, [
+            defaultLine({
+              typeId: mealTypes[0]?.id || "regular",
+              qty: 1,
+              mealTypeOptions: mealTypes,
+            }),
+          ]);
+        }
       }
-      const schedule = scheduleFromDays(f.delivery_days, f.meal_quantity || 1);
       return {
         ...f,
         meal_slots: next,
-        meal_schedule: schedule,
-        slot_schedules: { [next[0]]: schedule },
+        delivery_days: days,
+        slot_meal_type_lines: linesMap,
       };
     });
   }
 
-  function changeQuantity(qty: number) {
+  function changeUniformSlotLines(slot: "lunch" | "dinner", lines: MealTypeLine[]) {
     setForm((f: any) => {
-      const schedule = scheduleFromDays(f.delivery_days, qty);
-      const slots = normalizeMealSlots(f.meal_slots);
-      return {
-        ...f,
-        meal_quantity: qty,
-        meal_schedule: schedule,
-        slot_schedules: slots.length === 1 ? { [slots[0]]: schedule } : f.slot_schedules,
-      };
-    });
-  }
-
-  function changeLunchQuantity(qty: number) {
-    setForm((f: any) => ({
-      ...f,
-      lunch_quantity: qty,
-      slot_schedules: {
-        ...f.slot_schedules,
-        lunch: scheduleFromDays(f.delivery_days, qty),
-        dinner: scheduleFromDays(f.delivery_days, f.dinner_quantity || 1),
-      },
-      meal_schedule: scheduleFromDays(f.delivery_days, qty + (f.dinner_quantity || 1)),
-    }));
-  }
-
-  function changeDinnerQuantity(qty: number) {
-    setForm((f: any) => ({
-      ...f,
-      dinner_quantity: qty,
-      slot_schedules: {
-        ...f.slot_schedules,
-        lunch: scheduleFromDays(f.delivery_days, f.lunch_quantity || 1),
-        dinner: scheduleFromDays(f.delivery_days, qty),
-      },
-      meal_schedule: scheduleFromDays(f.delivery_days, (f.lunch_quantity || 1) + qty),
-    }));
-  }
-
-  function changeDayQuantity(day: number, qty: number) {
-    setForm((f: any) => {
-      const schedule = { ...f.meal_schedule, [String(day)]: qty };
-      const slots = normalizeMealSlots(f.meal_slots);
-      return {
-        ...f,
-        meal_schedule: schedule,
-        slot_schedules: slots.length === 1 ? { [slots[0]]: schedule } : f.slot_schedules,
-      };
-    });
-  }
-
-  function changeSlotDayQuantity(slot: "lunch" | "dinner", day: number, qty: number) {
-    setForm((f: any) => {
-      const prev = { ...(f.slot_schedules?.[slot] || {}) };
-      if (qty < 1) delete prev[String(day)];
-      else prev[String(day)] = qty;
-      const slot_schedules = { ...f.slot_schedules, [slot]: prev };
-      const days = unionDaysFromSlotSchedules(slot_schedules);
-      const types = { ...(f.slot_meal_types || {}) };
-      if (qty < 1) {
-        const slotTypes = { ...(types[slot] || {}) };
-        delete slotTypes[String(day)];
-        if (Object.keys(slotTypes).length) types[slot] = slotTypes;
-        else delete types[slot];
-      }
-      return { ...f, slot_schedules, delivery_days: days, slot_meal_types: types };
-    });
-  }
-
-  function changeUniformSlotMealType(slot: "lunch" | "dinner", typeId: string) {
-    setForm((f: any) => {
-      const defaultId = f.meal_type_id || "regular";
-      const tid = (typeId || "").trim();
       const days = f.delivery_days.length ? f.delivery_days : [];
-      const types = { ...(f.slot_meal_types || {}) };
-      const slotMap: Record<string, string> = {};
-      if (tid && tid !== defaultId) {
-        for (const d of days) slotMap[String(d)] = tid;
-      }
-      if (Object.keys(slotMap).length) types[slot] = slotMap;
-      else delete types[slot];
-      return { ...f, slot_meal_types: types };
+      const cleaned = normalizeLines(lines);
+      const linesMap = { ...(f.slot_meal_type_lines || {}) };
+      if (cleaned.length && days.length) linesMap[slot] = broadcastLinesToDays(days, cleaned);
+      else delete linesMap[slot];
+      return { ...f, slot_meal_type_lines: linesMap };
     });
   }
 
-  function changeSlotDayMealType(slot: "lunch" | "dinner", day: number, typeId: string) {
+  function changeSlotDayLines(slot: "lunch" | "dinner", day: number, lines: MealTypeLine[]) {
     setForm((f: any) => {
-      const defaultId = f.meal_type_id || "regular";
-      const tid = (typeId || "").trim();
-      const types = { ...(f.slot_meal_types || {}) };
-      const slotMap = { ...(types[slot] || {}) };
-      if (!tid || tid === defaultId) delete slotMap[String(day)];
-      else slotMap[String(day)] = tid;
-      if (Object.keys(slotMap).length) types[slot] = slotMap;
-      else delete types[slot];
-      return { ...f, slot_meal_types: types };
+      const cleaned = normalizeLines(lines);
+      const linesMap = { ...(f.slot_meal_type_lines || {}) };
+      const dayMap = { ...(linesMap[slot] || {}) };
+      if (cleaned.length) dayMap[String(day)] = cleaned;
+      else delete dayMap[String(day)];
+      if (Object.keys(dayMap).length) linesMap[slot] = dayMap;
+      else delete linesMap[slot];
+      const delivery_days = unionDaysFromLines(linesMap);
+      return { ...f, slot_meal_type_lines: linesMap, delivery_days };
     });
   }
 
@@ -943,9 +872,13 @@ export default function Customers() {
         meal_slots: slots,
       };
       if (form.email) payload.email = form.email;
-      if (form.meal_type_id) payload.meal_type_id = form.meal_type_id;
-      if (form.meal_price !== "" && form.meal_price != null) payload.meal_price = Number(form.meal_price);
-      payload.slot_meal_types = form.slot_meal_types || {};
+      const linesPayload = serializeSlotMealTypeLines(form.slot_meal_type_lines || {});
+      const derivedSchedules = slotSchedulesFromLines(form.slot_meal_type_lines || {});
+      const primary = primaryFromTypeLines(form.slot_meal_type_lines || {});
+      payload.meal_type_id = primary.meal_type_id;
+      payload.meal_price = primary.meal_price;
+      payload.slot_meal_type_lines = linesPayload;
+      payload.slot_schedules = derivedSchedules;
       if (canMutate) {
         if (form.opening_balance !== "" && form.opening_balance != null) {
           payload.opening_balance = Number(form.opening_balance);
@@ -967,13 +900,9 @@ export default function Customers() {
       }
 
       if (dual) {
-        if (scheduleMode === "same") {
-          payload.delivery_days = form.delivery_days;
-          payload.lunch_meal_quantity = form.lunch_quantity;
-          payload.dinner_meal_quantity = form.dinner_quantity;
-        } else {
-          payload.slot_schedules = form.slot_schedules;
-        }
+        payload.delivery_days = form.delivery_days.length
+          ? form.delivery_days
+          : unionDaysFromLines(form.slot_meal_type_lines);
         payload.slot_assignments = {
           lunch: {
             driver_id: form.slot_assignments?.lunch?.driver_id || null,
@@ -993,10 +922,8 @@ export default function Customers() {
           },
         };
       } else {
-        const schedule =
-          scheduleMode === "same"
-            ? scheduleFromDays(form.delivery_days, form.meal_quantity)
-            : form.meal_schedule;
+        const primarySlot = slots[0] || "dinner";
+        const schedule = derivedSchedules[primarySlot] || {};
         payload.delivery_days = daysFromSchedule(schedule);
         payload.meal_schedule = schedule;
         payload.slot_assignments = {
@@ -1477,40 +1404,6 @@ export default function Customers() {
           <label className="flex flex-col gap-1.5"><span className="label-overline">Phone</span><input data-testid="cf-phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className={input} /></label>
           <label className="flex flex-col gap-1.5"><span className="label-overline">Email</span><input type="email" data-testid="cf-email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={input} /></label>
           {canMutate ? (
-            <>
-              <label className="flex flex-col gap-1.5">
-                <span className="label-overline">Default meal type</span>
-                <span className="text-[11px] text-muted-foreground -mt-1">Used unless overridden per day/slot below</span>
-                <SearchableSelect
-                  testid="cf-meal-type"
-                  inputClassName={input}
-                  value={form.meal_type_id || "regular"}
-                  onChange={(tid) => {
-                    setForm({
-                      ...form,
-                      meal_type_id: tid,
-                      meal_price: String(priceForMealType(tid)),
-                    });
-                  }}
-                  options={mealTypes.map((t) => ({ value: t.id, label: t.name }))}
-                  placeholder="Search meal type…"
-                />
-              </label>
-              <label className="flex flex-col gap-1.5">
-                <span className="label-overline">Price per meal (CAD)</span>
-                <input
-                  type="number"
-                  step="0.5"
-                  data-testid="cf-price"
-                  value={form.meal_price}
-                  onChange={(e) => setForm({ ...form, meal_price: e.target.value })}
-                  className={input}
-                  placeholder="From meal type if empty"
-                />
-              </label>
-            </>
-          ) : null}
-          {canMutate ? (
             <label className="flex flex-col gap-1.5 sm:col-span-2">
               <span className="label-overline">Opening balance (CAD)</span>
               <input
@@ -1658,23 +1551,11 @@ export default function Customers() {
               mealSlots={form.meal_slots}
               onMealSlotsChange={changeMealSlots}
               deliveryDays={form.delivery_days}
-              mealSchedule={form.meal_schedule}
-              mealQuantity={form.meal_quantity}
-              lunchQuantity={form.lunch_quantity}
-              dinnerQuantity={form.dinner_quantity}
-              slotSchedules={form.slot_schedules}
-              mealPrice={form.meal_price}
               onToggleDay={toggleDay}
-              onQuantityChange={changeQuantity}
-              onLunchQuantityChange={changeLunchQuantity}
-              onDinnerQuantityChange={changeDinnerQuantity}
-              onDayQuantityChange={changeDayQuantity}
-              onSlotDayQuantityChange={changeSlotDayQuantity}
-              defaultMealTypeId={form.meal_type_id || "regular"}
               mealTypeOptions={mealTypes}
-              slotMealTypes={form.slot_meal_types || {}}
-              onUniformSlotMealTypeChange={changeUniformSlotMealType}
-              onSlotDayMealTypeChange={changeSlotDayMealType}
+              slotMealTypeLines={form.slot_meal_type_lines || {}}
+              onUniformSlotLinesChange={changeUniformSlotLines}
+              onSlotDayLinesChange={changeSlotDayLines}
               inputClassName={input}
             />
           </div>

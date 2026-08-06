@@ -12,12 +12,25 @@ import {
   projectDaySummaryMulti,
   type DaySummary as PreviewDaySummary,
 } from "@/lib/adjustPreview";
+import {
+  MAX_MEAL_TYPE_LINES,
+  MAX_LINE_TOTAL_QTY,
+  formatMealTypeLinesBreakdown,
+  linesTotalQty,
+  priceForTypeId,
+} from "@/lib/mealTypeLines";
 
-const MAX_QTY = 20;
+const MAX_QTY = MAX_LINE_TOTAL_QTY;
 
 export type MealTypeOption = { id: string; name: string; price: number };
 
 export type DaySummary = PreviewDaySummary;
+
+export type AdjustMealTypeLineArg = {
+  meal_type_id: string;
+  quantity: number;
+  meal_price?: number | null;
+};
 
 export type AdjustConfirmArgs = {
   date: string;
@@ -25,6 +38,7 @@ export type AdjustConfirmArgs = {
   meal_slot?: string | null;
   meal_type_id?: string | null;
   meal_price?: number | null;
+  meal_type_lines?: AdjustMealTypeLineArg[];
 };
 
 export type AdjustDaySlotArg = {
@@ -32,6 +46,7 @@ export type AdjustDaySlotArg = {
   quantity: number;
   meal_type_id?: string | null;
   meal_price?: number | null;
+  meal_type_lines?: AdjustMealTypeLineArg[];
 };
 
 export type AdjustDayConfirmArgs = {
@@ -51,6 +66,13 @@ type AdjustContextSlot = {
     meal_type_name: string;
     meal_price: number;
     extra_quantity?: number;
+    meal_type_lines?: Array<{
+      meal_type_id?: string;
+      meal_type_name?: string;
+      quantity?: number;
+      meal_price?: number;
+      unit_price?: number;
+    }>;
   } | null;
   suggested_meal_type_id: string;
   suggested_meal_type_name: string;
@@ -65,10 +87,14 @@ type AdjustContext = {
   slots: AdjustContextSlot[];
 };
 
-type SlotEdit = {
-  quantity: number;
+type LineEdit = {
   meal_type_id: string;
+  quantity: number;
   priceStr: string;
+};
+
+type SlotEdit = {
+  lines: LineEdit[];
 };
 
 function slotLabel(slot: string) {
@@ -83,6 +109,11 @@ function scheduleChip(slot: AdjustContextSlot, qty: number) {
   }
   if (slot.scheduled) return `Scheduled · base ${slot.schedule_base}`;
   return "Off-schedule";
+}
+
+function slotQty(edit: SlotEdit | undefined): number {
+  if (!edit?.lines?.length) return 0;
+  return edit.lines.reduce((s, ln) => s + Math.max(0, Math.floor(ln.quantity) || 0), 0);
 }
 
 export default function ExtraMealsSheet({
@@ -167,30 +198,54 @@ export default function ExtraMealsSheet({
         const next: Record<string, SlotEdit> = {};
         for (const s of context.slots || []) {
           const existing = s.existing;
-          let qty = 0;
+          let lines: LineEdit[] = [];
           if (existing) {
-            // Trust existing: cancelled → 0 (never fall back to schedule_base)
-            qty =
-              existing.status === "cancelled"
-                ? 0
-                : Math.max(0, Number(existing.quantity) || 0);
+            if (existing.status === "cancelled") {
+              lines = [];
+            } else if (Array.isArray(existing.meal_type_lines) && existing.meal_type_lines.length) {
+              lines = existing.meal_type_lines.map((ln) => {
+                const tid = String(ln.meal_type_id || existing.meal_type_id || "regular");
+                const price =
+                  Number(ln.meal_price ?? ln.unit_price) ||
+                  existing.meal_price ||
+                  context.meal_price ||
+                  0;
+                return {
+                  meal_type_id: tid,
+                  quantity: Math.min(MAX_QTY, Math.max(1, Number(ln.quantity) || 1)),
+                  priceStr: price > 0 ? String(price) : "",
+                };
+              });
+            } else {
+              const qty = Math.max(0, Number(existing.quantity) || 0);
+              if (qty >= 1) {
+                const tid = existing.meal_type_id || s.suggested_meal_type_id || "regular";
+                const price = existing.meal_price || context.meal_price || 0;
+                lines = [
+                  {
+                    meal_type_id: String(tid),
+                    quantity: Math.min(MAX_QTY, qty),
+                    priceStr: price > 0 ? String(price) : "",
+                  },
+                ];
+              }
+            }
           } else if (s.scheduled) {
-            qty = Math.max(0, Number(s.schedule_base) || 0);
+            const qty = Math.max(0, Number(s.schedule_base) || 0);
+            if (qty >= 1) {
+              const tid = s.suggested_meal_type_id || defaultMealTypeId || "regular";
+              const price =
+                priceForTypeId(mealTypes, String(tid), context.meal_price || mealPrice || 12);
+              lines = [
+                {
+                  meal_type_id: String(tid),
+                  quantity: Math.min(MAX_QTY, qty),
+                  priceStr: price > 0 ? String(price) : "",
+                },
+              ];
+            }
           }
-          const tid =
-            (existing && existing.status !== "cancelled" && existing.meal_type_id) ||
-            existing?.meal_type_id ||
-            s.suggested_meal_type_id ||
-            "regular";
-          const price =
-            existing?.meal_price ||
-            context.meal_price ||
-            0;
-          next[s.meal_slot] = {
-            quantity: Math.min(MAX_QTY, qty),
-            meal_type_id: String(tid),
-            priceStr: price > 0 ? String(price) : "",
-          };
+          next[s.meal_slot] = { lines };
         }
         setEdits(next);
       } catch (err: any) {
@@ -205,7 +260,7 @@ export default function ExtraMealsSheet({
     return () => {
       cancelled = true;
     };
-  }, [open, date, customerId, summaryMode]);
+  }, [open, date, customerId, summaryMode, defaultMealTypeId, mealTypes, mealPrice]);
 
   const slots = ctx?.slots || [];
   const crmPrice = ctx?.meal_price ?? mealPrice ?? 0;
@@ -224,23 +279,81 @@ export default function ExtraMealsSheet({
     setDaySummary(null);
   }
 
+  function updateLine(slot: string, idx: number, patch: Partial<LineEdit>) {
+    setEdits((prev) => {
+      const cur = prev[slot] || { lines: [] };
+      const lines = cur.lines.map((ln, i) => (i === idx ? { ...ln, ...patch } : ln));
+      return { ...prev, [slot]: { lines } };
+    });
+    setDaySummary(null);
+  }
+
+  function removeLine(slot: string, idx: number) {
+    setEdits((prev) => {
+      const cur = prev[slot] || { lines: [] };
+      const lines = cur.lines.filter((_, i) => i !== idx);
+      return { ...prev, [slot]: { lines } };
+    });
+    setDaySummary(null);
+  }
+
+  function addLine(slot: string, suggestedTypeId?: string) {
+    setEdits((prev) => {
+      const cur = prev[slot] || { lines: [] };
+      if (cur.lines.length >= MAX_MEAL_TYPE_LINES) return prev;
+      const total = slotQty(cur);
+      if (total >= MAX_QTY) return prev;
+      const used = new Set(cur.lines.map((ln) => ln.meal_type_id));
+      const nextType =
+        mealTypes.find((t) => t.id === suggestedTypeId && !used.has(t.id)) ||
+        mealTypes.find((t) => !used.has(t.id)) ||
+        mealTypes[0] ||
+        { id: "regular", name: "Regular", price: crmPrice || 12 };
+      const price = nextType.price || crmPrice || 12;
+      return {
+        ...prev,
+        [slot]: {
+          lines: [
+            ...cur.lines,
+            {
+              meal_type_id: nextType.id,
+              quantity: 1,
+              priceStr: price > 0 ? String(price) : "",
+            },
+          ],
+        },
+      };
+    });
+    setDaySummary(null);
+  }
+
+  function clearSlot(slot: string) {
+    updateSlot(slot, { lines: [] });
+  }
+
   function buildConfirmArgs(): AdjustDayConfirmArgs {
     return {
       date,
       slots: slots
         .filter((s) => s.editable)
         .map((s) => {
-          const e = edits[s.meal_slot] || {
-            quantity: 0,
-            meal_type_id: s.suggested_meal_type_id,
-            priceStr: "",
-          };
+          const e = edits[s.meal_slot] || { lines: [] };
+          const qty = Math.min(MAX_QTY, Math.max(0, slotQty(e)));
+          const lines = e.lines
+            .filter((ln) => Math.floor(ln.quantity) >= 1)
+            .map((ln) => ({
+              meal_type_id: ln.meal_type_id,
+              quantity: Math.min(MAX_QTY, Math.max(1, Math.floor(ln.quantity))),
+              meal_price:
+                allowPriceOverride && Number(ln.priceStr) > 0 ? Number(ln.priceStr) : null,
+            }));
+          const primary = lines[0];
           return {
             meal_slot: s.meal_slot,
-            quantity: Math.min(MAX_QTY, Math.max(0, Math.floor(e.quantity))),
-            meal_type_id: e.meal_type_id || null,
-            meal_price:
-              allowPriceOverride && Number(e.priceStr) > 0 ? Number(e.priceStr) : null,
+            quantity: qty,
+            meal_type_id: primary?.meal_type_id || s.suggested_meal_type_id || null,
+            meal_price: primary?.meal_price ?? null,
+            meal_type_lines: qty > 0 ? lines : [],
           };
         }),
     };
@@ -267,19 +380,29 @@ export default function ExtraMealsSheet({
       const patches = slots
         .filter((s) => s.editable)
         .map((s) => {
-          const ed = edits[s.meal_slot];
-          const tid = ed?.meal_type_id || s.suggested_meal_type_id || "regular";
-          const tname =
-            mealTypes.find((t) => t.id === tid)?.name ||
-            s.suggested_meal_type_name ||
-            tid;
+          const ed = edits[s.meal_slot] || { lines: [] };
+          const qty = Math.min(MAX_QTY, Math.max(0, slotQty(ed)));
+          const lines = ed.lines
+            .filter((ln) => Math.floor(ln.quantity) >= 1)
+            .map((ln) => {
+              const tid = ln.meal_type_id || s.suggested_meal_type_id || "regular";
+              const tname = mealTypes.find((t) => t.id === tid)?.name || tid;
+              return {
+                meal_type_id: tid,
+                meal_type_name: tname,
+                quantity: Math.min(MAX_QTY, Math.max(1, Math.floor(ln.quantity))),
+              };
+            });
+          const primary = lines[0];
           return {
             customer_id: customerId || ctx.customer_id || "",
             customer_name: displayName || undefined,
             meal_slot: s.meal_slot,
-            meal_type_id: tid,
-            meal_type_name: tname,
-            quantity: Math.min(MAX_QTY, Math.max(0, Math.floor(ed?.quantity ?? 0))),
+            meal_type_id: primary?.meal_type_id || s.suggested_meal_type_id || "regular",
+            meal_type_name:
+              primary?.meal_type_name || s.suggested_meal_type_name || "Meal",
+            quantity: qty,
+            meal_type_lines: lines,
           };
         });
       let projected: DaySummary;
@@ -330,9 +453,20 @@ export default function ExtraMealsSheet({
 
   const locked = busy || previewLoading || ctxLoading;
   const editableCount = slots.filter((s) => s.editable).length;
-  // silence unused legacy props used only for seeding when context fails
   void currentQty;
   void mealSlots;
+
+  // Group customer pack rows by slot for summary display
+  const customerBySlot = useMemo(() => {
+    const map = new Map<string, typeof customerLines>();
+    for (const line of customerLines) {
+      const slot = String(line.meal_slot || "dinner");
+      const arr = map.get(slot) || [];
+      arr.push(line);
+      map.set(slot, arr);
+    }
+    return map;
+  }, [customerLines]);
 
   return (
     <AppSheet
@@ -422,17 +556,33 @@ export default function ExtraMealsSheet({
               ))}
             </div>
           ) : null}
-          {customerLines.length > 0 ? (
+          {customerBySlot.size > 0 ? (
             <div className="rounded-xl border border-brand-border px-4 py-3 space-y-2" data-testid="adjust-summary-customer-line">
               <div className="label-overline">
                 {summaryMode === "consumer" ? "Your stops" : displayName || "Customer"}
               </div>
-              {customerLines.map((line) => (
-                <div key={`${line.meal_slot}-${line.meal_type_id}`} className="text-sm font-medium">
-                  {line.meal_type_name || "Meal"} · {slotLabel(String(line.meal_slot || "dinner"))} ·{" "}
-                  {line.quantity ?? 1}×
-                </div>
-              ))}
+              {[...customerBySlot.entries()].map(([slot, rows]) => {
+                const breakdown = rows.length > 1
+                  ? rows.map((r) => `${r.meal_type_name || "Meal"}×${r.quantity ?? 1}`).join(" + ")
+                  : null;
+                const primary = rows[0];
+                const total = rows.reduce((s, r) => s + Math.max(1, Number(r.quantity) || 1), 0);
+                return (
+                  <div key={slot} className="text-sm font-medium">
+                    {slotLabel(slot)} · {total}×
+                    {breakdown ? (
+                      <span className="block text-xs text-muted-foreground font-normal mt-0.5">
+                        {breakdown}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground font-normal">
+                        {" "}
+                        · {primary?.meal_type_name || "Meal"}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">No active stops for this customer after cancel(s).</p>
@@ -450,8 +600,8 @@ export default function ExtraMealsSheet({
       ) : (
         <div className="flex flex-col gap-4">
           <p className="text-sm text-muted-foreground">
-            Edit the day plan (qty + type per slot), then review the summary before saving.
-            Set quantity to 0 to cancel a pending stop.
+            Edit type×qty{allowPriceOverride ? "×price" : ""} lines per slot, then review the summary before saving.
+            Clear all lines (qty 0) to cancel a pending stop.
           </p>
           {showDate ? (
             <label className="flex flex-col gap-1.5">
@@ -485,17 +635,17 @@ export default function ExtraMealsSheet({
             <p className="text-sm text-muted-foreground">No lunch/dinner slots for this customer.</p>
           ) : null}
           {slots.map((slot) => {
-            const ed = edits[slot.meal_slot] || {
-              quantity: 0,
-              meal_type_id: slot.suggested_meal_type_id,
-              priceStr: "",
-            };
-            const qty = Math.min(MAX_QTY, Math.max(0, Math.floor(ed.quantity)));
-            const unit = allowPriceOverride
-              ? Number(ed.priceStr) || 0
-              : Number(mealTypes.find((t) => t.id === ed.meal_type_id)?.price ?? crmPrice) || 0;
+            const ed = edits[slot.meal_slot] || { lines: [] };
+            const qty = Math.min(MAX_QTY, Math.max(0, slotQty(ed)));
             const highlighted = highlightSlot === slot.meal_slot;
             const readOnly = !slot.editable;
+            const unitTotal = ed.lines.reduce((sum, ln) => {
+              const q = Math.max(0, Math.floor(ln.quantity) || 0);
+              const unit = allowPriceOverride
+                ? Number(ln.priceStr) || 0
+                : Number(mealTypes.find((t) => t.id === ln.meal_type_id)?.price ?? crmPrice) || 0;
+              return sum + q * unit;
+            }, 0);
             return (
               <div
                 key={slot.meal_slot}
@@ -511,91 +661,180 @@ export default function ExtraMealsSheet({
                 {readOnly ? (
                   <p className="text-sm text-muted-foreground">
                     {slot.existing?.status || "locked"} · {slot.existing?.quantity ?? 0}×{" "}
-                    {slot.existing?.meal_type_name || ""}
+                    {formatMealTypeLinesBreakdown(slot.existing?.meal_type_lines) ||
+                      slot.existing?.meal_type_name ||
+                      ""}
                   </p>
                 ) : (
                   <>
-                    {mealTypes.length > 0 ? (
-                      <label className="flex flex-col gap-1.5">
-                        <span className="label-overline">Meal type</span>
-                        <SearchableSelect
-                          testid={`adjust-meal-type-${slot.meal_slot}`}
-                          inputClassName="h-11 px-3 rounded-xl border border-brand-border bg-white text-sm"
-                          value={ed.meal_type_id}
-                          onChange={(next) => {
-                            const t = mealTypes.find((x) => x.id === next);
-                            updateSlot(slot.meal_slot, {
-                              meal_type_id: next,
-                              ...(t && allowPriceOverride ? { priceStr: String(t.price) } : {}),
-                            });
-                          }}
-                          disabled={locked}
-                          options={mealTypes.map((t) => ({
-                            value: t.id,
-                            label: `${t.name} (${fmtCAD(t.price)})`,
-                          }))}
-                          placeholder="Search meal type…"
-                        />
-                      </label>
-                    ) : null}
-                    <label className="flex flex-col gap-1.5">
-                      <span className="label-overline">Quantity</span>
-                      <div className="flex items-center gap-3">
-                        <button
-                          type="button"
-                          data-testid={`adjust-qty-dec-${slot.meal_slot}`}
-                          className="h-11 w-11 rounded-full border border-brand-border bg-white text-lg font-semibold cursor-pointer hover:bg-brand-surface disabled:opacity-40"
-                          onClick={() => updateSlot(slot.meal_slot, { quantity: Math.max(0, qty - 1) })}
-                          disabled={qty <= 0 || locked}
-                        >
-                          −
-                        </button>
-                        <input
-                          data-testid={`adjust-qty-${slot.meal_slot}`}
-                          type="number"
-                          min={0}
-                          max={MAX_QTY}
-                          className="h-11 w-16 text-center rounded-xl border border-brand-border bg-white text-sm font-semibold"
-                          value={qty}
-                          onChange={(e) => {
-                            const v = Math.floor(Number(e.target.value) || 0);
-                            updateSlot(slot.meal_slot, {
-                              quantity: Math.min(MAX_QTY, Math.max(0, v)),
-                            });
-                          }}
-                        />
-                        <button
-                          type="button"
-                          data-testid={`adjust-qty-inc-${slot.meal_slot}`}
-                          className="h-11 w-11 rounded-full border border-brand-border bg-white text-lg font-semibold cursor-pointer hover:bg-brand-surface disabled:opacity-40"
-                          onClick={() => updateSlot(slot.meal_slot, { quantity: Math.min(MAX_QTY, qty + 1) })}
-                          disabled={qty >= MAX_QTY || locked}
-                        >
-                          +
-                        </button>
+                    {ed.lines.map((ln, idx) => (
+                      <div
+                        key={`${slot.meal_slot}-line-${idx}`}
+                        className="flex flex-col gap-2 rounded-lg border border-brand-border/60 p-2.5"
+                        data-testid={`adjust-line-${slot.meal_slot}-${idx}`}
+                      >
+                        {mealTypes.length > 0 ? (
+                          <label className="flex flex-col gap-1.5">
+                            <span className="label-overline">Meal type</span>
+                            <SearchableSelect
+                              testid={
+                                idx === 0
+                                  ? `adjust-meal-type-${slot.meal_slot}`
+                                  : `adjust-meal-type-${slot.meal_slot}-${idx}`
+                              }
+                              inputClassName="h-11 px-3 rounded-xl border border-brand-border bg-white text-sm"
+                              value={ln.meal_type_id}
+                              onChange={(next) => {
+                                const t = mealTypes.find((x) => x.id === next);
+                                updateLine(slot.meal_slot, idx, {
+                                  meal_type_id: next,
+                                  ...(t && allowPriceOverride ? { priceStr: String(t.price) } : {}),
+                                });
+                              }}
+                              disabled={locked}
+                              options={mealTypes.map((t) => ({
+                                value: t.id,
+                                label: `${t.name} (${fmtCAD(t.price)})`,
+                              }))}
+                              placeholder="Search meal type…"
+                            />
+                          </label>
+                        ) : null}
+                        <label className="flex flex-col gap-1.5">
+                          <span className="label-overline">Quantity</span>
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              data-testid={
+                                idx === 0
+                                  ? `adjust-qty-dec-${slot.meal_slot}`
+                                  : `adjust-qty-dec-${slot.meal_slot}-${idx}`
+                              }
+                              className="h-11 w-11 rounded-full border border-brand-border bg-white text-lg font-semibold cursor-pointer hover:bg-brand-surface disabled:opacity-40"
+                              onClick={() =>
+                                updateLine(slot.meal_slot, idx, {
+                                  quantity: Math.max(1, ln.quantity - 1),
+                                })
+                              }
+                              disabled={ln.quantity <= 1 || locked}
+                            >
+                              −
+                            </button>
+                            <input
+                              data-testid={
+                                idx === 0
+                                  ? `adjust-qty-${slot.meal_slot}`
+                                  : `adjust-qty-${slot.meal_slot}-${idx}`
+                              }
+                              type="number"
+                              min={1}
+                              max={MAX_QTY}
+                              className="h-11 w-16 text-center rounded-xl border border-brand-border bg-white text-sm font-semibold"
+                              value={ln.quantity}
+                              onChange={(e) => {
+                                const v = Math.floor(Number(e.target.value) || 1);
+                                updateLine(slot.meal_slot, idx, {
+                                  quantity: Math.min(MAX_QTY, Math.max(1, v)),
+                                });
+                              }}
+                            />
+                            <button
+                              type="button"
+                              data-testid={
+                                idx === 0
+                                  ? `adjust-qty-inc-${slot.meal_slot}`
+                                  : `adjust-qty-inc-${slot.meal_slot}-${idx}`
+                              }
+                              className="h-11 w-11 rounded-full border border-brand-border bg-white text-lg font-semibold cursor-pointer hover:bg-brand-surface disabled:opacity-40"
+                              onClick={() =>
+                                updateLine(slot.meal_slot, idx, {
+                                  quantity: Math.min(MAX_QTY, ln.quantity + 1),
+                                })
+                              }
+                              disabled={ln.quantity >= MAX_QTY || locked || qty >= MAX_QTY}
+                            >
+                              +
+                            </button>
+                            {ed.lines.length > 1 || qty > 0 ? (
+                              <button
+                                type="button"
+                                data-testid={`adjust-line-remove-${slot.meal_slot}-${idx}`}
+                                className="h-11 px-3 rounded-full border border-brand-border bg-white text-xs font-medium cursor-pointer hover:bg-brand-surface"
+                                onClick={() => removeLine(slot.meal_slot, idx)}
+                                disabled={locked}
+                              >
+                                Remove
+                              </button>
+                            ) : null}
+                          </div>
+                        </label>
+                        {allowPriceOverride ? (
+                          <label className="flex flex-col gap-1.5">
+                            <span className="label-overline">Unit price (CAD)</span>
+                            <input
+                              data-testid={
+                                idx === 0
+                                  ? `adjust-meal-price-${slot.meal_slot}`
+                                  : `adjust-meal-price-${slot.meal_slot}-${idx}`
+                              }
+                              type="number"
+                              min={0.01}
+                              step={0.01}
+                              className="h-11 px-3 rounded-xl border border-brand-border bg-white text-sm"
+                              value={ln.priceStr}
+                              onChange={(e) =>
+                                updateLine(slot.meal_slot, idx, { priceStr: e.target.value })
+                              }
+                              disabled={locked}
+                            />
+                          </label>
+                        ) : null}
                       </div>
-                      <span className="text-xs text-muted-foreground">
-                        {qty === 0 ? "Cancel this stop (0)" : `Absolute count (0–${MAX_QTY})`}
-                      </span>
-                    </label>
-                    {allowPriceOverride ? (
-                      <label className="flex flex-col gap-1.5">
-                        <span className="label-overline">Unit price (CAD)</span>
-                        <input
-                          data-testid={`adjust-meal-price-${slot.meal_slot}`}
-                          type="number"
-                          min={0.01}
-                          step={0.01}
-                          className="h-11 px-3 rounded-xl border border-brand-border bg-white text-sm"
-                          value={ed.priceStr}
-                          onChange={(e) => updateSlot(slot.meal_slot, { priceStr: e.target.value })}
+                    ))}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        data-testid={`adjust-add-type-${slot.meal_slot}`}
+                        className="h-9 px-3 rounded-full text-xs font-semibold border border-brand-border bg-white cursor-pointer hover:bg-brand-surface disabled:opacity-40"
+                        onClick={() => addLine(slot.meal_slot, slot.suggested_meal_type_id)}
+                        disabled={
+                          locked ||
+                          ed.lines.length >= MAX_MEAL_TYPE_LINES ||
+                          qty >= MAX_QTY
+                        }
+                      >
+                        + Add type
+                      </button>
+                      {ed.lines.length > 0 ? (
+                        <button
+                          type="button"
+                          data-testid={`adjust-cancel-slot-${slot.meal_slot}`}
+                          className="h-9 px-3 rounded-full text-xs font-medium border border-brand-border bg-white text-muted-foreground cursor-pointer hover:bg-brand-surface"
+                          onClick={() => clearSlot(slot.meal_slot)}
                           disabled={locked}
-                        />
-                      </label>
-                    ) : null}
-                    {unit > 0 && qty > 0 ? (
+                        >
+                          Cancel stop (0)
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          data-testid={`adjust-enable-slot-${slot.meal_slot}`}
+                          className="h-9 px-3 rounded-full text-xs font-semibold border border-brand-border bg-white cursor-pointer hover:bg-brand-surface"
+                          onClick={() => addLine(slot.meal_slot, slot.suggested_meal_type_id)}
+                          disabled={locked}
+                        >
+                          + Add stop
+                        </button>
+                      )}
+                      <span className="text-xs text-muted-foreground">
+                        {qty === 0
+                          ? "Cancel this stop (0)"
+                          : `Total ${qty} meal${qty === 1 ? "" : "s"} (0–${MAX_QTY})`}
+                      </span>
+                    </div>
+                    {unitTotal > 0 && qty > 0 && allowPriceOverride ? (
                       <p className="text-xs text-muted-foreground">
-                        {qty} × {fmtCAD(unit)} = {fmtCAD(unit * qty)}
+                        Line total {fmtCAD(unitTotal)}
                       </p>
                     ) : null}
                   </>

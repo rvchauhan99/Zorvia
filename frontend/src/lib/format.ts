@@ -38,6 +38,30 @@ export function fmtMealCount(d: { quantity?: number } | null | undefined) {
   return qty === 1 ? "1 meal" : `${qty} meals`;
 }
 
+/** Breakdown when a stop has multiple type×qty lines, e.g. "Regular×2 + Jain×1". */
+export function fmtMealTypeLinesBreakdown(
+  d:
+    | {
+        meal_type_lines?: Array<{
+          meal_type_id?: string;
+          meal_type_name?: string;
+          quantity?: number;
+        }>;
+      }
+    | null
+    | undefined,
+): string {
+  const lines = d?.meal_type_lines;
+  if (!Array.isArray(lines) || lines.length <= 1) return "";
+  return lines
+    .map((ln) => {
+      const name = (ln.meal_type_name || ln.meal_type_id || "Meal").trim();
+      const q = Math.max(1, Math.floor(Number(ln.quantity) || 1));
+      return `${name}×${q}`;
+    })
+    .join(" + ");
+}
+
 /** Extra portion badge, e.g. "+2 extra"; empty string when none. */
 export function fmtExtraBadge(d: { extra_quantity?: number } | null | undefined) {
   const n = Math.max(0, Math.floor(Number(d?.extra_quantity) || 0));

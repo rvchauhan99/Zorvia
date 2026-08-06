@@ -11,6 +11,12 @@ export type DaySummaryPackLine = {
   notes?: string;
   status?: string;
   route_order?: number | null;
+  meal_type_lines?: Array<{
+    meal_type_id?: string;
+    meal_type_name?: string;
+    quantity?: number;
+    meal_price?: number;
+  }>;
 };
 
 export type DaySummary = {
@@ -28,14 +34,22 @@ export type DaySummary = {
   pack_list?: DaySummaryPackLine[];
 };
 
+export type AdjustPreviewLine = {
+  meal_type_id: string;
+  meal_type_name: string;
+  quantity: number;
+};
+
 export type AdjustPreviewPatch = {
   customer_id: string;
   customer_name?: string;
   meal_slot: string;
   meal_type_id: string;
   meal_type_name: string;
-  /** Absolute qty; 0 removes the customer's line for that slot from the projected pack. */
+  /** Absolute qty; 0 removes the customer's line(s) for that slot from the projected pack. */
   quantity: number;
+  /** When set (multi-type), expand into one pack row per type line. */
+  meal_type_lines?: AdjustPreviewLine[];
 };
 
 function normSlot(slot?: string | null): string {
@@ -64,22 +78,30 @@ export function recomputeDaySummaryFromPack(
   let totalMeals = 0;
   let totalStops = 0;
 
+  // Group by customer×slot for stop counting (multi-type lines share one stop)
+  const stopKeys = new Set<string>();
+
   for (const row of packList) {
     const qty = Math.max(1, Number(row.quantity) || 1);
     const slot = normSlot(row.meal_slot);
     const mtId = String(row.meal_type_id || "regular");
     const mtName = String(row.meal_type_name || mtId).trim() || mtId;
+    const cid = String(row.customer_id || "");
+    const stopKey = `${cid}::${slot}`;
+    const isNewStop = !stopKeys.has(stopKey);
+    if (isNewStop) stopKeys.add(stopKey);
+
     totalMeals += qty;
-    totalStops += 1;
+    if (isNewStop) totalStops += 1;
     if (!by_slot[slot]) by_slot[slot] = { meals: 0, stops: 0 };
     by_slot[slot].meals += qty;
-    by_slot[slot].stops += 1;
+    if (isNewStop) by_slot[slot].stops += 1;
 
     const mk = `${mtId}::${slot}`;
     const existing = matrixKey.get(mk);
     if (existing) {
       existing.meals += qty;
-      existing.stops += 1;
+      if (isNewStop) existing.stops += 1;
       existing.meal_type_name = mtName;
     } else {
       matrixKey.set(mk, {
@@ -94,7 +116,7 @@ export function recomputeDaySummaryFromPack(
     const tt = typeTotals.get(mtId);
     if (tt) {
       tt.meals += qty;
-      tt.stops += 1;
+      if (isNewStop) tt.stops += 1;
       tt.name = mtName;
     } else {
       typeTotals.set(mtId, { id: mtId, name: mtName, meals: qty, stops: 1 });
@@ -121,8 +143,8 @@ export function recomputeDaySummaryFromPack(
 
 /**
  * Apply a proposed adjust onto an existing kitchen-summary (or empty base).
- * Qty 0 removes the customer's line for that meal_slot.
- * Otherwise replaces the line for that slot, or appends if missing.
+ * Qty 0 removes the customer's line(s) for that meal_slot.
+ * Multi-type patches expand into one pack row per line (same customer×slot).
  */
 export function projectDaySummary(
   base: DaySummary | null | undefined,
@@ -133,31 +155,43 @@ export function projectDaySummary(
   const prev = Array.isArray(base?.pack_list) ? [...base!.pack_list!] : [];
   const cid = patch.customer_id;
   const qty = Math.max(0, Math.floor(Number(patch.quantity) || 0));
+  const multi = Array.isArray(patch.meal_type_lines)
+    ? patch.meal_type_lines.filter((ln) => Math.floor(Number(ln.quantity) || 0) >= 1)
+    : null;
 
-  if (qty === 0) {
-    const next = prev.filter(
-      (row) => !(row.customer_id === cid && normSlot(row.meal_slot) === slot),
-    );
+  // Always clear existing pack rows for this customer×slot first
+  const without = prev.filter(
+    (row) => !(row.customer_id === cid && normSlot(row.meal_slot) === slot),
+  );
+
+  if (qty === 0 || (multi && !multi.length)) {
+    return recomputeDaySummaryFromPack(date, without);
+  }
+
+  if (multi && multi.length) {
+    const next = [
+      ...without,
+      ...multi.map((ln) => ({
+        customer_id: cid,
+        customer_name: patch.customer_name || "",
+        meal_type_id: ln.meal_type_id,
+        meal_type_name: ln.meal_type_name,
+        meal_slot: slot,
+        quantity: Math.max(1, Math.floor(Number(ln.quantity) || 1)),
+        status: "pending" as const,
+        meal_type_lines: multi.map((x) => ({
+          meal_type_id: x.meal_type_id,
+          meal_type_name: x.meal_type_name,
+          quantity: Math.max(1, Math.floor(Number(x.quantity) || 1)),
+        })),
+      })),
+    ];
     return recomputeDaySummaryFromPack(date, next);
   }
 
-  let replaced = false;
-  const next: DaySummaryPackLine[] = prev.map((row) => {
-    if (row.customer_id !== cid) return row;
-    if (normSlot(row.meal_slot) !== slot) return row;
-    replaced = true;
-    return {
-      ...row,
-      meal_type_id: patch.meal_type_id,
-      meal_type_name: patch.meal_type_name,
-      meal_slot: slot,
-      quantity: qty,
-      customer_name: patch.customer_name || row.customer_name,
-      status: row.status || "pending",
-    };
-  });
-  if (!replaced) {
-    next.push({
+  const next: DaySummaryPackLine[] = [
+    ...without,
+    {
       customer_id: cid,
       customer_name: patch.customer_name || "",
       meal_type_id: patch.meal_type_id,
@@ -165,8 +199,8 @@ export function projectDaySummary(
       meal_slot: slot,
       quantity: qty,
       status: "pending",
-    });
-  }
+    },
+  ];
   return recomputeDaySummaryFromPack(date, next);
 }
 
@@ -197,6 +231,7 @@ export function projectConsumerDaySummary(
     quantity?: number;
     status?: string;
     delivery_date?: string;
+    meal_type_lines?: DaySummaryPackLine["meal_type_lines"];
   }>,
   patch: AdjustPreviewPatch | AdjustPreviewPatch[],
 ): DaySummary {
@@ -210,16 +245,35 @@ export function projectConsumerDaySummary(
   const cname = patches[0]?.customer_name || "";
   const base: DaySummary = {
     date,
-    pack_list: dayRows.map((d) => ({
-      delivery_id: d.id,
-      customer_id: d.customer_id || cid,
-      customer_name: d.customer_name || cname || "",
-      meal_type_id: d.meal_type_id,
-      meal_type_name: d.meal_type_name,
-      meal_slot: d.meal_slot || "dinner",
-      quantity: d.quantity,
-      status: d.status,
-    })),
+    pack_list: dayRows.flatMap((d) => {
+      const lines = Array.isArray(d.meal_type_lines) ? d.meal_type_lines : null;
+      if (lines && lines.length > 1) {
+        return lines.map((ln) => ({
+          delivery_id: d.id,
+          customer_id: d.customer_id || cid,
+          customer_name: d.customer_name || cname || "",
+          meal_type_id: ln.meal_type_id || d.meal_type_id,
+          meal_type_name: ln.meal_type_name || d.meal_type_name,
+          meal_slot: d.meal_slot || "dinner",
+          quantity: ln.quantity ?? d.quantity,
+          status: d.status,
+          meal_type_lines: lines,
+        }));
+      }
+      return [
+        {
+          delivery_id: d.id,
+          customer_id: d.customer_id || cid,
+          customer_name: d.customer_name || cname || "",
+          meal_type_id: d.meal_type_id,
+          meal_type_name: d.meal_type_name,
+          meal_slot: d.meal_slot || "dinner",
+          quantity: d.quantity,
+          status: d.status,
+          meal_type_lines: lines || undefined,
+        },
+      ];
+    }),
   };
   return projectDaySummaryMulti(base, patches);
 }

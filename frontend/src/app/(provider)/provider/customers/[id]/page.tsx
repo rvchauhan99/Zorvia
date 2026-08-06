@@ -158,6 +158,11 @@ export default function CustomerDetail() {
       quantity: number;
       meal_type_id?: string | null;
       meal_price?: number | null;
+      meal_type_lines?: Array<{
+        meal_type_id: string;
+        quantity: number;
+        meal_price?: number | null;
+      }>;
     }>;
   }) {
     if (!id) return;
@@ -171,6 +176,7 @@ export default function CustomerDetail() {
           quantity: s.quantity,
           meal_type_id: s.meal_type_id || undefined,
           meal_price: s.meal_price ?? undefined,
+          meal_type_lines: s.meal_type_lines?.length ? s.meal_type_lines : undefined,
         })),
       });
       toast.success("Meal adjusted");

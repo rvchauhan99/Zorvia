@@ -90,8 +90,8 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 | Filters (UI) | Compact horizontal chips: all \| pending \| paused \| inactive \| high_balance (with counts) |
 | Mobile list | Whole customer card opens Analysis (`/provider/customers/{id}?tab=analysis`); action buttons (including Payment history) stop propagation |
 | Delivery days | Weekday indices `0=Mon … 6=Sun` |
-| Meal type | Provider Settings define Regular / Jain / Fasting (+ custom); CRM has a **Default** type plus optional per weekday×slot overrides so lunch/dinner (or Mon vs Tue) can differ; changing Default auto-fills unit price (editable); import still uses one `meal_type` column |
-| Meal price | Per-customer CAD unit price on generated deliveries; defaults from selected meal type’s price when omitted |
+| Meal type | Settings catalog prices. CRM schedule uses **type×qty×price lines** per slot×day (no top Default type / meal price). Import: one `meal_type` → `slot_meal_type_lines`. Generate/kitchen/adjust expand lines; outstanding Σ(line qty × price). |
+| Meal price | Per-line unit CAD on schedule/delivery snapshots (defaults from Settings type price; editable in CRM/Adjust); charge = Σ(line qty × price) |
 | Opening balance | Signed CAD on create/edit/import: positive = outstanding owed at onboard; negative = advance credit; included in displayed outstanding |
 | Joining date | Optional `joining_date` (defaults to today on create/import); distinct from system `created_at`. Outstanding never accrues before `created_at` — use `opening_balance` for prior debt |
 | Pause / resume | Date window; deliveries in window generated as `paused`; resume restores future `paused` → `pending` |
@@ -109,7 +109,7 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 | Delivery proof photo | Optional camera/gallery on **single** mark delivered (`/provider/deliveries` + dashboard quick Deliver); stored as `delivery_image_url` (R2 `deliveries/` prefix or base64 fallback); **Mark all delivered** skips photo |
 | Delivery proof view | Thumbnail + **View** on deliveries list (Delivered/All tabs), customer 360 Deliveries tab, and dashboard delivered rows; in-app sheet with full image + open in new tab |
 | Consumer cancel | Upcoming `pending` only; blocked for past dates; within `cutoff_hours` before assumed **local noon** (provider timezone) |
-| Adjust meal | **Day plan** UI: lunch/dinner rows (qty + type). Loads adjust-context; Save via adjust-day. Qty **0–20**; **0 cancels** pending stop; reopen keeps cancelled at qty 0 (no schedule-base resurrect). Dual customers get both rows. Preview multi-slot kitchen plan. Legacy single adjust / additive extra remain on API. |
+| Adjust meal | **Day plan** with per-slot **type×qty×price lines** (e.g. Regular×1 + Fasting×1). Loads adjust-context; Save via adjust-day. Qty **0** cancels pending stop. Preview expands lines into kitchen plan. |
 | Kitchen cook plan | `/provider/kitchen` for admin/driver/viewer; `GET /reports/kitchen-summary` (shared helper also returned from adjust); counts by meal type × slot for pending+delivered; pack list with CRM notes; delivery snapshots `meal_type_id`/`meal_type_name` at generate/adjust. **Print** downloads `GET /reports/kitchen-print.pdf` for the **full** filter-matched pack list (not only the current UI page), generated server-side via Playwright Chromium. |
 
 ### 4.5 Payments (Interac)
