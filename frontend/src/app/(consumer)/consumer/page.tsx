@@ -77,18 +77,22 @@ export default function ConsumerHome() {
 
   async function confirmAdjust(args: {
     date: string;
-    quantity: number;
-    meal_slot?: string | null;
-    meal_type_id?: string | null;
-    meal_price?: number | null;
+    slots: Array<{
+      meal_slot: string;
+      quantity: number;
+      meal_type_id?: string | null;
+      meal_price?: number | null;
+    }>;
   }) {
     setExtraBusy(true);
     try {
-      const { data } = await api.post("/consumer/deliveries/adjust", {
+      const { data } = await api.post("/consumer/deliveries/adjust-day", {
         date: args.date,
-        quantity: args.quantity,
-        meal_slot: args.meal_slot || undefined,
-        meal_type_id: args.meal_type_id || undefined,
+        slots: args.slots.map((s) => ({
+          meal_slot: s.meal_slot,
+          quantity: s.quantity,
+          meal_type_id: s.meal_type_id || undefined,
+        })),
       });
       toast.success("Meal adjusted");
       load();
@@ -112,8 +116,6 @@ export default function ConsumerHome() {
   const extraOpen = extraTarget !== null;
   const extraDefaultDate =
     extraTarget && extraTarget !== "new" ? extraTarget.delivery_date : todayISO();
-  const extraCurrentQty =
-    extraTarget && extraTarget !== "new" ? Math.max(1, Number(extraTarget.quantity) || 1) : 1;
 
   if (loading && !me) {
     return (
@@ -378,7 +380,6 @@ export default function ConsumerHome() {
         defaultDate={extraDefaultDate}
         showDate={extraTarget === "new"}
         mealPrice={mealPrice}
-        currentQty={extraCurrentQty}
         cutoffHours={cutoffHours}
         busy={extraBusy}
         confirmTestId="c-adjust-confirm"
@@ -395,13 +396,6 @@ export default function ConsumerHome() {
           (extraTarget && extraTarget !== "new" && extraTarget.meal_type_id) ||
           me?.customer?.meal_type_id ||
           "regular"
-        }
-        mealSlots={
-          Array.isArray(me?.customer?.meal_slots) && me.customer.meal_slots.length
-            ? me.customer.meal_slots
-            : extraTarget && extraTarget !== "new" && extraTarget.meal_slot
-              ? [extraTarget.meal_slot]
-              : ["dinner"]
         }
         defaultMealSlot={
           extraTarget && extraTarget !== "new"

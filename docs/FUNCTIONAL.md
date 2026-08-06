@@ -90,7 +90,7 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 | Filters (UI) | Compact horizontal chips: all \| pending \| paused \| inactive \| high_balance (with counts) |
 | Mobile list | Whole customer card opens Analysis (`/provider/customers/{id}?tab=analysis`); action buttons (including Payment history) stop propagation |
 | Delivery days | Weekday indices `0=Mon … 6=Sun` |
-| Meal type | Provider Settings define Regular / Jain / Fasting (+ custom); CRM defaults to **Regular**; changing type auto-fills price from settings (editable) |
+| Meal type | Provider Settings define Regular / Jain / Fasting (+ custom); CRM has a **Default** type plus optional per weekday×slot overrides so lunch/dinner (or Mon vs Tue) can differ; changing Default auto-fills unit price (editable); import still uses one `meal_type` column |
 | Meal price | Per-customer CAD unit price on generated deliveries; defaults from selected meal type’s price when omitted |
 | Opening balance | Signed CAD on create/edit/import: positive = outstanding owed at onboard; negative = advance credit; included in displayed outstanding |
 | Joining date | Optional `joining_date` (defaults to today on create/import); distinct from system `created_at`. Outstanding never accrues before `created_at` — use `opening_balance` for prior debt |
@@ -109,7 +109,7 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 | Delivery proof photo | Optional camera/gallery on **single** mark delivered (`/provider/deliveries` + dashboard quick Deliver); stored as `delivery_image_url` (R2 `deliveries/` prefix or base64 fallback); **Mark all delivered** skips photo |
 | Delivery proof view | Thumbnail + **View** on deliveries list (Delivered/All tabs), customer 360 Deliveries tab, and dashboard delivered rows; in-app sheet with full image + open in new tab |
 | Consumer cancel | Upcoming `pending` only; blocked for past dates; within `cutoff_hours` before assumed **local noon** (provider timezone) |
-| Adjust meal | Consumer or provider admin sets **absolute** tiffin count (1–20) and/or **meal type** on a pending stop for a date; `extra_quantity = max(0, quantity − schedule base)`; one stop per customer×date×slot; consumer uses same cutoff as cancel; type change refreshes `meal_price` from provider meal types (provider may override price); UI is **preview-then-save** (Show summary projects kitchen/own-day plan without writing; Save calls adjust); adjust response still includes day summary. Legacy `POST …/extra` remains as additive wrapper. |
+| Adjust meal | **Day plan** UI: lunch/dinner rows (qty + type). Loads adjust-context; Save via adjust-day. Qty **0–20**; **0 cancels** pending stop; reopen keeps cancelled at qty 0 (no schedule-base resurrect). Dual customers get both rows. Preview multi-slot kitchen plan. Legacy single adjust / additive extra remain on API. |
 | Kitchen cook plan | `/provider/kitchen` for admin/driver/viewer; `GET /reports/kitchen-summary` (shared helper also returned from adjust); counts by meal type × slot for pending+delivered; pack list with CRM notes; delivery snapshots `meal_type_id`/`meal_type_name` at generate/adjust. **Print** downloads `GET /reports/kitchen-print.pdf` for the **full** filter-matched pack list (not only the current UI page), generated server-side via Playwright Chromium. |
 
 ### 4.5 Payments (Interac)
@@ -298,7 +298,7 @@ WhatsApp menu shares are **not** included in the SaaS subscription.
 9. **Payments:** Submit amount must be `> 0`; verify/reject only from `pending`.  
 10. **Pause:** `end` must be on or after `start`.
 11. **Meal schedule:** Provider sets weekday→quantity; consumers may change days only (new days get qty 1).  
-12. **Adjust meal:** Absolute `quantity` (1–20) and optional meal type on pending stops; consumer before cancel cutoff; provider admin anytime for future/today; dual-slot days require `meal_slot`; off-schedule days create a pending stop; UI shows a projected day summary before Save (write happens only on confirm); adjust response includes day cook summary. Legacy extras endpoint adds to current quantity via the same helper.
+12. **Adjust meal (day plan):** Per-slot qty + type; qty 0 cancels pending; reopen stays cancelled at 0 until raised; adjust-context + adjust-day; multi-slot preview before Save.
 
 ---
 

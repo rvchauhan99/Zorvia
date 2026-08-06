@@ -60,6 +60,7 @@ interface FormState {
   lunch_quantity: number;
   dinner_quantity: number;
   slot_schedules: Record<string, Record<string, number>>;
+  slot_meal_types: Record<string, Record<string, string>>;
   slot_assignments: {
     lunch: { driver_id: string; delivery_sequence: string };
     dinner: { driver_id: string; delivery_sequence: string };
@@ -93,6 +94,7 @@ const EMPTY: FormState = {
   lunch_quantity: 1,
   dinner_quantity: 1,
   slot_schedules: {},
+  slot_meal_types: {},
   slot_assignments: {
     lunch: { driver_id: "", delivery_sequence: "" },
     dinner: { driver_id: "", delivery_sequence: "" },
@@ -426,6 +428,8 @@ export default function CustomerFormPage({
       lunch_quantity: uniformQty(lunchSched) || 1,
       dinner_quantity: uniformQty(dinnerSched) || 1,
       slot_schedules: ss,
+      slot_meal_types:
+        c.slot_meal_types && typeof c.slot_meal_types === "object" ? c.slot_meal_types : {},
       slot_assignments: {
         lunch: {
           driver_id: sa.lunch?.driver_id || "",
@@ -590,7 +594,25 @@ export default function CustomerFormPage({
       const on = f.delivery_days.includes(i);
       const days = on ? f.delivery_days.filter((d) => d !== i) : [...f.delivery_days, i];
       const dual = isDualSlots(f.meal_slots);
+      const defaultId = f.meal_type_id || "regular";
+      const rebroadcast = (slot: "lunch" | "dinner", types: Record<string, Record<string, string>>) => {
+        const vals = Object.values(types[slot] || {}).filter(Boolean);
+        if (!vals.length || new Set(vals).size !== 1) return types;
+        const tid = vals[0];
+        if (!tid || tid === defaultId) {
+          const next = { ...types };
+          delete next[slot];
+          return next;
+        }
+        return {
+          ...types,
+          [slot]: Object.fromEntries(days.map((d) => [String(d), tid])),
+        };
+      };
       if (dual && scheduleMode === "same") {
+        let types = { ...(f.slot_meal_types || {}) };
+        types = rebroadcast("lunch", types);
+        types = rebroadcast("dinner", types);
         return {
           ...f,
           delivery_days: days,
@@ -599,6 +621,7 @@ export default function CustomerFormPage({
             dinner: scheduleFromDays(days, f.dinner_quantity),
           },
           meal_schedule: scheduleFromDays(days, f.lunch_quantity + f.dinner_quantity),
+          slot_meal_types: types,
         };
       }
       let schedule = { ...f.meal_schedule };
@@ -607,7 +630,19 @@ export default function CustomerFormPage({
       if (scheduleMode === "same") schedule = scheduleFromDays(days, f.meal_quantity);
       const slots = normalizeMealSlots(f.meal_slots);
       const slot_schedules = slots.length === 1 ? { [slots[0]]: schedule } : f.slot_schedules;
-      return { ...f, delivery_days: days, meal_schedule: schedule, slot_schedules };
+      let types = { ...(f.slot_meal_types || {}) };
+      if (scheduleMode === "same" && (slots[0] === "lunch" || slots[0] === "dinner")) {
+        types = rebroadcast(slots[0], types);
+      } else if (on) {
+        const slotKey = slots[0];
+        if (slotKey && types[slotKey]) {
+          const sm = { ...types[slotKey] };
+          delete sm[String(i)];
+          if (Object.keys(sm).length) types[slotKey] = sm;
+          else delete types[slotKey];
+        }
+      }
+      return { ...f, delivery_days: days, meal_schedule: schedule, slot_schedules, slot_meal_types: types };
     });
   }
 
@@ -732,7 +767,44 @@ export default function CustomerFormPage({
       else prev[String(day)] = qty;
       const slot_schedules = { ...f.slot_schedules, [slot]: prev };
       const days = unionDaysFromSlotSchedules(slot_schedules);
-      return { ...f, slot_schedules, delivery_days: days };
+      const types = { ...(f.slot_meal_types || {}) };
+      if (qty < 1) {
+        const slotTypes = { ...(types[slot] || {}) };
+        delete slotTypes[String(day)];
+        if (Object.keys(slotTypes).length) types[slot] = slotTypes;
+        else delete types[slot];
+      }
+      return { ...f, slot_schedules, delivery_days: days, slot_meal_types: types };
+    });
+  }
+
+  function changeUniformSlotMealType(slot: "lunch" | "dinner", typeId: string) {
+    setForm((f) => {
+      const defaultId = f.meal_type_id || "regular";
+      const tid = (typeId || "").trim();
+      const days = f.delivery_days.length ? f.delivery_days : [];
+      const types = { ...(f.slot_meal_types || {}) };
+      const slotMap: Record<string, string> = {};
+      if (tid && tid !== defaultId) {
+        for (const d of days) slotMap[String(d)] = tid;
+      }
+      if (Object.keys(slotMap).length) types[slot] = slotMap;
+      else delete types[slot];
+      return { ...f, slot_meal_types: types };
+    });
+  }
+
+  function changeSlotDayMealType(slot: "lunch" | "dinner", day: number, typeId: string) {
+    setForm((f) => {
+      const defaultId = f.meal_type_id || "regular";
+      const tid = (typeId || "").trim();
+      const types = { ...(f.slot_meal_types || {}) };
+      const slotMap = { ...(types[slot] || {}) };
+      if (!tid || tid === defaultId) delete slotMap[String(day)];
+      else slotMap[String(day)] = tid;
+      if (Object.keys(slotMap).length) types[slot] = slotMap;
+      else delete types[slot];
+      return { ...f, slot_meal_types: types };
     });
   }
 
@@ -826,6 +898,7 @@ export default function CustomerFormPage({
       if (form.meal_type_id) payload.meal_type_id = form.meal_type_id;
       if (form.meal_price !== "" && form.meal_price != null)
         payload.meal_price = Number(form.meal_price);
+      payload.slot_meal_types = form.slot_meal_types || {};
       if (canMutate) {
         payload.opening_balance =
           form.opening_balance !== "" && form.opening_balance != null
@@ -1183,7 +1256,7 @@ export default function CustomerFormPage({
             <div className={`grid grid-cols-1 sm:grid-cols-2 gap-3`}>
               {canMutate ? (
                 <>
-                  <FieldLabel label="Meal type">
+                  <FieldLabel label="Default meal type" hint="Used for all days/slots unless overridden below">
                     <SearchableSelect
                       testid="cf-meal-type"
                       inputClassName={inp()}
@@ -1326,6 +1399,11 @@ export default function CustomerFormPage({
                   onDinnerQuantityChange={changeDinnerQuantity}
                   onDayQuantityChange={changeDayQuantity}
                   onSlotDayQuantityChange={changeSlotDayQuantity}
+                  defaultMealTypeId={form.meal_type_id || "regular"}
+                  mealTypeOptions={mealTypes}
+                  slotMealTypes={form.slot_meal_types}
+                  onUniformSlotMealTypeChange={changeUniformSlotMealType}
+                  onSlotDayMealTypeChange={changeSlotDayMealType}
                   inputClassName={inputBase}
                 />
               </div>
@@ -1653,8 +1731,11 @@ export default function CustomerFormPage({
                 </div>
                 <div className="px-4 py-3 grid grid-cols-2 md:grid-cols-4 gap-y-2 gap-x-4">
                    <div className="flex flex-col gap-0.5">
-                     <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Meal Type</span>
+                     <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Default meal type</span>
                      <span className="text-sm text-foreground font-medium truncate">{mealTypes.find(t => t.id === form.meal_type_id)?.name || form.meal_type_id || "—"}</span>
+                     {Object.keys(form.slot_meal_types || {}).length ? (
+                       <span className="text-[10px] text-muted-foreground">+ weekday/slot overrides</span>
+                     ) : null}
                    </div>
                    <div className="flex flex-col gap-0.5">
                      <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Billing Policy</span>

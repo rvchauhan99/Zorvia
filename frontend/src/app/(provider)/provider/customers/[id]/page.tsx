@@ -153,21 +153,25 @@ export default function CustomerDetail() {
 
   async function confirmAdjust(args: {
     date: string;
-    quantity: number;
-    meal_slot?: string | null;
-    meal_type_id?: string | null;
-    meal_price?: number | null;
+    slots: Array<{
+      meal_slot: string;
+      quantity: number;
+      meal_type_id?: string | null;
+      meal_price?: number | null;
+    }>;
   }) {
     if (!id) return;
     setExtraBusy(true);
     try {
-      const { data } = await api.post("/deliveries/adjust", {
+      const { data } = await api.post("/deliveries/adjust-day", {
         customer_id: id,
         date: args.date,
-        quantity: args.quantity,
-        meal_slot: args.meal_slot || undefined,
-        meal_type_id: args.meal_type_id || undefined,
-        meal_price: args.meal_price ?? undefined,
+        slots: args.slots.map((s) => ({
+          meal_slot: s.meal_slot,
+          quantity: s.quantity,
+          meal_type_id: s.meal_type_id || undefined,
+          meal_price: s.meal_price ?? undefined,
+        })),
       });
       toast.success("Meal adjusted");
       load();
@@ -452,10 +456,15 @@ export default function CustomerDetail() {
                 {c.billing?.billing_mode === "monthly_flat" ? "Meal type (kitchen)" : "Meal type / price"}
               </div>
               <div className="font-medium" data-testid="customer-meal-type-price">
-                {(c.meal_type_id || "regular").replace(/^\w/, (ch: string) => ch.toUpperCase())}
+                Default: {(c.meal_type_id || "regular").replace(/^\w/, (ch: string) => ch.toUpperCase())}
                 {" · "}
                 {fmtCAD(c.meal_price)}{" "}
                 <span className="text-sm text-muted-foreground font-normal">{customerSlotSummary(c)}</span>
+                {c.slot_meal_types && Object.keys(c.slot_meal_types).length ? (
+                  <div className="text-xs text-muted-foreground font-normal mt-0.5" data-testid="customer-slot-meal-types">
+                    Custom types by day/slot
+                  </div>
+                ) : null}
               </div>
             </div>
           ) : null}
@@ -958,7 +967,6 @@ export default function CustomerDetail() {
         mealPrice={showMoney ? Number(c.meal_price) || 0 : undefined}
         mealTypes={mealTypes}
         defaultMealTypeId={c.meal_type_id || "regular"}
-        mealSlots={Array.isArray(c.meal_slots) && c.meal_slots.length ? c.meal_slots : ["dinner"]}
         defaultMealSlot={
           Array.isArray(c.meal_slots) && c.meal_slots.length === 1 ? c.meal_slots[0] : null
         }
