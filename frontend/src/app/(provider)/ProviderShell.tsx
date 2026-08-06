@@ -159,7 +159,7 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
   }, [loadBillingNav]);
 
   if (!ready && !session) {
-    return <PageLoader testid="provider-shell-loading" className="min-h-screen bg-brand-cream" />;
+    return <PageLoader testid="provider-shell-loading" className="min-h-dvh bg-brand-cream" />;
   }
 
   if (ready && (!session || session.user_type !== "provider")) {
@@ -167,7 +167,7 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
   }
 
   if (!session || session.user_type !== "provider") {
-    return <PageLoader testid="provider-shell-loading" className="min-h-screen bg-brand-cream" />;
+    return <PageLoader testid="provider-shell-loading" className="min-h-dvh bg-brand-cream" />;
   }
 
   const status = sub?.status;
@@ -208,10 +208,10 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
           : null;
 
   return (
-    <div className="min-h-screen bg-brand-cream text-foreground overflow-x-hidden">
-      {/* Desktop sidebar */}
-      <aside className="hidden lg:flex fixed inset-y-0 left-0 w-64 border-r border-brand-border bg-white flex-col p-6 gap-2">
-        <div className="mb-6 flex items-start justify-between gap-2">
+    <div className="min-h-dvh bg-brand-cream text-foreground overflow-x-hidden">
+      {/* Desktop sidebar: header / scrollable nav / pinned footer */}
+      <aside className="hidden lg:flex fixed inset-y-0 left-0 z-30 w-64 border-r border-brand-border bg-white flex-col overflow-hidden px-4 py-5 gap-2">
+        <div className="shrink-0 mb-4 flex items-start justify-between gap-2">
           <div>
             <img
               src="/brand/mealhq-logo-horizontal.png"
@@ -226,7 +226,7 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
             {isDesktop ? <NotificationBell testid="provider-notification-bell" /> : null}
           </div>
         </div>
-        <nav className="flex flex-col gap-1">
+        <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col gap-1">
           {sideItems.map((it) => {
             const isActive = it.end ? pathname === it.to : pathname.startsWith(it.to);
             const badge =
@@ -326,7 +326,7 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
             </>
           ) : null}
         </nav>
-        <div className="mt-auto">
+        <div className="shrink-0 pt-2 border-t border-brand-border">
           <button
             data-testid="side-logout-btn"
             onClick={() => { void logout().then(() => router.push("/login")); }}
