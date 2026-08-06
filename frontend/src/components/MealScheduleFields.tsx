@@ -59,6 +59,8 @@ export function detectSlotScheduleMode(
   return "same";
 }
 
+type MealTypeOption = { id: string; name: string };
+
 type Props = {
   mode: ScheduleMode;
   onModeChange: (mode: ScheduleMode) => void;
@@ -79,9 +81,30 @@ type Props = {
   onDinnerQuantityChange: (qty: number) => void;
   onDayQuantityChange: (day: number, qty: number) => void;
   onSlotDayQuantityChange: (slot: "lunch" | "dinner", day: number, qty: number) => void;
+  /** Default CRM meal type (overrides leave empty / "Same as default"). */
+  defaultMealTypeId?: string;
+  mealTypeOptions?: MealTypeOption[];
+  /** Sparse overrides: slot → weekday → meal_type_id */
+  slotMealTypes?: Record<string, Record<string, string>>;
+  onUniformSlotMealTypeChange?: (slot: "lunch" | "dinner", typeId: string) => void;
+  onSlotDayMealTypeChange?: (slot: "lunch" | "dinner", day: number, typeId: string) => void;
   inputClassName?: string;
   disabled?: boolean;
 };
+
+/** Common override across days, or "" if none / mixed. */
+export function uniformSlotMealType(
+  slotMealTypes: Record<string, Record<string, string>> | null | undefined,
+  slot: string,
+  days: number[],
+): string {
+  if (!days.length) return "";
+  const map = slotMealTypes?.[slot] || {};
+  const vals = days.map((d) => (map[String(d)] || "").trim()).filter(Boolean);
+  if (!vals.length) return "";
+  if (vals.length < days.length) return "";
+  return new Set(vals).size === 1 ? vals[0] : "";
+}
 
 export default function MealScheduleFields({
   mode,
@@ -101,11 +124,38 @@ export default function MealScheduleFields({
   onDinnerQuantityChange,
   onDayQuantityChange,
   onSlotDayQuantityChange,
+  defaultMealTypeId = "regular",
+  mealTypeOptions,
+  slotMealTypes = {},
+  onUniformSlotMealTypeChange,
+  onSlotDayMealTypeChange,
   inputClassName = "",
   disabled,
 }: Props) {
   const dual = isDualSlots(mealSlots);
   const slots = normalizeMealSlots(mealSlots);
+  const typeUi = Array.isArray(mealTypeOptions) && mealTypeOptions.length > 0 && !!onSlotDayMealTypeChange;
+
+  const typeSelect = (
+    value: string,
+    onChange: (tid: string) => void,
+    testid: string,
+  ) => (
+    <select
+      data-testid={testid}
+      disabled={disabled}
+      value={value || ""}
+      onChange={(e) => onChange(e.target.value)}
+      className={`${inputClassName} text-xs sm:text-sm`}
+    >
+      <option value="">Same as default</option>
+      {(mealTypeOptions || []).map((t) => (
+        <option key={t.id} value={t.id}>
+          {t.name}
+        </option>
+      ))}
+    </select>
+  );
 
   const preview = useMemo(() => {
     const price = Number(mealPrice);
@@ -274,47 +324,83 @@ export default function MealScheduleFields({
       ) : null}
 
       {mode === "same" && dual ? (
-        <div className="flex gap-3 flex-wrap">
-          <label className="flex flex-col gap-1.5 max-w-[140px]">
-            <span className="label-overline">Lunch / day</span>
-            <input
-              type="number"
-              min={1}
-              max={20}
-              data-testid="cf-lunch-quantity"
-              disabled={disabled}
-              value={lunchQuantity}
-              onChange={(e) =>
-                onLunchQuantityChange(Math.max(1, Math.min(20, Number(e.target.value) || 1)))
-              }
-              className={inputClassName}
-            />
-          </label>
-          <label className="flex flex-col gap-1.5 max-w-[140px]">
-            <span className="label-overline">Dinner / day</span>
-            <input
-              type="number"
-              min={1}
-              max={20}
-              data-testid="cf-dinner-quantity"
-              disabled={disabled}
-              value={dinnerQuantity}
-              onChange={(e) =>
-                onDinnerQuantityChange(Math.max(1, Math.min(20, Number(e.target.value) || 1)))
-              }
-              className={inputClassName}
-            />
-          </label>
-          <div className="flex flex-col justify-end pb-1 text-sm text-muted-foreground">
-            Total {lunchQuantity + dinnerQuantity} / day
+        <div className="flex flex-col gap-3">
+          <div className="flex gap-3 flex-wrap">
+            <label className="flex flex-col gap-1.5 max-w-[140px]">
+              <span className="label-overline">Lunch / day</span>
+              <input
+                type="number"
+                min={1}
+                max={20}
+                data-testid="cf-lunch-quantity"
+                disabled={disabled}
+                value={lunchQuantity}
+                onChange={(e) =>
+                  onLunchQuantityChange(Math.max(1, Math.min(20, Number(e.target.value) || 1)))
+                }
+                className={inputClassName}
+              />
+            </label>
+            <label className="flex flex-col gap-1.5 max-w-[140px]">
+              <span className="label-overline">Dinner / day</span>
+              <input
+                type="number"
+                min={1}
+                max={20}
+                data-testid="cf-dinner-quantity"
+                disabled={disabled}
+                value={dinnerQuantity}
+                onChange={(e) =>
+                  onDinnerQuantityChange(Math.max(1, Math.min(20, Number(e.target.value) || 1)))
+                }
+                className={inputClassName}
+              />
+            </label>
+            <div className="flex flex-col justify-end pb-1 text-sm text-muted-foreground">
+              Total {lunchQuantity + dinnerQuantity} / day
+            </div>
           </div>
+          {typeUi && onUniformSlotMealTypeChange ? (
+            <div className="flex gap-3 flex-wrap">
+              <label className="flex flex-col gap-1.5 min-w-[160px] flex-1 max-w-[220px]">
+                <span className="label-overline">Lunch type</span>
+                {typeSelect(
+                  uniformSlotMealType(slotMealTypes, "lunch", deliveryDays),
+                  (tid) => onUniformSlotMealTypeChange("lunch", tid),
+                  "cf-lunch-meal-type",
+                )}
+              </label>
+              <label className="flex flex-col gap-1.5 min-w-[160px] flex-1 max-w-[220px]">
+                <span className="label-overline">Dinner type</span>
+                {typeSelect(
+                  uniformSlotMealType(slotMealTypes, "dinner", deliveryDays),
+                  (tid) => onUniformSlotMealTypeChange("dinner", tid),
+                  "cf-dinner-meal-type",
+                )}
+              </label>
+              <p className="text-xs text-muted-foreground self-end pb-2">
+                Leave “Same as default” to use {defaultMealTypeId}.
+              </p>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
+      {mode === "same" && !dual && typeUi && onUniformSlotMealTypeChange && (slots[0] === "lunch" || slots[0] === "dinner") ? (
+        <label className="flex flex-col gap-1.5 max-w-[220px]">
+          <span className="label-overline">{MEAL_SLOT_LABELS[slots[0]]} type</span>
+          {typeSelect(
+            uniformSlotMealType(slotMealTypes, slots[0], deliveryDays),
+            (tid) => onUniformSlotMealTypeChange(slots[0] as "lunch" | "dinner", tid),
+            `cf-${slots[0]}-meal-type`,
+          )}
+        </label>
+      ) : null}
+
       {mode === "custom" && !dual ? (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {WEEKDAYS.filter((d) => deliveryDays.includes(d.i)).map((d) => (
-            <label key={d.i} className="flex flex-col gap-1">
+            <div key={d.i} className="flex flex-col gap-1 rounded-xl border border-brand-border/60 p-2">
               <span className="text-xs text-muted-foreground">{d.s}</span>
               <input
                 type="number"
@@ -328,7 +414,14 @@ export default function MealScheduleFields({
                 }
                 className={inputClassName}
               />
-            </label>
+              {typeUi && (slots[0] === "lunch" || slots[0] === "dinner") ? (
+                typeSelect(
+                  (slotMealTypes[slots[0]]?.[String(d.i)] || "").trim(),
+                  (tid) => onSlotDayMealTypeChange!(slots[0] as "lunch" | "dinner", d.i, tid),
+                  `cf-${slots[0]}-type-${d.s}`,
+                )
+              ) : null}
+            </div>
           ))}
           {!deliveryDays.length ? (
             <p className="text-xs text-muted-foreground col-span-full">Select days to set quantities.</p>
@@ -343,48 +436,83 @@ export default function MealScheduleFields({
               <tr className="text-left text-muted-foreground">
                 <th className="py-1 pr-2 font-medium">Day</th>
                 <th className="py-1 pr-2 font-medium">Lunch</th>
+                {typeUi ? <th className="py-1 pr-2 font-medium">L type</th> : null}
                 <th className="py-1 font-medium">Dinner</th>
+                {typeUi ? <th className="py-1 font-medium">D type</th> : null}
               </tr>
             </thead>
             <tbody>
-              {WEEKDAYS.map((d) => (
-                <tr key={d.i} className="border-t border-brand-border/60">
-                  <td className="py-1.5 pr-2">{d.s}</td>
-                  <td className="py-1.5 pr-2">
-                    <input
-                      type="number"
-                      min={0}
-                      max={20}
-                      data-testid={`cf-lunch-qty-${d.s}`}
-                      disabled={disabled}
-                      value={slotSchedules.lunch?.[String(d.i)] || 0}
-                      onChange={(e) => {
-                        const v = Math.max(0, Math.min(20, Number(e.target.value) || 0));
-                        onSlotDayQuantityChange("lunch", d.i, v);
-                      }}
-                      className={inputClassName}
-                    />
-                  </td>
-                  <td className="py-1.5">
-                    <input
-                      type="number"
-                      min={0}
-                      max={20}
-                      data-testid={`cf-dinner-qty-${d.s}`}
-                      disabled={disabled}
-                      value={slotSchedules.dinner?.[String(d.i)] || 0}
-                      onChange={(e) => {
-                        const v = Math.max(0, Math.min(20, Number(e.target.value) || 0));
-                        onSlotDayQuantityChange("dinner", d.i, v);
-                      }}
-                      className={inputClassName}
-                    />
-                  </td>
-                </tr>
-              ))}
+              {WEEKDAYS.map((d) => {
+                const lq = slotSchedules.lunch?.[String(d.i)] || 0;
+                const dq = slotSchedules.dinner?.[String(d.i)] || 0;
+                return (
+                  <tr key={d.i} className="border-t border-brand-border/60">
+                    <td className="py-1.5 pr-2">{d.s}</td>
+                    <td className="py-1.5 pr-2">
+                      <input
+                        type="number"
+                        min={0}
+                        max={20}
+                        data-testid={`cf-lunch-qty-${d.s}`}
+                        disabled={disabled}
+                        value={lq}
+                        onChange={(e) => {
+                          const v = Math.max(0, Math.min(20, Number(e.target.value) || 0));
+                          onSlotDayQuantityChange("lunch", d.i, v);
+                        }}
+                        className={inputClassName}
+                      />
+                    </td>
+                    {typeUi ? (
+                      <td className="py-1.5 pr-2 min-w-[120px]">
+                        {lq >= 1
+                          ? typeSelect(
+                              (slotMealTypes.lunch?.[String(d.i)] || "").trim(),
+                              (tid) => onSlotDayMealTypeChange!("lunch", d.i, tid),
+                              `cf-lunch-type-${d.s}`,
+                            )
+                          : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                      </td>
+                    ) : null}
+                    <td className="py-1.5 pr-2">
+                      <input
+                        type="number"
+                        min={0}
+                        max={20}
+                        data-testid={`cf-dinner-qty-${d.s}`}
+                        disabled={disabled}
+                        value={dq}
+                        onChange={(e) => {
+                          const v = Math.max(0, Math.min(20, Number(e.target.value) || 0));
+                          onSlotDayQuantityChange("dinner", d.i, v);
+                        }}
+                        className={inputClassName}
+                      />
+                    </td>
+                    {typeUi ? (
+                      <td className="py-1.5 min-w-[120px]">
+                        {dq >= 1
+                          ? typeSelect(
+                              (slotMealTypes.dinner?.[String(d.i)] || "").trim(),
+                              (tid) => onSlotDayMealTypeChange!("dinner", d.i, tid),
+                              `cf-dinner-type-${d.s}`,
+                            )
+                          : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                      </td>
+                    ) : null}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
-          <p className="text-xs text-muted-foreground mt-1">0 = no stop for that slot on that day.</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            0 = no stop for that slot on that day.
+            {typeUi ? " Type “Same as default” uses the Default meal type above." : ""}
+          </p>
         </div>
       ) : null}
 

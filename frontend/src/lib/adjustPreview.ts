@@ -34,6 +34,7 @@ export type AdjustPreviewPatch = {
   meal_slot: string;
   meal_type_id: string;
   meal_type_name: string;
+  /** Absolute qty; 0 removes the customer's line for that slot from the projected pack. */
   quantity: number;
 };
 
@@ -120,7 +121,8 @@ export function recomputeDaySummaryFromPack(
 
 /**
  * Apply a proposed adjust onto an existing kitchen-summary (or empty base).
- * Replaces the customer's line for that meal_slot, or appends if missing.
+ * Qty 0 removes the customer's line for that meal_slot.
+ * Otherwise replaces the line for that slot, or appends if missing.
  */
 export function projectDaySummary(
   base: DaySummary | null | undefined,
@@ -130,6 +132,15 @@ export function projectDaySummary(
   const slot = normSlot(patch.meal_slot);
   const prev = Array.isArray(base?.pack_list) ? [...base!.pack_list!] : [];
   const cid = patch.customer_id;
+  const qty = Math.max(0, Math.floor(Number(patch.quantity) || 0));
+
+  if (qty === 0) {
+    const next = prev.filter(
+      (row) => !(row.customer_id === cid && normSlot(row.meal_slot) === slot),
+    );
+    return recomputeDaySummaryFromPack(date, next);
+  }
+
   let replaced = false;
   const next: DaySummaryPackLine[] = prev.map((row) => {
     if (row.customer_id !== cid) return row;
@@ -140,7 +151,7 @@ export function projectDaySummary(
       meal_type_id: patch.meal_type_id,
       meal_type_name: patch.meal_type_name,
       meal_slot: slot,
-      quantity: Math.max(1, patch.quantity),
+      quantity: qty,
       customer_name: patch.customer_name || row.customer_name,
       status: row.status || "pending",
     };
@@ -152,14 +163,28 @@ export function projectDaySummary(
       meal_type_id: patch.meal_type_id,
       meal_type_name: patch.meal_type_name,
       meal_slot: slot,
-      quantity: Math.max(1, patch.quantity),
+      quantity: qty,
       status: "pending",
     });
   }
   return recomputeDaySummaryFromPack(date, next);
 }
 
-/** Slim consumer preview from own deliveries for a date + proposed patch. */
+/** Apply multiple slot patches (order matters; later overwrites same slot). */
+export function projectDaySummaryMulti(
+  base: DaySummary | null | undefined,
+  patches: AdjustPreviewPatch[],
+): DaySummary {
+  let cur: DaySummary = base
+    ? { ...base, pack_list: Array.isArray(base.pack_list) ? [...base.pack_list] : [] }
+    : { date: "", pack_list: [] };
+  for (const p of patches) {
+    cur = projectDaySummary(cur, p);
+  }
+  return cur;
+}
+
+/** Slim consumer preview from own deliveries for a date + proposed patch(es). */
 export function projectConsumerDaySummary(
   date: string,
   deliveries: Array<{
@@ -173,19 +198,22 @@ export function projectConsumerDaySummary(
     status?: string;
     delivery_date?: string;
   }>,
-  patch: AdjustPreviewPatch,
+  patch: AdjustPreviewPatch | AdjustPreviewPatch[],
 ): DaySummary {
   const dayRows = (deliveries || []).filter(
     (d) =>
       d.delivery_date === date &&
       (d.status === "pending" || d.status === "delivered"),
   );
+  const patches = Array.isArray(patch) ? patch : [patch];
+  const cid = patches[0]?.customer_id || "";
+  const cname = patches[0]?.customer_name || "";
   const base: DaySummary = {
     date,
     pack_list: dayRows.map((d) => ({
       delivery_id: d.id,
-      customer_id: d.customer_id || patch.customer_id,
-      customer_name: d.customer_name || patch.customer_name || "",
+      customer_id: d.customer_id || cid,
+      customer_name: d.customer_name || cname || "",
       meal_type_id: d.meal_type_id,
       meal_type_name: d.meal_type_name,
       meal_slot: d.meal_slot || "dinner",
@@ -193,5 +221,5 @@ export function projectConsumerDaySummary(
       status: d.status,
     })),
   };
-  return projectDaySummary(base, patch);
+  return projectDaySummaryMulti(base, patches);
 }

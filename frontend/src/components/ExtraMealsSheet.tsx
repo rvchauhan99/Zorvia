@@ -9,7 +9,7 @@ import SearchableSelect from "@/components/SearchableSelect";
 import { fmtCAD, todayISO } from "@/lib/format";
 import {
   projectConsumerDaySummary,
-  projectDaySummary,
+  projectDaySummaryMulti,
   type DaySummary as PreviewDaySummary,
 } from "@/lib/adjustPreview";
 
@@ -27,10 +27,62 @@ export type AdjustConfirmArgs = {
   meal_price?: number | null;
 };
 
+export type AdjustDaySlotArg = {
+  meal_slot: string;
+  quantity: number;
+  meal_type_id?: string | null;
+  meal_price?: number | null;
+};
+
+export type AdjustDayConfirmArgs = {
+  date: string;
+  slots: AdjustDaySlotArg[];
+};
+
+type AdjustContextSlot = {
+  meal_slot: string;
+  scheduled: boolean;
+  schedule_base: number;
+  existing: {
+    id?: string;
+    quantity: number;
+    status: string;
+    meal_type_id: string;
+    meal_type_name: string;
+    meal_price: number;
+    extra_quantity?: number;
+  } | null;
+  suggested_meal_type_id: string;
+  suggested_meal_type_name: string;
+  editable: boolean;
+};
+
+type AdjustContext = {
+  date: string;
+  customer_id: string;
+  customer_name: string;
+  meal_price: number;
+  slots: AdjustContextSlot[];
+};
+
+type SlotEdit = {
+  quantity: number;
+  meal_type_id: string;
+  priceStr: string;
+};
+
 function slotLabel(slot: string) {
   if (slot === "lunch") return "Lunch";
   if (slot === "dinner") return "Dinner";
   return "Meal";
+}
+
+function scheduleChip(slot: AdjustContextSlot, qty: number) {
+  if (qty === 0 && (slot.existing?.status === "pending" || !slot.existing)) {
+    return "Cancel this stop";
+  }
+  if (slot.scheduled) return `Scheduled · base ${slot.schedule_base}`;
+  return "Off-schedule";
 }
 
 export default function ExtraMealsSheet({
@@ -56,10 +108,11 @@ export default function ExtraMealsSheet({
 }: {
   open: boolean;
   onClose: () => void;
-  onConfirm: (args: AdjustConfirmArgs) => void | Promise<unknown>;
+  onConfirm: (args: AdjustDayConfirmArgs) => void | Promise<unknown>;
   title?: string;
   defaultDate?: string;
   mealPrice?: number;
+  /** @deprecated single-slot seed; context overrides */
   currentQty?: number;
   showDate?: boolean;
   cutoffHours?: number;
@@ -75,116 +128,173 @@ export default function ExtraMealsSheet({
   summaryMode?: "provider" | "consumer";
 }) {
   const [date, setDate] = useState(defaultDate || todayISO());
-  const [qty, setQty] = useState(Math.max(1, currentQty || 1));
-  const [mealTypeId, setMealTypeId] = useState("");
-  const [mealSlot, setMealSlot] = useState("");
-  const [priceStr, setPriceStr] = useState("");
+  const [ctx, setCtx] = useState<AdjustContext | null>(null);
+  const [ctxLoading, setCtxLoading] = useState(false);
+  const [edits, setEdits] = useState<Record<string, SlotEdit>>({});
   const [daySummary, setDaySummary] = useState<DaySummary | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
-
-  const dualSlots = mealSlots.filter((s) => s === "lunch" || s === "dinner").length >= 2;
-  const needsSlot = dualSlots || mealSlots.length > 1;
+  const [highlightSlot, setHighlightSlot] = useState<string | null>(defaultMealSlot || null);
 
   useEffect(() => {
     if (!open) return;
     setDate(defaultDate || todayISO());
-    setQty(Math.min(MAX_QTY, Math.max(1, currentQty || 1)));
     setDaySummary(null);
     setPreviewLoading(false);
-    const tid =
-      defaultMealTypeId ||
-      mealTypes[0]?.id ||
-      "";
-    setMealTypeId(tid);
-    const slot =
-      defaultMealSlot ||
-      (mealSlots.length === 1 ? mealSlots[0] : dualSlots ? "lunch" : mealSlots[0] || "");
-    setMealSlot(slot || "");
-    const fromType = mealTypes.find((t) => t.id === tid);
-    const seed =
-      mealPrice != null && mealPrice > 0
-        ? mealPrice
-        : fromType?.price ?? 0;
-    setPriceStr(seed > 0 ? String(seed) : "");
-  }, [
-    open,
-    defaultDate,
-    currentQty,
-    defaultMealTypeId,
-    defaultMealSlot,
-    mealSlots,
-    mealTypes,
-    mealPrice,
-    dualSlots,
-  ]);
+    setHighlightSlot(defaultMealSlot || null);
+    setCtx(null);
+    setEdits({});
+  }, [open, defaultDate, defaultMealSlot]);
 
-  const clampedQty = Math.min(MAX_QTY, Math.max(1, qty));
-  const unit = allowPriceOverride
-    ? Number(priceStr) || 0
-    : Number(mealTypes.find((t) => t.id === mealTypeId)?.price ?? mealPrice) || 0;
-  const lineTotal = unit * clampedQty;
-  const typeName = mealTypes.find((t) => t.id === mealTypeId)?.name || mealTypeId || "Meal";
-  const resolvedSlot = mealSlot || (mealSlots.length === 1 ? mealSlots[0] : "dinner") || "dinner";
+  useEffect(() => {
+    if (!open) return;
+    if (summaryMode === "provider" && !customerId) return;
+    let cancelled = false;
+    setCtxLoading(true);
+    (async () => {
+      try {
+        const path =
+          summaryMode === "consumer"
+            ? "/consumer/deliveries/adjust-context"
+            : "/deliveries/adjust-context";
+        const params =
+          summaryMode === "consumer"
+            ? { date }
+            : { customer_id: customerId, date };
+        const { data } = await api.get(path, { params });
+        if (cancelled) return;
+        const context = data as AdjustContext;
+        setCtx(context);
+        const next: Record<string, SlotEdit> = {};
+        for (const s of context.slots || []) {
+          const existing = s.existing;
+          let qty = 0;
+          if (existing) {
+            // Trust existing: cancelled → 0 (never fall back to schedule_base)
+            qty =
+              existing.status === "cancelled"
+                ? 0
+                : Math.max(0, Number(existing.quantity) || 0);
+          } else if (s.scheduled) {
+            qty = Math.max(0, Number(s.schedule_base) || 0);
+          }
+          const tid =
+            (existing && existing.status !== "cancelled" && existing.meal_type_id) ||
+            existing?.meal_type_id ||
+            s.suggested_meal_type_id ||
+            "regular";
+          const price =
+            existing?.meal_price ||
+            context.meal_price ||
+            0;
+          next[s.meal_slot] = {
+            quantity: Math.min(MAX_QTY, qty),
+            meal_type_id: String(tid),
+            priceStr: price > 0 ? String(price) : "",
+          };
+        }
+        setEdits(next);
+      } catch (err: any) {
+        if (!cancelled) {
+          toast.error(err?.response?.data?.detail || "Failed to load day plan");
+          setCtx(null);
+        }
+      } finally {
+        if (!cancelled) setCtxLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, date, customerId, summaryMode]);
 
-  const customerLine = useMemo(() => {
-    if (!daySummary?.pack_list?.length) return null;
-    if (customerId) {
-      const slot = resolvedSlot;
-      return (
-        daySummary.pack_list.find(
-          (p) => p.customer_id === customerId && String(p.meal_slot || "dinner") === slot,
-        ) ||
-        daySummary.pack_list.find((p) => p.customer_id === customerId) ||
-        daySummary.pack_list[0]
-      );
-    }
-    return daySummary.pack_list[0];
-  }, [daySummary, customerId, resolvedSlot]);
+  const slots = ctx?.slots || [];
+  const crmPrice = ctx?.meal_price ?? mealPrice ?? 0;
+  const displayName = ctx?.customer_name || customerName || "";
 
-  function confirmArgs(): AdjustConfirmArgs {
+  const customerLines = useMemo(() => {
+    if (!daySummary?.pack_list?.length || !customerId) return [];
+    return daySummary.pack_list.filter((p) => p.customer_id === customerId);
+  }, [daySummary, customerId]);
+
+  function updateSlot(slot: string, patch: Partial<SlotEdit>) {
+    setEdits((prev) => ({
+      ...prev,
+      [slot]: { ...prev[slot], ...patch },
+    }));
+    setDaySummary(null);
+  }
+
+  function buildConfirmArgs(): AdjustDayConfirmArgs {
     return {
       date,
-      quantity: clampedQty,
-      meal_slot: needsSlot ? mealSlot || null : mealSlot || null,
-      meal_type_id: mealTypeId || null,
-      meal_price: allowPriceOverride && Number(priceStr) > 0 ? Number(priceStr) : null,
+      slots: slots
+        .filter((s) => s.editable)
+        .map((s) => {
+          const e = edits[s.meal_slot] || {
+            quantity: 0,
+            meal_type_id: s.suggested_meal_type_id,
+            priceStr: "",
+          };
+          return {
+            meal_slot: s.meal_slot,
+            quantity: Math.min(MAX_QTY, Math.max(0, Math.floor(e.quantity))),
+            meal_type_id: e.meal_type_id || null,
+            meal_price:
+              allowPriceOverride && Number(e.priceStr) > 0 ? Number(e.priceStr) : null,
+          };
+        }),
     };
   }
 
   async function showSummary(e: React.FormEvent) {
     e.preventDefault();
-    if (busy || previewLoading || daySummary) return;
-    if (needsSlot && !mealSlot) {
-      toast.error("Select a meal slot");
-      return;
-    }
+    if (busy || previewLoading || daySummary || ctxLoading) return;
     if (!customerId && summaryMode === "provider") {
       toast.error("Customer required");
       return;
     }
+    if (!ctx?.slots?.length) {
+      toast.error("No meal slots for this day");
+      return;
+    }
+    const editable = slots.filter((s) => s.editable);
+    if (!editable.length) {
+      toast.error("No editable stops for this day (already delivered or locked)");
+      return;
+    }
     setPreviewLoading(true);
     try {
-      const patch = {
-        customer_id: customerId || "",
-        customer_name: customerName || undefined,
-        meal_slot: resolvedSlot,
-        meal_type_id: mealTypeId || "regular",
-        meal_type_name: typeName,
-        quantity: clampedQty,
-      };
+      const patches = slots
+        .filter((s) => s.editable)
+        .map((s) => {
+          const ed = edits[s.meal_slot];
+          const tid = ed?.meal_type_id || s.suggested_meal_type_id || "regular";
+          const tname =
+            mealTypes.find((t) => t.id === tid)?.name ||
+            s.suggested_meal_type_name ||
+            tid;
+          return {
+            customer_id: customerId || ctx.customer_id || "",
+            customer_name: displayName || undefined,
+            meal_slot: s.meal_slot,
+            meal_type_id: tid,
+            meal_type_name: tname,
+            quantity: Math.min(MAX_QTY, Math.max(0, Math.floor(ed?.quantity ?? 0))),
+          };
+        });
       let projected: DaySummary;
       if (summaryMode === "consumer") {
         const { data } = await api.get("/consumer/deliveries");
         projected = projectConsumerDaySummary(
           date,
           Array.isArray(data) ? data : [],
-          { ...patch, customer_id: customerId || patch.customer_id },
+          patches,
         );
       } else {
         const { data } = await api.get("/reports/kitchen-summary", { params: { date } });
-        projected = projectDaySummary(
+        projected = projectDaySummaryMulti(
           { ...(data || {}), date: data?.date || date },
-          patch,
+          patches,
         );
       }
       setDaySummary(projected);
@@ -197,8 +307,12 @@ export default function ExtraMealsSheet({
 
   async function confirmSave() {
     if (busy || !daySummary) return;
-    const res = await onConfirm(confirmArgs());
-    // Parents return response body on success and undefined on error.
+    const args = buildConfirmArgs();
+    if (!args.slots.length) {
+      toast.error("No editable stops to save");
+      return;
+    }
+    const res = await onConfirm(args);
     if (res != null) {
       setDaySummary(null);
       onClose();
@@ -214,7 +328,11 @@ export default function ExtraMealsSheet({
     onClose();
   }
 
-  const locked = busy || previewLoading;
+  const locked = busy || previewLoading || ctxLoading;
+  const editableCount = slots.filter((s) => s.editable).length;
+  // silence unused legacy props used only for seeding when context fails
+  void currentQty;
+  void mealSlots;
 
   return (
     <AppSheet
@@ -267,9 +385,9 @@ export default function ExtraMealsSheet({
                 type="submit"
                 data-testid="adjust-show-summary"
                 className="pill-btn btn-primary flex-1 h-11 cursor-pointer"
-                disabled={locked || clampedQty < 1 || (needsSlot && !mealSlot)}
+                disabled={locked || !editableCount}
               >
-                {previewLoading ? "Loading…" : "Show summary"}
+                {previewLoading || ctxLoading ? "Loading…" : "Show summary"}
               </button>
             </>
           )}
@@ -304,17 +422,21 @@ export default function ExtraMealsSheet({
               ))}
             </div>
           ) : null}
-          {customerLine ? (
-            <div className="rounded-xl border border-brand-border px-4 py-3" data-testid="adjust-summary-customer-line">
+          {customerLines.length > 0 ? (
+            <div className="rounded-xl border border-brand-border px-4 py-3 space-y-2" data-testid="adjust-summary-customer-line">
               <div className="label-overline">
-                {summaryMode === "consumer" ? "Your stop" : customerLine.customer_name || customerName || "Customer"}
+                {summaryMode === "consumer" ? "Your stops" : displayName || "Customer"}
               </div>
-              <div className="text-sm font-medium mt-0.5">
-                {customerLine.meal_type_name || "Meal"} · {slotLabel(String(customerLine.meal_slot || "dinner"))} ·{" "}
-                {customerLine.quantity ?? 1}×
-              </div>
+              {customerLines.map((line) => (
+                <div key={`${line.meal_slot}-${line.meal_type_id}`} className="text-sm font-medium">
+                  {line.meal_type_name || "Meal"} · {slotLabel(String(line.meal_slot || "dinner"))} ·{" "}
+                  {line.quantity ?? 1}×
+                </div>
+              ))}
             </div>
-          ) : null}
+          ) : (
+            <p className="text-sm text-muted-foreground">No active stops for this customer after cancel(s).</p>
+          )}
           {summaryMode === "provider" && daySummary.date ? (
             <Link
               href={`/provider/kitchen?date=${daySummary.date}`}
@@ -328,7 +450,8 @@ export default function ExtraMealsSheet({
       ) : (
         <div className="flex flex-col gap-4">
           <p className="text-sm text-muted-foreground">
-            Set the meal count and type for this day, then review the day summary before saving.
+            Edit the day plan (qty + type per slot), then review the summary before saving.
+            Set quantity to 0 to cancel a pending stop.
           </p>
           {showDate ? (
             <label className="flex flex-col gap-1.5">
@@ -339,108 +462,147 @@ export default function ExtraMealsSheet({
                 className="h-11 px-3 rounded-xl border border-brand-border bg-white text-sm"
                 value={date}
                 min={todayISO()}
-                onChange={(e) => setDate(e.target.value)}
+                onChange={(e) => {
+                  setDate(e.target.value);
+                  setDaySummary(null);
+                }}
                 required
               />
             </label>
           ) : null}
-          {needsSlot ? (
-            <label className="flex flex-col gap-1.5">
-              <span className="label-overline">Meal slot</span>
-              <SearchableSelect
-                testid="adjust-slot"
-                inputClassName="h-11 px-3 rounded-xl border border-brand-border bg-white text-sm"
-                value={mealSlot}
-                onChange={setMealSlot}
-                disabled={locked}
-                options={(mealSlots.length ? mealSlots : ["lunch", "dinner"]).map((s) => ({
-                  value: s,
-                  label: slotLabel(s),
-                }))}
-                placeholder="Search slot…"
-              />
-            </label>
-          ) : null}
-          {mealTypes.length > 0 ? (
-            <label className="flex flex-col gap-1.5">
-              <span className="label-overline">Meal type</span>
-              <SearchableSelect
-                testid="adjust-meal-type"
-                inputClassName="h-11 px-3 rounded-xl border border-brand-border bg-white text-sm"
-                value={mealTypeId}
-                onChange={(next) => {
-                  setMealTypeId(next);
-                  const t = mealTypes.find((x) => x.id === next);
-                  if (t) setPriceStr(String(t.price));
-                }}
-                disabled={locked}
-                options={mealTypes.map((t) => ({
-                  value: t.id,
-                  label: `${t.name} (${fmtCAD(t.price)})`,
-                }))}
-                placeholder="Search meal type…"
-              />
-            </label>
-          ) : null}
-          <label className="flex flex-col gap-1.5">
-            <span className="label-overline">Quantity</span>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                data-testid="adjust-qty-dec"
-                className="h-11 w-11 rounded-full border border-brand-border bg-white text-lg font-semibold cursor-pointer hover:bg-brand-surface disabled:opacity-40"
-                onClick={() => setQty((q) => Math.max(1, q - 1))}
-                disabled={clampedQty <= 1 || locked}
-              >
-                −
-              </button>
-              <input
-                data-testid="adjust-qty"
-                type="number"
-                min={1}
-                max={MAX_QTY}
-                className="h-11 w-16 text-center rounded-xl border border-brand-border bg-white text-sm font-semibold"
-                value={clampedQty}
-                onChange={(e) => {
-                  const v = Math.floor(Number(e.target.value) || 1);
-                  setQty(Math.min(MAX_QTY, Math.max(1, v)));
-                }}
-              />
-              <button
-                type="button"
-                data-testid="adjust-qty-inc"
-                className="h-11 w-11 rounded-full border border-brand-border bg-white text-lg font-semibold cursor-pointer hover:bg-brand-surface disabled:opacity-40"
-                onClick={() => setQty((q) => Math.min(MAX_QTY, q + 1))}
-                disabled={clampedQty >= MAX_QTY || locked}
-              >
-                +
-              </button>
-            </div>
-            <span className="text-xs text-muted-foreground">
-              Absolute count (1–{MAX_QTY}){currentQty > 0 ? ` · currently ${currentQty}` : ""}
-            </span>
-          </label>
-          {allowPriceOverride ? (
-            <label className="flex flex-col gap-1.5">
-              <span className="label-overline">Unit price (CAD)</span>
-              <input
-                data-testid="adjust-meal-price"
-                type="number"
-                min={0.01}
-                step={0.01}
-                className="h-11 px-3 rounded-xl border border-brand-border bg-white text-sm"
-                value={priceStr}
-                onChange={(e) => setPriceStr(e.target.value)}
-                disabled={locked}
-              />
-            </label>
-          ) : null}
-          {unit > 0 ? (
-            <p className="text-sm text-muted-foreground" data-testid="adjust-line-preview">
-              {clampedQty} × {fmtCAD(unit)} = <span className="font-medium text-foreground">{fmtCAD(lineTotal)}</span>
-              {" "}(outstanding when delivered)
+          {displayName ? (
+            <p className="text-sm font-medium" data-testid="adjust-customer-name">
+              {displayName}
+              {crmPrice > 0 ? (
+                <span className="text-muted-foreground font-normal"> · CRM {fmtCAD(crmPrice)}/meal</span>
+              ) : null}
             </p>
           ) : null}
+          {ctxLoading ? (
+            <p className="text-sm text-muted-foreground">Loading day plan…</p>
+          ) : null}
+          {!ctxLoading && slots.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No lunch/dinner slots for this customer.</p>
+          ) : null}
+          {slots.map((slot) => {
+            const ed = edits[slot.meal_slot] || {
+              quantity: 0,
+              meal_type_id: slot.suggested_meal_type_id,
+              priceStr: "",
+            };
+            const qty = Math.min(MAX_QTY, Math.max(0, Math.floor(ed.quantity)));
+            const unit = allowPriceOverride
+              ? Number(ed.priceStr) || 0
+              : Number(mealTypes.find((t) => t.id === ed.meal_type_id)?.price ?? crmPrice) || 0;
+            const highlighted = highlightSlot === slot.meal_slot;
+            const readOnly = !slot.editable;
+            return (
+              <div
+                key={slot.meal_slot}
+                data-testid={`adjust-slot-row-${slot.meal_slot}`}
+                className={`rounded-xl border px-4 py-3 flex flex-col gap-3 ${
+                  highlighted ? "border-primary bg-primary/5" : "border-brand-border"
+                } ${readOnly ? "opacity-70" : ""}`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-display font-semibold">{slotLabel(slot.meal_slot)}</div>
+                  <span className="text-xs text-muted-foreground">{scheduleChip(slot, qty)}</span>
+                </div>
+                {readOnly ? (
+                  <p className="text-sm text-muted-foreground">
+                    {slot.existing?.status || "locked"} · {slot.existing?.quantity ?? 0}×{" "}
+                    {slot.existing?.meal_type_name || ""}
+                  </p>
+                ) : (
+                  <>
+                    {mealTypes.length > 0 ? (
+                      <label className="flex flex-col gap-1.5">
+                        <span className="label-overline">Meal type</span>
+                        <SearchableSelect
+                          testid={`adjust-meal-type-${slot.meal_slot}`}
+                          inputClassName="h-11 px-3 rounded-xl border border-brand-border bg-white text-sm"
+                          value={ed.meal_type_id}
+                          onChange={(next) => {
+                            const t = mealTypes.find((x) => x.id === next);
+                            updateSlot(slot.meal_slot, {
+                              meal_type_id: next,
+                              ...(t && allowPriceOverride ? { priceStr: String(t.price) } : {}),
+                            });
+                          }}
+                          disabled={locked}
+                          options={mealTypes.map((t) => ({
+                            value: t.id,
+                            label: `${t.name} (${fmtCAD(t.price)})`,
+                          }))}
+                          placeholder="Search meal type…"
+                        />
+                      </label>
+                    ) : null}
+                    <label className="flex flex-col gap-1.5">
+                      <span className="label-overline">Quantity</span>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          data-testid={`adjust-qty-dec-${slot.meal_slot}`}
+                          className="h-11 w-11 rounded-full border border-brand-border bg-white text-lg font-semibold cursor-pointer hover:bg-brand-surface disabled:opacity-40"
+                          onClick={() => updateSlot(slot.meal_slot, { quantity: Math.max(0, qty - 1) })}
+                          disabled={qty <= 0 || locked}
+                        >
+                          −
+                        </button>
+                        <input
+                          data-testid={`adjust-qty-${slot.meal_slot}`}
+                          type="number"
+                          min={0}
+                          max={MAX_QTY}
+                          className="h-11 w-16 text-center rounded-xl border border-brand-border bg-white text-sm font-semibold"
+                          value={qty}
+                          onChange={(e) => {
+                            const v = Math.floor(Number(e.target.value) || 0);
+                            updateSlot(slot.meal_slot, {
+                              quantity: Math.min(MAX_QTY, Math.max(0, v)),
+                            });
+                          }}
+                        />
+                        <button
+                          type="button"
+                          data-testid={`adjust-qty-inc-${slot.meal_slot}`}
+                          className="h-11 w-11 rounded-full border border-brand-border bg-white text-lg font-semibold cursor-pointer hover:bg-brand-surface disabled:opacity-40"
+                          onClick={() => updateSlot(slot.meal_slot, { quantity: Math.min(MAX_QTY, qty + 1) })}
+                          disabled={qty >= MAX_QTY || locked}
+                        >
+                          +
+                        </button>
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {qty === 0 ? "Cancel this stop (0)" : `Absolute count (0–${MAX_QTY})`}
+                      </span>
+                    </label>
+                    {allowPriceOverride ? (
+                      <label className="flex flex-col gap-1.5">
+                        <span className="label-overline">Unit price (CAD)</span>
+                        <input
+                          data-testid={`adjust-meal-price-${slot.meal_slot}`}
+                          type="number"
+                          min={0.01}
+                          step={0.01}
+                          className="h-11 px-3 rounded-xl border border-brand-border bg-white text-sm"
+                          value={ed.priceStr}
+                          onChange={(e) => updateSlot(slot.meal_slot, { priceStr: e.target.value })}
+                          disabled={locked}
+                        />
+                      </label>
+                    ) : null}
+                    {unit > 0 && qty > 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        {qty} × {fmtCAD(unit)} = {fmtCAD(unit * qty)}
+                      </p>
+                    ) : null}
+                  </>
+                )}
+              </div>
+            );
+          })}
           {cutoffHours != null ? (
             <p className="text-xs text-muted-foreground">
               Subject to your provider&apos;s {cutoffHours}h cutoff before delivery (same as cancel).

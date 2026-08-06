@@ -328,21 +328,25 @@ export default function Deliveries() {
 
   async function confirmAdjust(args: {
     date: string;
-    quantity: number;
-    meal_slot?: string | null;
-    meal_type_id?: string | null;
-    meal_price?: number | null;
+    slots: Array<{
+      meal_slot: string;
+      quantity: number;
+      meal_type_id?: string | null;
+      meal_price?: number | null;
+    }>;
   }) {
     if (!extraTarget || !canAddExtra) return;
     setExtraBusy(true);
     try {
-      const { data } = await api.post("/deliveries/adjust", {
+      const { data } = await api.post("/deliveries/adjust-day", {
         customer_id: extraTarget.customer_id,
         date: args.date || date,
-        quantity: args.quantity,
-        meal_slot: args.meal_slot || extraTarget.meal_slot || undefined,
-        meal_type_id: args.meal_type_id || undefined,
-        meal_price: args.meal_price ?? undefined,
+        slots: args.slots.map((s) => ({
+          meal_slot: s.meal_slot,
+          quantity: s.quantity,
+          meal_type_id: s.meal_type_id || undefined,
+          meal_price: s.meal_price ?? undefined,
+        })),
       });
       toast.success("Meal adjusted");
       load();
@@ -709,15 +713,9 @@ export default function Deliveries() {
         title={extraTarget ? `Adjust for ${extraTarget.customer_name}` : "Adjust meal"}
         defaultDate={date}
         showDate={false}
-        currentQty={extraTarget ? deliveryQty(extraTarget) : 1}
         mealPrice={extraTarget ? Number(extraTarget.meal_price) || 0 : undefined}
         mealTypes={mealTypes}
         defaultMealTypeId={extraTarget?.meal_type_id || null}
-        mealSlots={
-          extraTarget?.meal_slot
-            ? [extraTarget.meal_slot]
-            : ["dinner"]
-        }
         defaultMealSlot={extraTarget?.meal_slot || null}
         allowPriceOverride
         customerId={extraTarget?.customer_id}
