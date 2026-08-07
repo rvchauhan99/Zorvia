@@ -21,6 +21,8 @@ type Props = {
   inputClassName?: string;
   errorClassName?: string;
   hasError?: boolean;
+  /** Dropdown opens below (default) or above the field — use "up" near bottom of viewport. */
+  dropdownPlacement?: "down" | "up";
 };
 
 const defaultInputClass =
@@ -41,6 +43,7 @@ export default function SearchableSelect({
   inputClassName,
   errorClassName,
   hasError = false,
+  dropdownPlacement = "down",
 }: Props) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -172,7 +175,11 @@ export default function SearchableSelect({
           id={listId}
           role="listbox"
           data-testid={`${testid}-list`}
-          className="absolute z-30 top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto rounded-xl border border-brand-border bg-white shadow-lg divide-y divide-brand-border"
+          className={`absolute z-50 left-0 right-0 max-h-48 overflow-y-auto rounded-xl border border-brand-border bg-white shadow-lg divide-y divide-brand-border ${
+            dropdownPlacement === "up"
+              ? "bottom-full mb-1"
+              : "top-full mt-1"
+          }`}
         >
           {allowEmpty ? (
             <button
