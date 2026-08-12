@@ -380,12 +380,25 @@ export default function ImportCustomersSheet({
                   <code className="text-[11px]">0,1,2,3,4</code>.
                 </p>
               ) : (
-                <p>
-                  <code className="text-[11px]">monthly_plan</code> — required:{" "}
-                  <code className="text-[11px]">Mon-Fri</code> or <code className="text-[11px]">Mon-Sat</code>.
-                  Delivery days come from that plan.
-                </p>
+                <>
+                  <p>
+                    <code className="text-[11px]">monthly_plan</code> — required:{" "}
+                    <code className="text-[11px]">Mon-Fri</code> or{" "}
+                    <code className="text-[11px]">Mon-Sat</code>. Delivery days come from that plan.
+                  </p>
+                  <p>
+                    <code className="text-[11px]">payment_status</code> —{" "}
+                    <code className="text-[11px]">paid</code> or{" "}
+                    <code className="text-[11px]">unpaid</code> (blank = unpaid). Amount comes from
+                    the Settings plan fee (after tax); do not put an outstanding dollar amount.
+                  </p>
+                </>
               )}
+              <p>
+                <code className="text-[11px]">joining_date</code> — sample uses{" "}
+                <code className="text-[11px]">yyyy-mm-dd</code>; other common date formats are accepted
+                on import.
+              </p>
               <p>Do not put billing_policy in the file — it is set in step 1.</p>
             </div>
             <button
