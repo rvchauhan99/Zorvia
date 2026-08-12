@@ -21,12 +21,12 @@ export const IMPORT_POLICY_OPTIONS: { value: ImportBillingPolicy; label: string;
   {
     value: "monthly_adjustable",
     label: "Adjustable Monthly",
-    hint: "Pick monthly_plan (Mon-Fri or Mon-Sat). Use payment_status paid/unpaid — plan fee comes from Settings.",
+    hint: "last_collection_status: collected = last collection taken (balance ~$0); pending = last collection still open (due that date).",
   },
   {
     value: "monthly_fixed",
     label: "Fixed Monthly",
-    hint: "Pick monthly_plan (Mon-Fri or Mon-Sat). Use payment_status paid/unpaid — plan fee comes from Settings.",
+    hint: "last_collection_status: collected = last collection taken (balance ~$0); pending = last collection still open (due that date).",
   },
 ];
 
@@ -34,7 +34,7 @@ const PER_MEAL_HEADER =
   "name,phone,email,address,apartment,city,province,postal_code,delivery_days,lunch_qty,dinner_qty,driver_name,opening_balance,joining_date,notes";
 
 const MONTHLY_HEADER =
-  "name,phone,email,address,apartment,city,province,postal_code,monthly_plan,lunch_qty,dinner_qty,driver_name,payment_status,joining_date,payment_collection_day,notes";
+  "name,phone,email,address,apartment,city,province,postal_code,monthly_plan,lunch_qty,dinner_qty,driver_name,joining_date,payment_collection_day,last_collection_status,notes";
 
 const SAMPLE_PER_MEAL = `${PER_MEAL_HEADER},meal_price,meal_type
 Aarav Sharma,4165551212,aarav@example.com,45 Bloor St W,Unit 302,Toronto,ON,M5S 1M2,"0,1,2,3,4",0,2,Alex Driver,45.00,2026-01-15,Gate code 12,12,regular
@@ -43,15 +43,15 @@ Neha Gupta,9055553344,neha@example.com,12 Queen St W,Suite 5,Brampton,ON,L6Y 1N2
 `;
 
 const SAMPLE_MONTHLY_ADJ = `${MONTHLY_HEADER}
-Aarav Sharma,4165551212,aarav@example.com,45 Bloor St W,Unit 302,Toronto,ON,M5S 1M2,Mon-Fri,0,2,Alex Driver,paid,2026-01-15,15,Gate code 12
-Priya Patel,6475559898,priya@example.com,100 King St E,,Mississauga,ON,L5B 3Y4,Mon-Fri,1,1,Alex Driver,unpaid,2025-11-01,1,
-Neha Gupta,9055553344,neha@example.com,12 Queen St W,Suite 5,Brampton,ON,L6Y 1N2,Mon-Sat,1,0,Alex Driver,unpaid,2026-03-01,15,Leave at concierge
+Aarav Sharma,4165551212,aarav@example.com,45 Bloor St W,Unit 302,Toronto,ON,M5S 1M2,Mon-Fri,0,2,Alex Driver,2026-01-15,15,collected,Gate code 12
+Priya Patel,6475559898,priya@example.com,100 King St E,,Mississauga,ON,L5B 3Y4,Mon-Fri,1,1,Alex Driver,2025-11-01,1,pending,
+Neha Gupta,9055553344,neha@example.com,12 Queen St W,Suite 5,Brampton,ON,L6Y 1N2,Mon-Sat,1,0,Alex Driver,2026-03-01,15,pending,Leave at concierge
 `;
 
 const SAMPLE_MONTHLY_FIXED = `${MONTHLY_HEADER}
-Aarav Sharma,4165551212,aarav@example.com,45 Bloor St W,Unit 302,Toronto,ON,M5S 1M2,Mon-Fri,0,2,Alex Driver,paid,2026-01-15,15,Gate code 12
-Priya Patel,6475559898,priya@example.com,100 King St E,,Mississauga,ON,L5B 3Y4,Mon-Fri,1,1,Alex Driver,unpaid,2025-11-01,1,
-Neha Gupta,9055553344,neha@example.com,12 Queen St W,Suite 5,Brampton,ON,L6Y 1N2,Mon-Sat,2,2,Alex Driver,paid,2026-03-01,15,Buzzer 305
+Aarav Sharma,4165551212,aarav@example.com,45 Bloor St W,Unit 302,Toronto,ON,M5S 1M2,Mon-Fri,0,2,Alex Driver,2026-01-15,15,collected,Gate code 12
+Priya Patel,6475559898,priya@example.com,100 King St E,,Mississauga,ON,L5B 3Y4,Mon-Fri,1,1,Alex Driver,2025-11-01,1,pending,
+Neha Gupta,9055553344,neha@example.com,12 Queen St W,Suite 5,Brampton,ON,L6Y 1N2,Mon-Sat,2,2,Alex Driver,2026-03-01,15,collected,Buzzer 305
 `;
 
 export function sampleCsvForPolicy(policy: ImportBillingPolicy): string {

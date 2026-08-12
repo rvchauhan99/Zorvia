@@ -356,7 +356,26 @@ export default function ImportCustomersSheet({
           </StepCard>
 
           <StepCard step={3} title="Upload filled CSV">
-            <div className="rounded-xl border border-brand-border bg-brand-surface/40 px-3 py-3 text-xs text-muted-foreground space-y-1.5">
+            <button
+              type="button"
+              data-testid="import-customers-btn"
+              disabled={uploading || !!running}
+              onClick={() => fileRef.current?.click()}
+              className="pill-btn btn-primary h-11 px-5 gap-2 cursor-pointer inline-flex items-center disabled:opacity-60 self-start"
+            >
+              <UploadSimple size={16} />
+              {uploading ? "Starting…" : running ? "Importing…" : "Upload CSV"}
+            </button>
+            <input
+              ref={fileRef}
+              data-testid="import-customers-input"
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={(e) => void onFile(e)}
+              disabled={uploading || !!running}
+            />
+            <div className="rounded-xl border border-brand-border bg-brand-surface/40 px-3 py-3 text-xs text-muted-foreground space-y-1.5 max-h-40 sm:max-h-48 overflow-y-auto">
               <p className="font-medium text-foreground text-sm">CSV tips</p>
               <p>
                 <code className="text-[11px]">lunch_qty</code> /{" "}
@@ -381,16 +400,24 @@ export default function ImportCustomersSheet({
                 </p>
               ) : (
                 <>
+                  <p className="font-medium text-foreground text-sm pt-1">How to fill collection fields</p>
                   <p>
                     <code className="text-[11px]">monthly_plan</code> — required:{" "}
                     <code className="text-[11px]">Mon-Fri</code> or{" "}
                     <code className="text-[11px]">Mon-Sat</code>. Delivery days come from that plan.
+                    Plan fee comes from Settings — do not type dollars in the CSV.
                   </p>
                   <p>
-                    <code className="text-[11px]">payment_status</code> —{" "}
-                    <code className="text-[11px]">paid</code> or{" "}
-                    <code className="text-[11px]">unpaid</code> (blank = unpaid). Amount comes from
-                    the Settings plan fee (after tax); do not put an outstanding dollar amount.
+                    <code className="text-[11px]">payment_collection_day</code> — day of month (1–31),
+                    or leave blank to use kitchen default from Settings.
+                  </p>
+                  <p>
+                    <code className="text-[11px]">last_collection_status</code> —{" "}
+                    <code className="text-[11px]">collected</code> = last collection already taken →
+                    balance ~$0; next renew on the upcoming collection day.{" "}
+                    <code className="text-[11px]">pending</code> (or blank) = last collection still
+                    open (this or previous month) → due on that last collection date (overdue if that
+                    day already passed).
                   </p>
                 </>
               )}
@@ -401,25 +428,6 @@ export default function ImportCustomersSheet({
               </p>
               <p>Do not put billing_policy in the file — it is set in step 1.</p>
             </div>
-            <button
-              type="button"
-              data-testid="import-customers-btn"
-              disabled={uploading || !!running}
-              onClick={() => fileRef.current?.click()}
-              className="pill-btn btn-primary h-11 px-5 gap-2 cursor-pointer inline-flex items-center disabled:opacity-60 self-start"
-            >
-              <UploadSimple size={16} />
-              {uploading ? "Starting…" : running ? "Importing…" : "Upload CSV"}
-            </button>
-            <input
-              ref={fileRef}
-              data-testid="import-customers-input"
-              type="file"
-              accept=".csv,text/csv"
-              className="hidden"
-              onChange={(e) => void onFile(e)}
-              disabled={uploading || !!running}
-            />
           </StepCard>
 
           <StepCard step={4} title="Live progress">

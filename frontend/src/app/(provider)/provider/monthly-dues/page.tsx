@@ -188,7 +188,7 @@ export default function MonthlyDuesPage() {
   // Drive blurb from row policies (report billing_mode may be "mixed")
   const isAdjustable = rows.some((r) => r.policy_variant === "monthly_adjustable");
 
-  const colCount = 4 + (showMoney ? 3 : 0) + 1;
+  const colCount = 4 + (showMoney ? 4 : 0) + 1;
 
   if (loading && !rows.length && !totals) {
     return <PageLoader testid="monthly-dues-loading" label="Loading customer subscriptions…" />;
@@ -216,8 +216,8 @@ export default function MonthlyDuesPage() {
           <h1 className="font-display font-black text-xl sm:text-2xl mt-0.5">Customer subscriptions</h1>
           <p className="text-xs text-muted-foreground mt-1 truncate">
             {isAdjustable
-              ? "Monthly customers with renewal dates — expand a row to verify this month’s charge math."
-              : "Fixed Monthly customers — overdue first; Quick Renew anytime (early full-fee advances renewal)."}
+              ? "Plan fee is the Settings price. Balance is what they owe — pending last collection uses that due date; collected renews on the next one."
+              : "Plan fee is the Settings price. Balance is what they owe — pending last collection uses that due date; Quick Renew anytime."}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -270,7 +270,8 @@ export default function MonthlyDuesPage() {
           <>
             <ul className="md:hidden divide-y divide-brand-border" data-testid="monthly-dues-list-mobile">
               {rows.map((r) => {
-                const credit = Number(r.credit ?? Math.max(0, -Number(r.outstanding || 0)));
+                    const credit = Number(r.credit ?? Math.max(0, -Number(r.outstanding || 0)));
+                const balance = Number(r.outstanding || 0);
                 const monthCharge = r.month_charge_after_tax ?? r.month_charge_before_tax;
                 const open = Boolean(expandedIds[r.customer_id]);
                 const hint = collapsedMonthHint(r);
@@ -297,9 +298,10 @@ export default function MonthlyDuesPage() {
                           Renewal {r.renewal_date || r.collection_due_date || "—"}
                           {r.is_overdue && r.days_overdue ? ` · ${r.days_overdue}d overdue` : null}
                         </div>
-                        {showMoney && monthCharge != null ? (
+                        {showMoney ? (
                           <div className="text-xs text-muted-foreground mt-1">
-                            This month {fmtCAD(Number(monthCharge))}
+                            Plan fee {fmtCAD(r.monthly_fee ?? 0)}
+                            {monthCharge != null ? ` · This month ${fmtCAD(Number(monthCharge))}` : ""}
                             {hint ? ` · ${hint}` : ""}
                           </div>
                         ) : null}
@@ -308,7 +310,15 @@ export default function MonthlyDuesPage() {
                         ) : null}
                       </div>
                       {showMoney ? (
-                        <div className="shrink-0 font-semibold text-primary">{fmtCAD(r.monthly_fee ?? 0)}</div>
+                        <div className="shrink-0 text-right">
+                          <div
+                            className={`font-semibold ${balance > 0 ? "text-primary" : "text-muted-foreground"}`}
+                            data-testid={`monthly-dues-balance-${r.customer_id}`}
+                          >
+                            {fmtCAD(balance)}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground">Balance</div>
+                        </div>
                       ) : null}
                     </div>
                     {showMoney ? (
@@ -363,8 +373,9 @@ export default function MonthlyDuesPage() {
                     <th className="px-3 py-2 label-overline">Plan</th>
                     <th className="px-3 py-2 label-overline">Renewal date</th>
                     <th className="px-3 py-2 label-overline">Overdue by</th>
-                    {showMoney ? <th className="px-3 py-2 label-overline text-right">Amount</th> : null}
+                    {showMoney ? <th className="px-3 py-2 label-overline text-right">Plan fee</th> : null}
                     {showMoney ? <th className="px-3 py-2 label-overline text-right">This month</th> : null}
+                    {showMoney ? <th className="px-3 py-2 label-overline text-right">Balance</th> : null}
                     {showMoney ? <th className="px-3 py-2 label-overline text-right">Credit</th> : null}
                     <th className="px-3 py-2 label-overline text-right">Action</th>
                   </tr>
@@ -372,6 +383,7 @@ export default function MonthlyDuesPage() {
                 <tbody className="divide-y divide-brand-border">
                   {rows.map((r) => {
                     const credit = Number(r.credit ?? Math.max(0, -Number(r.outstanding || 0)));
+                    const balance = Number(r.outstanding || 0);
                     const monthCharge = r.month_charge_after_tax ?? r.month_charge_before_tax;
                     const open = Boolean(expandedIds[r.customer_id]);
                     const hint = collapsedMonthHint(r);
@@ -400,7 +412,7 @@ export default function MonthlyDuesPage() {
                             {r.is_overdue && r.days_overdue ? `${r.days_overdue}d` : "—"}
                           </td>
                           {showMoney ? (
-                            <td className="px-3 py-2 text-right font-semibold text-primary">{fmtCAD(r.monthly_fee ?? 0)}</td>
+                            <td className="px-3 py-2 text-right font-semibold text-muted-foreground">{fmtCAD(r.monthly_fee ?? 0)}</td>
                           ) : null}
                           {showMoney ? (
                             <td className="px-3 py-2 text-right text-muted-foreground">
@@ -408,6 +420,14 @@ export default function MonthlyDuesPage() {
                               {hint ? (
                                 <div className="text-[10px] text-muted-foreground/80 mt-0.5">{hint}</div>
                               ) : null}
+                            </td>
+                          ) : null}
+                          {showMoney ? (
+                            <td
+                              className={`px-3 py-2 text-right font-semibold ${balance > 0 ? "text-primary" : "text-muted-foreground"}`}
+                              data-testid={`monthly-dues-balance-${r.customer_id}`}
+                            >
+                              {fmtCAD(balance)}
                             </td>
                           ) : null}
                           {showMoney ? (
