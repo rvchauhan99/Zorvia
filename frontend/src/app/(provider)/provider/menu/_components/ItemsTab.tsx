@@ -175,58 +175,67 @@ export default function ItemsTab({
         customers still only see your menu picture.
       </p>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          data-testid="menu-item-search"
-          className="h-11 flex-1 min-w-[180px] rounded-xl border border-brand-border bg-white px-3 text-sm"
-          placeholder="Search items"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
-        <select
-          data-testid="menu-item-category-filter"
-          className="h-11 rounded-xl border border-brand-border bg-white px-3 text-sm"
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-        >
-          <option value="all">All categories</option>
-          {ITEM_CATEGORIES.map((c) => (
-            <option key={c.value} value={c.value}>
-              {c.label}
-            </option>
-          ))}
-        </select>
-        <select
-          data-testid="menu-item-diet-filter"
-          className="h-11 rounded-xl border border-brand-border bg-white px-3 text-sm"
-          value={diet}
-          onChange={(e) => setDiet(e.target.value)}
-        >
-          {DIET_FILTERS.map((d) => (
-            <option key={d.value} value={d.value}>
-              {d.label}
-            </option>
-          ))}
-        </select>
-        <label className="flex items-center gap-2 text-sm h-11 px-1">
+      <div className="flex flex-col md:flex-row flex-wrap items-stretch md:items-center gap-3 bg-brand-surface/30 p-2 border border-brand-border/60 rounded-2xl">
+        <div className="flex-1 min-w-[240px]">
           <input
-            data-testid="menu-item-show-inactive"
-            type="checkbox"
-            checked={showInactive}
-            onChange={(e) => setShowInactive(e.target.checked)}
+            data-testid="menu-item-search"
+            className="w-full h-11 rounded-xl border border-brand-border bg-white px-4 text-sm focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+            placeholder="Search items..."
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
           />
-          Show inactive
-        </label>
-        {canMutate ? (
-          <button
-            type="button"
-            data-testid="menu-item-add"
-            onClick={openCreate}
-            className="pill-btn btn-primary gap-2 h-11 cursor-pointer"
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            data-testid="menu-item-category-filter"
+            className="h-11 rounded-xl border border-brand-border bg-white px-3 pr-8 text-sm focus:ring-2 focus:ring-primary/20 transition-all shadow-sm appearance-none"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 20 20\'%3E%3Cpath stroke=\'%236b7280\' stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'1.5\' d=\'M6 8l4 4 4-4\'/%3E%3C/svg%3E")', backgroundPosition: 'right 0.5rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1.5em 1.5em' }}
           >
-            <Plus size={18} /> Add item
-          </button>
-        ) : null}
+            <option value="all">All categories</option>
+            {ITEM_CATEGORIES.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+          <select
+            data-testid="menu-item-diet-filter"
+            className="h-11 rounded-xl border border-brand-border bg-white px-3 pr-8 text-sm focus:ring-2 focus:ring-primary/20 transition-all shadow-sm appearance-none"
+            value={diet}
+            onChange={(e) => setDiet(e.target.value)}
+            style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 20 20\'%3E%3Cpath stroke=\'%236b7280\' stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'1.5\' d=\'M6 8l4 4 4-4\'/%3E%3C/svg%3E")', backgroundPosition: 'right 0.5rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1.5em 1.5em' }}
+          >
+            {DIET_FILTERS.map((d) => (
+              <option key={d.value} value={d.value}>
+                {d.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center justify-between md:justify-end gap-4 pl-1 md:pl-2">
+          <label className="flex items-center gap-2 text-sm text-neutral-700 font-medium cursor-pointer group">
+            <input
+              data-testid="menu-item-show-inactive"
+              type="checkbox"
+              className="w-4 h-4 rounded border-brand-border text-primary focus:ring-primary/20 transition-all cursor-pointer"
+              checked={showInactive}
+              onChange={(e) => setShowInactive(e.target.checked)}
+            />
+            <span className="group-hover:text-neutral-900 transition-colors">Show inactive</span>
+          </label>
+          {canMutate ? (
+            <button
+              type="button"
+              data-testid="menu-item-add"
+              onClick={openCreate}
+              className="pill-btn btn-primary shadow-sm hover:-translate-y-0.5 transition-transform gap-2 h-11 px-5 cursor-pointer"
+            >
+              <Plus size={18} /> Add item
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {loading ? (
@@ -238,15 +247,15 @@ export default function ItemsTab({
             : "No items match these filters."}
         </p>
       ) : (
-        <ul className="divide-y divide-brand-border border border-brand-border rounded-xl overflow-hidden">
+        <ul className="grid grid-cols-1 gap-2 mt-1">
           {visible.map((item) => (
             <li
               key={item.id}
               data-testid={`menu-item-row-${item.id}`}
-              className="flex items-center gap-3 px-3 py-2.5 bg-white"
+              className="flex items-center gap-4 px-4 py-3 bg-white border border-brand-border/60 rounded-xl hover:-translate-y-[1px] hover:shadow-sm transition-all duration-200 group"
             >
               <div className="min-w-0 flex-1">
-                <div className="font-medium text-sm truncate flex items-center gap-1.5">
+                <div className="font-medium text-sm text-neutral-900 truncate flex items-center gap-2">
                   <span
                     aria-label={item.is_veg === false ? "Non-vegetarian" : "Vegetarian"}
                     title={item.is_veg === false ? "Non-vegetarian" : "Vegetarian"}
@@ -283,7 +292,7 @@ export default function ItemsTab({
                   <button
                     type="button"
                     data-testid={`menu-item-edit-${item.id}`}
-                    className="icon-btn icon-btn-neutral"
+                    className="icon-btn icon-btn-neutral opacity-60 group-hover:opacity-100 transition-opacity bg-brand-surface hover:bg-brand-border/50"
                     title="Edit"
                     onClick={() => openEdit(item)}
                   >
@@ -293,7 +302,7 @@ export default function ItemsTab({
                     <button
                       type="button"
                       data-testid={`menu-item-deactivate-${item.id}`}
-                      className="icon-btn icon-btn-danger"
+                      className="icon-btn icon-btn-danger opacity-60 group-hover:opacity-100 transition-opacity"
                       title="Deactivate"
                       onClick={() => void handleDeactivate(item)}
                     >
@@ -303,7 +312,7 @@ export default function ItemsTab({
                     <button
                       type="button"
                       data-testid={`menu-item-reactivate-${item.id}`}
-                      className="icon-btn icon-btn-neutral"
+                      className="icon-btn icon-btn-neutral opacity-60 group-hover:opacity-100 transition-opacity bg-brand-surface hover:bg-brand-border/50"
                       title="Reactivate"
                       onClick={() => void handleReactivate(item)}
                     >

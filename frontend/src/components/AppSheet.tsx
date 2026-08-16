@@ -140,7 +140,7 @@ export default function AppSheet({
       <button
         type="button"
         aria-label="Close dialog"
-        className="absolute inset-0 z-[60] bg-black/50 backdrop-blur-[2px] border-0 cursor-default"
+        className="absolute inset-0 z-[60] bg-neutral-900/40 backdrop-blur-md border-0 cursor-default transition-all duration-300"
         onClick={requestClose}
       />
       {panel}

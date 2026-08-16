@@ -89,37 +89,40 @@ function ProviderMenuInner() {
   const refreshConfigured = () => setPlanVersion((v) => v + 1);
 
   return (
-    <div className="flex flex-col gap-3 sm:gap-4 animate-fade-in-up" data-testid="provider-menu-page">
-      <div>
-        <span className="label-overline">Kitchen</span>
-        <h1 className="font-display font-black text-xl sm:text-2xl mt-0.5 flex items-center gap-2">
-          <ForkKnife size={26} weight="duotone" className="text-primary" />
-          Menu
-        </h1>
-      </div>
+    <div className="flex flex-col gap-3 animate-fade-in-up" data-testid="provider-menu-page">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-brand-border/40 pb-3">
+        <div className="flex items-center gap-2.5">
+          <ForkKnife size={22} weight="duotone" className="text-primary" />
+          <h1 className="font-display font-bold text-lg tracking-tight text-neutral-900 leading-none">
+            Menu
+          </h1>
+        </div>
 
-      <div
-        className="flex gap-2 overflow-x-auto snap-x -mx-1 px-1 pb-1"
-        role="tablist"
-        aria-label="Menu sections"
-      >
-        {visibleTabs.map((value) => (
-          <button
-            key={value}
-            type="button"
-            role="tab"
-            aria-selected={tab === value}
-            data-testid={`menu-tab-${value}`}
-            onClick={() => selectTab(value)}
-            className={`snap-start shrink-0 px-3.5 h-11 min-h-[44px] rounded-full text-sm font-medium border cursor-pointer transition-colors ${
-              tab === value
-                ? "bg-primary text-primary-foreground border-primary"
-                : "bg-white border-brand-border hover:bg-brand-surface"
-            }`}
+        <div className="flex items-center -mx-1 px-1 sm:mx-0 sm:px-0 overflow-x-auto pb-1 sm:pb-0">
+          <div
+            className="inline-flex p-0.5 bg-brand-surface rounded-xl border border-brand-border/60 snap-x min-w-max"
+            role="tablist"
+            aria-label="Menu sections"
           >
-            {TAB_LABELS[value]}
-          </button>
-        ))}
+            {visibleTabs.map((value) => (
+              <button
+                key={value}
+                type="button"
+                role="tab"
+                aria-selected={tab === value}
+                data-testid={`menu-tab-${value}`}
+                onClick={() => selectTab(value)}
+                className={`snap-start shrink-0 px-4 h-8 min-h-[32px] rounded-lg text-sm font-medium cursor-pointer transition-colors duration-200 ease-out flex items-center justify-center ${
+                  tab === value
+                    ? "bg-white text-neutral-900 shadow-sm border border-brand-border/40"
+                    : "text-muted-foreground hover:text-neutral-900 hover:bg-white/40 border border-transparent"
+                }`}
+              >
+                {TAB_LABELS[value]}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {tab === "poster" ? (

@@ -299,95 +299,29 @@ export default function WeeklyMenuTab({
 
   return (
     <div className="flex flex-col gap-3" data-testid="menu-plan-tab">
-      <p className="text-sm text-muted-foreground">
-        Optional. Set what goes in each tiffin per weekday, and let customers pick their options.
-        Leave it empty to keep sharing the menu as a picture only.
-      </p>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Meal type">
-          {(plan?.meal_types || []).map((type) => (
-            <button
-              key={type.id}
-              type="button"
-              role="tab"
-              aria-selected={mealTypeId === type.id}
-              data-testid={`menu-plan-type-${type.id}`}
-              onClick={() => setMealTypeId(type.id)}
-              className={`shrink-0 px-3.5 h-9 rounded-full text-sm font-medium border cursor-pointer transition-colors ${
-                mealTypeId === type.id
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-white border-brand-border hover:bg-brand-surface"
-              }`}
-            >
-              {type.name}
-            </button>
-          ))}
-        </div>
-        <div className="flex-1" />
-        {canMutate ? (
-          <>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                data-testid="menu-plan-split-slots"
-                checked={splitBySlot}
-                onChange={(e) => handleSplitToggle(e.target.checked)}
-              />
-              Different lunch and dinner
-            </label>
-            <button
-              type="button"
-              data-testid="menu-plan-save"
-              disabled={!dirty || saving}
-              onClick={() => void handleSave()}
-              className="pill-btn btn-primary h-11 cursor-pointer disabled:opacity-60"
-            >
-              {saving ? "Saving…" : dirty ? "Save changes" : "Saved"}
-            </button>
-          </>
-        ) : null}
-      </div>
-
-      <div
-        className="card-tinted p-3 flex flex-wrap items-center gap-3"
-        data-testid="menu-plan-image-section"
-      >
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <ImageSquare size={20} weight="duotone" className="text-primary shrink-0" />
-          <div className="min-w-0">
-            <div className="text-sm font-medium">Weekly image for this meal type</div>
-            <div className="text-xs text-muted-foreground">
-              One picture for the whole week. Customers see it with their menu.
-            </div>
-            {plan?.configured ? (
-              <p className="text-xs text-muted-foreground mt-1" data-testid="menu-plan-share-hint">
-                Email / WhatsApp still use the menu picture.{" "}
-                <Link
-                  href="/provider/menu?tab=poster"
-                  className="text-primary font-medium hover:underline"
-                  data-testid="menu-plan-share-link"
-                >
-                  Share menu picture
-                </Link>
-              </p>
-            ) : null}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-brand-surface/30 p-2 border border-brand-border/60 rounded-xl">
+        <div className="flex items-center gap-3 overflow-x-auto min-w-0">
+          <div className="inline-flex p-0.5 bg-brand-surface rounded-lg border border-brand-border/60 shrink-0" role="tablist" aria-label="Meal type">
+            {(plan?.meal_types || []).map((type) => (
+              <button
+                key={type.id}
+                type="button"
+                role="tab"
+                aria-selected={mealTypeId === type.id}
+                data-testid={`menu-plan-type-${type.id}`}
+                onClick={() => setMealTypeId(type.id)}
+                className={`shrink-0 px-3 h-7 rounded-md text-sm font-medium cursor-pointer transition-colors duration-200 ${
+                  mealTypeId === type.id
+                    ? "bg-white text-neutral-900 shadow-sm border border-brand-border/40"
+                    : "text-muted-foreground hover:text-neutral-900 hover:bg-white/40 border border-transparent"
+                }`}
+              >
+                {type.name}
+              </button>
+            ))}
           </div>
-        </div>
-        {currentImage ? (
-          <button
-            type="button"
-            onClick={() => setViewingImage(currentImage)}
-            data-testid={`menu-plan-image-${mealTypeId}`}
-            className="shrink-0 cursor-pointer rounded-lg border border-brand-border p-0 overflow-hidden hover:opacity-95"
-            aria-label="View the weekly menu image"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={currentImage} alt="" className="h-14 w-14 object-cover" />
-          </button>
-        ) : null}
-        {canMutate ? (
-          <div className="flex gap-2">
+          
+          <div className="hidden sm:flex items-center gap-2 px-2 border-l border-brand-border/60 shrink-0">
             <input
               ref={imageRef}
               type="file"
@@ -396,60 +330,106 @@ export default function WeeklyMenuTab({
               data-testid="menu-plan-image-input"
               onChange={handleImageUpload}
             />
-            <button
-              type="button"
-              data-testid="menu-plan-image-upload"
-              disabled={uploadingImage}
-              onClick={() => imageRef.current?.click()}
-              className="pill-btn btn-outline gap-2 h-9 text-xs cursor-pointer disabled:opacity-60"
-            >
-              <UploadSimple size={14} />
-              {uploadingImage ? "Uploading…" : currentImage ? "Replace" : "Upload"}
-            </button>
             {currentImage ? (
+              <button
+                type="button"
+                onClick={() => setViewingImage(currentImage)}
+                data-testid={`menu-plan-image-${mealTypeId}`}
+                className="shrink-0 cursor-pointer rounded overflow-hidden border border-brand-border hover:opacity-90"
+                aria-label="View the weekly menu image"
+              >
+                <img src={currentImage} alt="" className="h-6 w-6 object-cover" />
+              </button>
+            ) : (
+              <ImageSquare size={16} weight="duotone" className="text-primary" />
+            )}
+            <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+              {uploadingImage ? "Uploading..." : currentImage ? "Custom image set" : plan?.configured ? "Using global picture" : "No picture uploaded"}
+            </span>
+            {canMutate ? (
+              <button
+                type="button"
+                data-testid="menu-plan-image-upload"
+                className="text-xs font-medium text-primary hover:underline ml-1 disabled:opacity-60"
+                disabled={uploadingImage}
+                onClick={() => imageRef.current?.click()}
+              >
+                {currentImage ? "Replace" : "Upload"}
+              </button>
+            ) : null}
+            {canMutate && currentImage ? (
               <button
                 type="button"
                 data-testid="menu-plan-image-remove"
                 onClick={() => void handleImageRemove()}
-                className="icon-btn icon-btn-danger"
+                className="text-xs font-medium text-red-600 hover:underline ml-1"
                 title="Remove image"
               >
-                <Trash size={16} />
+                Remove
               </button>
             ) : null}
           </div>
+        </div>
+
+        {canMutate ? (
+          <div className="flex flex-wrap items-center gap-3 shrink-0 pl-2 sm:pl-0 sm:border-0 border-l border-brand-border/60">
+            <label className="flex items-center gap-1.5 text-xs text-neutral-700 cursor-pointer">
+              <input
+                type="checkbox"
+                data-testid="menu-plan-split-slots"
+                checked={splitBySlot}
+                onChange={(e) => handleSplitToggle(e.target.checked)}
+                className="rounded-sm border-brand-border/60 text-primary focus:ring-primary/20 w-3.5 h-3.5"
+              />
+              Split lunch/dinner
+            </label>
+            <button
+              type="button"
+              data-testid="menu-plan-save"
+              disabled={!dirty || saving}
+              onClick={() => void handleSave()}
+              className="pill-btn btn-primary h-7 px-3 text-xs cursor-pointer disabled:opacity-60"
+            >
+              {saving ? "Saving…" : dirty ? "Save" : "Saved"}
+            </button>
+          </div>
         ) : null}
       </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
         {WEEKDAYS.map((day) => (
           <div
             key={day.i}
-            className="card-tinted p-3 flex flex-col gap-2"
+            className="card-tinted p-3 sm:p-4 flex flex-col gap-3 border border-brand-border/60 hover:border-brand-border hover:shadow-sm transition-all duration-300 group rounded-[16px]"
             data-testid={`menu-plan-day-${day.i}`}
           >
-            <div className="font-display font-bold text-sm">{WEEKDAY_LONG[day.i]}</div>
-            {slotsForDay.map((slot) => {
-              const entry = cellEntry(day.i, slot);
-              return (
-                <div
-                  key={slot}
-                  className="rounded-xl border border-brand-border bg-white p-2.5 flex flex-col gap-2"
-                  data-testid={`menu-plan-cell-${day.i}-${mealTypeId}-${slot}`}
-                >
+            <div className="font-display font-bold text-lg text-neutral-900 border-b border-brand-border/50 pb-2">{WEEKDAY_LONG[day.i]}</div>
+            <div className="flex flex-col gap-3">
+              {slotsForDay.map((slot) => {
+                const entry = cellEntry(day.i, slot);
+                return (
+                  <div
+                    key={slot}
+                    className={`rounded-xl p-3 flex flex-col gap-3 transition-all duration-300 ${
+                      entryIsEmpty(entry) ? "border border-dashed border-brand-border/80 bg-brand-surface/20 hover:bg-brand-surface/50" : "border border-brand-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)] bg-white"
+                    }`}
+                    data-testid={`menu-plan-cell-${day.i}-${mealTypeId}-${slot}`}
+                  >
                   {splitBySlot ? (
-                    <div className="label-overline">{slotLabel(slot)}</div>
+                    <div className="label-overline text-muted-foreground/80">{slotLabel(slot)}</div>
                   ) : null}
                   {entryIsEmpty(entry) ? (
-                    <p className="text-xs text-muted-foreground">Not set</p>
+                    <div className="flex flex-col items-center justify-center py-4 text-center opacity-70">
+                      <p className="text-sm font-medium text-neutral-500">Not set</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Click below to add</p>
+                    </div>
                   ) : (
-                    <div className="flex flex-col gap-1.5">
+                    <div className="flex flex-col gap-2">
                       {entry!.lines.length > 0 ? (
-                        <ul className="text-sm flex flex-col gap-0.5">
+                        <ul className="text-sm flex flex-col gap-1.5">
                           {entry!.lines.map((line) => (
-                            <li key={line.item_id} className="flex justify-between gap-2">
-                              <span className="truncate">{itemName(line.item_id)}</span>
-                              <span className="text-muted-foreground shrink-0 font-mono text-xs">
+                            <li key={line.item_id} className="flex justify-between items-center gap-2 py-0.5 border-b border-brand-border/30 last:border-0">
+                              <span className="truncate font-medium text-neutral-800">{itemName(line.item_id)}</span>
+                              <span className="text-muted-foreground shrink-0 font-mono text-xs bg-brand-surface px-1.5 py-0.5 rounded">
                                 {fmtQty(line.quantity)} {itemUnit(line.item_id)}
                               </span>
                             </li>
@@ -459,32 +439,38 @@ export default function WeeklyMenuTab({
                       {entry!.groups.map((group) => (
                         <div
                           key={group.id}
-                          className="rounded-lg bg-brand-surface px-2 py-1.5"
+                          className="rounded-lg bg-brand-surface/40 border border-brand-border/40 px-3 py-2"
                           data-testid={`menu-plan-group-${group.id}`}
                         >
-                          <div className="text-xs font-medium">
-                            {group.label || "Choice"} · pick {group.choose} of{" "}
-                            {group.options.length}
+                          <div className="text-xs font-bold text-neutral-800 mb-1">
+                            {group.label || "Choice"} <span className="font-normal text-muted-foreground ml-1">· pick {group.choose} of {group.options.length}</span>
                           </div>
-                          <div className="text-xs text-muted-foreground truncate">
+                          <div className="text-xs text-muted-foreground flex flex-wrap gap-1.5 mt-1">
                             {group.options
-                              .map((o) => `${itemName(o.item_id)}${o.is_default ? " ✓" : ""}`)
-                              .join(", ")}
+                              .map((o) => (
+                                <span key={o.item_id} className="inline-flex items-center gap-1 bg-white px-1.5 py-0.5 rounded border border-brand-border/60">
+                                  {itemName(o.item_id)}{o.is_default ? <span className="text-secondary font-bold">✓</span> : ""}
+                                </span>
+                              ))}
                           </div>
                         </div>
                       ))}
                     </div>
                   )}
                   {canMutate ? (
-                    <div className="flex flex-wrap gap-1.5">
+                    <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t border-brand-border/30">
                       <button
                         type="button"
                         data-testid={`menu-plan-edit-${day.i}-${slot}`}
                         onClick={() => openEditor(day.i, slot)}
-                        className="pill-btn btn-outline gap-1.5 h-9 text-xs cursor-pointer"
+                        className={`pill-btn gap-1.5 h-9 text-xs font-medium cursor-pointer transition-all ${
+                          entryIsEmpty(entry) 
+                            ? "bg-primary text-white hover:bg-primary/90 hover:shadow-sm w-full justify-center" 
+                            : "btn-outline hover:bg-brand-surface"
+                        }`}
                       >
                         {entryIsEmpty(entry) ? <Plus size={14} /> : <PencilSimple size={14} />}
-                        {entryIsEmpty(entry) ? "Set menu" : "Edit"}
+                        {entryIsEmpty(entry) ? "Set menu" : "Edit items"}
                       </button>
                       {!entryIsEmpty(entry) ? (
                         <>
@@ -495,7 +481,7 @@ export default function WeeklyMenuTab({
                               setCopySource({ weekday: day.i, slot });
                               setCopyTargets([]);
                             }}
-                            className="pill-btn btn-outline gap-1.5 h-9 text-xs cursor-pointer"
+                            className="pill-btn btn-outline gap-1.5 h-9 text-xs cursor-pointer hover:bg-brand-surface"
                           >
                             <Copy size={14} /> Copy to…
                           </button>
@@ -503,7 +489,7 @@ export default function WeeklyMenuTab({
                             type="button"
                             data-testid={`menu-plan-clear-${day.i}-${slot}`}
                             onClick={() => clearCell(day.i, slot)}
-                            className="icon-btn icon-btn-danger"
+                            className="icon-btn icon-btn-danger ml-auto opacity-0 group-hover:opacity-100 transition-opacity"
                             title="Clear this day"
                           >
                             <Trash size={14} />
@@ -515,6 +501,7 @@ export default function WeeklyMenuTab({
                 </div>
               );
             })}
+            </div>
           </div>
         ))}
       </div>
