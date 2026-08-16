@@ -13,6 +13,8 @@ import {
 } from "@phosphor-icons/react";
 import AppSheet from "@/components/AppSheet";
 import MenuImageLightbox from "@/components/MenuImageLightbox";
+import SearchableSelect from "@/components/SearchableSelect";
+import Link from "next/link";
 import { WEEKDAYS } from "@/lib/format";
 import {
   emptyEntry,
@@ -57,7 +59,13 @@ function groupError(group: MenuPlanGroup): string | null {
   return null;
 }
 
-export default function WeeklyMenuTab({ canMutate }: { canMutate: boolean }) {
+export default function WeeklyMenuTab({
+  canMutate,
+  onPlanConfiguredChange,
+}: {
+  canMutate: boolean;
+  onPlanConfiguredChange?: () => void;
+}) {
   const [plan, setPlan] = useState<MenuPlan | null>(null);
   const [loading, setLoading] = useState(true);
   const [entries, setEntries] = useState<MenuPlanEntry[]>([]);
@@ -223,6 +231,7 @@ export default function WeeklyMenuTab({ canMutate }: { canMutate: boolean }) {
       setSplitBySlot(!!data.split_by_slot);
       setBaseline(JSON.stringify({ s: !!data.split_by_slot, e: data.entries || [] }));
       toast.success("Weekly menu saved");
+      onPlanConfiguredChange?.();
     } catch (err: any) {
       toast.error(errDetail(err, "Could not save the weekly menu"));
     } finally {
@@ -351,6 +360,18 @@ export default function WeeklyMenuTab({ canMutate }: { canMutate: boolean }) {
             <div className="text-xs text-muted-foreground">
               One picture for the whole week. Customers see it with their menu.
             </div>
+            {plan?.configured ? (
+              <p className="text-xs text-muted-foreground mt-1" data-testid="menu-plan-share-hint">
+                Email / WhatsApp still use the menu picture.{" "}
+                <Link
+                  href="/provider/menu?tab=poster"
+                  className="text-primary font-medium hover:underline"
+                  data-testid="menu-plan-share-link"
+                >
+                  Share menu picture
+                </Link>
+              </p>
+            ) : null}
           </div>
         </div>
         {currentImage ? (
@@ -718,24 +739,21 @@ function CellEditorSheet({
               ))}
             </ul>
           )}
-          <select
-            data-testid="menu-plan-add-line"
-            className="h-11 rounded-xl border border-brand-border bg-white px-3 text-sm"
+          <SearchableSelect
+            testid="menu-plan-add-line"
             value=""
-            onChange={(e) => {
-              addLine(e.target.value);
-              e.target.value = "";
+            onChange={(next) => {
+              if (next) addLine(next);
             }}
-          >
-            <option value="">Add an item…</option>
-            {items
+            options={items
               .filter((item) => !usedInLines.has(item.id))
-              .map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-          </select>
+              .map((item) => ({
+                value: item.id,
+                label: item.name,
+              }))}
+            placeholder="Search and add an item…"
+            inputClassName="h-11 px-3 rounded-xl border border-brand-border bg-white text-sm w-full"
+          />
         </section>
 
         <section className="flex flex-col gap-3">
@@ -854,24 +872,22 @@ function CellEditorSheet({
                     </li>
                   ))}
                 </ul>
-                <select
-                  data-testid={`menu-plan-add-option-${group.id}`}
-                  className="h-11 rounded-xl border border-brand-border bg-white px-3 text-sm"
+                <SearchableSelect
+                  testid={`menu-plan-add-option-${group.id}`}
                   value=""
-                  onChange={(e) => {
-                    addOption(group, e.target.value);
-                    e.target.value = "";
+                  onChange={(next) => {
+                    if (next) addOption(group, next);
                   }}
-                >
-                  <option value="">Add an option…</option>
-                  {items
+                  options={items
                     .filter((item) => !group.options.some((o) => o.item_id === item.id))
-                    .map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name}
-                      </option>
-                    ))}
-                </select>
+                    .map((item) => ({
+                      value: item.id,
+                      label: item.name,
+                    }))}
+                  placeholder="Search and add an option…"
+                  dropdownPlacement="up"
+                  inputClassName="h-11 px-3 rounded-xl border border-brand-border bg-white text-sm w-full"
+                />
                 {problem ? (
                   <p
                     className="text-xs text-amber-800"

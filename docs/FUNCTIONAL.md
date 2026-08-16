@@ -181,15 +181,15 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 - Consumer pending-approval empty state explains “what happens next”
 ### 4.6d Menu (`/provider/menu`)
 
-Three tabs. A kitchen can stop after the first one — the rest is optional and turns itself on.
+Three tabs when the kitchen only uses a poster. Once at least one Weekly menu day is filled, **Menu picture** hides from the tab bar (default becomes Weekly menu). Email / WhatsApp share stays reachable from Weekly menu → **Share menu picture**.
 
 | Tab | Purpose |
 |-----|---------|
-| **Menu picture** | The original poster flow: upload an image anytime, keep history, email notify, WhatsApp share. Unchanged. |
+| **Menu picture** | Poster flow: upload anytime, history, email notify, WhatsApp share. Shown only while Weekly menu is empty; when weekly is in use, opened via the share link from Weekly menu. |
 | **Items** | Item master — every dish the kitchen can cook, with category, unit, veg/non-veg, and a default per-tiffin quantity. Search + category + diet filter. Every kitchen is pre-filled with a starter veg + non-veg list. |
 | **Weekly menu** | Grid of **weekday × meal type**. Fill a cell with fixed items and/or choice groups. Copy a day onto others. One weekly picture per meal type. |
 
-**No setting to switch this on.** The detailed menu is considered “in use” the moment one grid cell has content. Seeding the starter item list does **not** count. Until a cell is filled, the consumer portal, the customer master, and the kitchen report show nothing new, so a poster-only kitchen never sees this feature.
+**No setting to switch this on.** The detailed menu is considered “in use” the moment one grid cell has content. Seeding the starter item list does **not** count. Until a cell is filled, the consumer portal, the customer master, and the kitchen report show nothing new, so a poster-only kitchen never sees this feature. When weekly is in use, the customer app shows **Your weekly menu** only (not the old Current menu poster).
 
 **Days and slots.** The grid is 2‑D (weekday × meal type) by default. A kitchen that genuinely cooks different food at lunch and dinner turns on **separate lunch and dinner menus** and gets extra per-slot cells; anything left unset falls back to the all-day cell.
 

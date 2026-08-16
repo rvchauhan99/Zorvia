@@ -265,7 +265,7 @@ export default function ConsumerHome() {
         </section>
       ) : null}
 
-      {menu?.image_url ? (
+      {menu?.image_url && !menuWeek ? (
         <section className="card-tinted p-3 sm:p-4 flex flex-col gap-3" data-testid="consumer-menu-section">
           <div>
             <h2 className="font-display font-bold text-xl">Current menu</h2>

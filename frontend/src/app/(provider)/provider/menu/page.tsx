@@ -1,18 +1,20 @@
 "use client";
 
-import React, { Suspense, useEffect, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ForkKnife } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth";
 import { canMutateAdmin } from "@/lib/roles";
 import { fetchWhatsappFeaturesEnabled } from "@/lib/whatsapp-features";
+import { api } from "@/lib/api";
+import type { MenuPlan } from "@/lib/menuPlan";
 import PosterTab from "./_components/PosterTab";
 import ItemsTab from "./_components/ItemsTab";
 import WeeklyMenuTab from "./_components/WeeklyMenuTab";
 
 type Tab = "poster" | "items" | "plan";
 
-const VALID_TABS: Tab[] = ["poster", "items", "plan"];
+const ALL_TABS: Tab[] = ["poster", "items", "plan"];
 
 const TAB_LABELS: Record<Tab, string> = {
   poster: "Menu picture",
@@ -20,33 +22,71 @@ const TAB_LABELS: Record<Tab, string> = {
   plan: "Weekly menu",
 };
 
+function resolveTab(
+  raw: string | null,
+  configured: boolean | null,
+): Tab {
+  const requested = ALL_TABS.includes(raw as Tab) ? (raw as Tab) : null;
+  // Poster deep link stays valid even when the chip is hidden (share from Weekly menu).
+  if (requested === "poster") return "poster";
+  if (requested === "items" || requested === "plan") return requested;
+  if (configured === true) return "plan";
+  return "poster";
+}
+
 function ProviderMenuInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { session } = useAuth();
   const canMutate = canMutateAdmin(session);
   const [waEnabled, setWaEnabled] = useState(false);
-  const [tab, setTab] = useState<Tab>(() => {
-    const raw = searchParams.get("tab");
-    return VALID_TABS.includes(raw as Tab) ? (raw as Tab) : "poster";
-  });
+  const [configured, setConfigured] = useState<boolean | null>(null);
   const [planVersion, setPlanVersion] = useState(0);
+  const [tab, setTab] = useState<Tab>(() => resolveTab(searchParams.get("tab"), null));
 
   useEffect(() => {
     void fetchWhatsappFeaturesEnabled().then(setWaEnabled);
   }, []);
 
   useEffect(() => {
-    const raw = searchParams.get("tab");
-    if (VALID_TABS.includes(raw as Tab)) setTab(raw as Tab);
-  }, [searchParams]);
+    let cancelled = false;
+    void api
+      .get<MenuPlan>("/menu-plan")
+      .then(({ data }) => {
+        if (cancelled) return;
+        setConfigured(!!data?.configured);
+      })
+      .catch(() => {
+        if (!cancelled) setConfigured(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [planVersion]);
+
+  useEffect(() => {
+    if (configured === null) return;
+    setTab(resolveTab(searchParams.get("tab"), configured));
+  }, [searchParams, configured]);
+
+  const visibleTabs = useMemo<Tab[]>(() => {
+    // Until we know configured, omit Menu picture so planned kitchens do not flash it.
+    if (configured !== false) return ["items", "plan"];
+    return ALL_TABS;
+  }, [configured]);
 
   const selectTab = (next: Tab) => {
     setTab(next);
-    router.replace(next === "poster" ? "/provider/menu" : `/provider/menu?tab=${next}`, {
-      scroll: false,
-    });
+    const url =
+      next === "poster"
+        ? configured
+          ? "/provider/menu?tab=poster"
+          : "/provider/menu"
+        : `/provider/menu?tab=${next}`;
+    router.replace(url, { scroll: false });
   };
+
+  const refreshConfigured = () => setPlanVersion((v) => v + 1);
 
   return (
     <div className="flex flex-col gap-3 sm:gap-4 animate-fade-in-up" data-testid="provider-menu-page">
@@ -63,7 +103,7 @@ function ProviderMenuInner() {
         role="tablist"
         aria-label="Menu sections"
       >
-        {VALID_TABS.map((value) => (
+        {visibleTabs.map((value) => (
           <button
             key={value}
             type="button"
@@ -82,11 +122,19 @@ function ProviderMenuInner() {
         ))}
       </div>
 
-      {tab === "poster" ? <PosterTab waEnabled={waEnabled} /> : null}
+      {tab === "poster" ? (
+        <PosterTab waEnabled={waEnabled} weeklyInUse={configured === true} />
+      ) : null}
       {tab === "items" ? (
         <ItemsTab canMutate={canMutate} onItemsChanged={() => setPlanVersion((v) => v + 1)} />
       ) : null}
-      {tab === "plan" ? <WeeklyMenuTab key={planVersion} canMutate={canMutate} /> : null}
+      {tab === "plan" ? (
+        <WeeklyMenuTab
+          key={planVersion}
+          canMutate={canMutate}
+          onPlanConfiguredChange={refreshConfigured}
+        />
+      ) : null}
     </div>
   );
 }

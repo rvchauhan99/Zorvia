@@ -38,7 +38,13 @@ function alreadyShared(menu: MenuDoc): boolean {
   return menu.share_status === "shared" && sent > 0;
 }
 
-export default function PosterTab({ waEnabled }: { waEnabled: boolean }) {
+export default function PosterTab({
+  waEnabled,
+  weeklyInUse = false,
+}: {
+  waEnabled: boolean;
+  weeklyInUse?: boolean;
+}) {
   const [menus, setMenus] = useState<MenuDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [label, setLabel] = useState("");
@@ -166,6 +172,15 @@ export default function PosterTab({ waEnabled }: { waEnabled: boolean }) {
 
   return (
     <div className="flex flex-col gap-4 sm:gap-5">
+      {weeklyInUse ? (
+        <p
+          className="text-sm rounded-xl border border-brand-border bg-brand-surface px-3 py-2.5"
+          data-testid="menu-poster-weekly-note"
+        >
+          Customers see your weekly dishes in the app. This picture is for email / WhatsApp share
+          and history.
+        </p>
+      ) : null}
       <p className="text-sm text-muted-foreground">
         {waEnabled
           ? "Upload anytime. Customers see the latest menu in the app; notify by email or WhatsApp. Past uploads stay in History. WhatsApp is prepaid (not in your subscription) and can be shared once per menu after a successful send."
