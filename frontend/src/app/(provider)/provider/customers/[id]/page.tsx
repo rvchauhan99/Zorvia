@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useState, useTransition } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
-import { ArrowLeft, PencilSimple, Plus } from "@phosphor-icons/react";
+import { ArrowLeft, ForkKnife, PencilSimple, Plus } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canMutateAdmin, canSeePricing } from "@/lib/roles";
@@ -22,18 +22,28 @@ import { CollectionsChart } from "@/components/analytics/CollectionsChart";
 import { AgingChart } from "@/components/analytics/AgingChart";
 import { InlineLoader, KpiSkeleton, PageLoader, SectionSkeleton } from "@/components/loaders";
 import { customerSlotSummary } from "@/lib/mealSlots";
+import MenuWeekPanel from "@/components/MenuWeekPanel";
+import type { MenuWeek } from "@/lib/menuPlan";
 import { fetchWhatsappFeaturesEnabled } from "@/lib/whatsapp-features";
 import CursorPaginationBar from "@/components/CursorPaginationBar";
 import { asPageEnvelope, DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
 
-type Tab = "overview" | "analysis" | "deliveries" | "payments" | "pauses" | "notes";
+type Tab = "overview" | "analysis" | "deliveries" | "payments" | "pauses" | "menu" | "notes";
 
 function stagger(index: number) {
   return { animationDelay: `${index * 70}ms` } as React.CSSProperties;
 }
 
-const VALID_TABS: Tab[] = ["overview", "analysis", "deliveries", "payments", "pauses", "notes"];
+const VALID_TABS: Tab[] = [
+  "overview",
+  "analysis",
+  "deliveries",
+  "payments",
+  "pauses",
+  "menu",
+  "notes",
+];
 
 function tabBtn(active: boolean, label: string, onClick: () => void, testid: string) {
   return (
@@ -126,17 +136,21 @@ export default function CustomerDetail() {
   const [customerPayments, setCustomerPayments] = useState<any[]>([]);
   const [paymentsLoading, setPaymentsLoading] = useState(false);
   const paymentsPaging = useCursorPagination({ initialPageSize: DEFAULT_PAGE_SIZE });
+  const [menuWeek, setMenuWeek] = useState<MenuWeek | null>(null);
+  const [savingChoices, setSavingChoices] = useState(false);
 
   async function load() {
     try {
-      const [{ data }, enabled, provRes] = await Promise.all([
+      const [{ data }, enabled, provRes, weekRes] = await Promise.all([
         api.get(`/customers/${id}`),
         fetchWhatsappFeaturesEnabled(),
         api.get("/providers/me").catch(() => ({ data: null })),
+        api.get<MenuWeek>(`/customers/${id}/menu-choices`).catch(() => ({ data: null })),
       ]);
       setC(data);
       setNotesDraft(data.notes || "");
       setWaEnabled(enabled);
+      setMenuWeek(weekRes?.data?.enabled ? weekRes.data : null);
       const types = Array.isArray(provRes?.data?.meal_types)
         ? provRes.data.meal_types.map((t: any) => ({
             id: String(t.id),
@@ -296,6 +310,19 @@ export default function CustomerDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset+fetch when tab opens or page size changes
   }, [tab, id, paymentsPaging.pageSize, c?.billing?.billing_mode]);
 
+  async function saveMenuChoices(choices: Record<string, string[]>) {
+    setSavingChoices(true);
+    try {
+      const { data } = await api.put<MenuWeek>(`/customers/${id}/menu-choices`, { choices });
+      setMenuWeek(data);
+      toast.success("Menu choices saved");
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || "Could not save menu choices");
+    } finally {
+      setSavingChoices(false);
+    }
+  }
+
   function selectTab(next: Tab) {
     setTab(next);
     const url = next === "overview" ? `/provider/customers/${id}` : `/provider/customers/${id}?tab=${next}`;
@@ -391,6 +418,9 @@ export default function CustomerDetail() {
         {tabBtn(tab === "deliveries", "Deliveries", () => selectTab("deliveries"), "ctab-deliveries")}
         {tabBtn(tab === "payments", "Payment history", () => selectTab("payments"), "ctab-payments")}
         {tabBtn(tab === "pauses", "Pauses", () => selectTab("pauses"), "ctab-pauses")}
+        {menuWeek?.enabled
+          ? tabBtn(tab === "menu", "Menu choices", () => selectTab("menu"), "ctab-menu")
+          : null}
         {tabBtn(tab === "notes", "Notes", () => selectTab("notes"), "ctab-notes")}
       </div>
 
@@ -930,6 +960,23 @@ export default function CustomerDetail() {
               ))
             )}
           </ul>
+        </div>
+      ) : null}
+
+      {tab === "menu" && menuWeek ? (
+        <div className="card-tinted p-3 flex flex-col gap-3" data-testid="customer-menu-choices">
+          <div className="flex items-center gap-2">
+            <ForkKnife size={16} />
+            <span className="font-display font-bold text-lg">Menu choices</span>
+          </div>
+          <MenuWeekPanel
+            week={menuWeek}
+            canEdit={canMutate}
+            saving={savingChoices}
+            onSave={canMutate ? saveMenuChoices : undefined}
+            testid="customer-menu-week"
+            helpText={`What ${c.name} gets each day. Their picks repeat every week until changed.`}
+          />
         </div>
       ) : null}
 

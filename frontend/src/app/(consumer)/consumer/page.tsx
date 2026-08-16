@@ -8,6 +8,8 @@ import StatusPill from "@/components/StatusPill";
 import AppSheet from "@/components/AppSheet";
 import ExtraMealsSheet from "@/components/ExtraMealsSheet";
 import MenuImageLightbox from "@/components/MenuImageLightbox";
+import MenuWeekPanel from "@/components/MenuWeekPanel";
+import type { MenuWeek } from "@/lib/menuPlan";
 import CursorPaginationBar from "@/components/CursorPaginationBar";
 import { asPageEnvelope, DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
@@ -18,6 +20,8 @@ export default function ConsumerHome() {
   const [me, setMe] = useState<any>(null);
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [menu, setMenu] = useState<any | null>(null);
+  const [menuWeek, setMenuWeek] = useState<MenuWeek | null>(null);
+  const [savingChoices, setSavingChoices] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<any>(null);
   const [extraTarget, setExtraTarget] = useState<any | "new" | null>(null);
   const [extraBusy, setExtraBusy] = useState(false);
@@ -42,12 +46,14 @@ export default function ConsumerHome() {
   async function load() {
     setLoading(true);
     try {
-      const [{ data: m }, menuRes] = await Promise.all([
+      const [{ data: m }, menuRes, weekRes] = await Promise.all([
         api.get("/consumer/me"),
         api.get("/consumer/menus/current").catch(() => ({ data: null })),
+        api.get<MenuWeek>("/consumer/menu-plan").catch(() => ({ data: null })),
       ]);
       setMe(m);
       setMenu(menuRes?.data || null);
+      setMenuWeek(weekRes?.data?.enabled ? weekRes.data : null);
       deliveriesPaging.resetToFirstPage();
       await loadDeliveries({ cursor: null });
     } catch (e) {
@@ -107,6 +113,19 @@ export default function ConsumerHome() {
       toast.error(e?.response?.data?.detail || "Failed to adjust meal");
     } finally {
       setExtraBusy(false);
+    }
+  }
+
+  async function saveMenuChoices(choices: Record<string, string[]>) {
+    setSavingChoices(true);
+    try {
+      const { data } = await api.put<MenuWeek>("/consumer/menu-plan/choices", { choices });
+      setMenuWeek(data);
+      toast.success("Your choices are saved");
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || "Could not save your choices");
+    } finally {
+      setSavingChoices(false);
     }
   }
 
@@ -222,6 +241,28 @@ export default function ConsumerHome() {
             </p>
           )}
         </div>
+      ) : null}
+
+      {menuWeek ? (
+        <section
+          className="card-tinted p-3 sm:p-4 flex flex-col gap-3"
+          data-testid="consumer-menu-week-section"
+        >
+          <div>
+            <h2 className="font-display font-bold text-xl">Your weekly menu</h2>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              What comes in your tiffin each day. Where you can choose, your picks repeat every
+              week until you change them.
+            </p>
+          </div>
+          <MenuWeekPanel
+            week={menuWeek}
+            canEdit
+            saving={savingChoices}
+            onSave={saveMenuChoices}
+            testid="consumer-menu-week"
+          />
+        </section>
       ) : null}
 
       {menu?.image_url ? (

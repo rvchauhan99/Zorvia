@@ -18,6 +18,7 @@ import { useAuth } from "@/lib/auth";
 import { isDriver as sessionIsDriver } from "@/lib/roles";
 import { fmtDate, todayISO, fmtMealTypeLinesBreakdown } from "@/lib/format";
 import { mealSlotBadgeLabel } from "@/lib/mealSlots";
+import { categoryLabel, fmtQty, unitLabel } from "@/lib/menuPlan";
 import { InlineLoader } from "@/components/loaders";
 import CursorPaginationBar from "@/components/CursorPaginationBar";
 import SearchableSelect from "@/components/SearchableSelect";
@@ -173,6 +174,7 @@ export default function KitchenPage() {
 
   const matrix = useMemo(() => data?.matrix || [], [data]);
   const packList = useMemo(() => data?.pack_list || [], [data]);
+  const cookItems = useMemo(() => data?.items || [], [data]);
 
   const typeNames = useMemo(() => {
     const names = new Set<string>();
@@ -611,6 +613,49 @@ export default function KitchenPage() {
             </div>
           </div>
 
+          {/* ── Items to cook (only when the kitchen manages a detailed menu) ── */}
+          {cookItems.length > 0 ? (
+            <div className="card-tinted overflow-hidden" data-testid="kitchen-items">
+              <div className="p-4 sm:p-5 border-b border-brand-border">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-brand-amber/10 flex items-center justify-center">
+                    <CookingPot size={15} className="text-brand-amber" weight="duotone" />
+                  </div>
+                  <div>
+                    <h2 className="font-display font-bold text-base sm:text-lg leading-tight">
+                      Items to cook
+                    </h2>
+                    <p className="text-xs text-muted-foreground">
+                      From your weekly menu, including each customer&rsquo;s choices
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <ul className="divide-y divide-brand-border/60">
+                {cookItems.map((item: any) => (
+                  <li
+                    key={item.item_id}
+                    className="flex items-center gap-3 px-3 py-2.5"
+                    data-testid={`kitchen-item-${item.item_id}`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold truncate leading-snug">{item.name}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {categoryLabel(item.category)}
+                        {slotsShown.length > 1
+                          ? ` · Lunch ${fmtQty(item.by_slot?.lunch)} · Dinner ${fmtQty(item.by_slot?.dinner)}`
+                          : ""}
+                      </div>
+                    </div>
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-brand-surface border border-brand-border text-foreground tabular-nums shrink-0">
+                      {fmtQty(item.quantity)} {unitLabel(item.unit)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
           {/* ── Pack List ── */}
           <div className="card-tinted overflow-hidden" data-testid="kitchen-pack-list">
             <div className="p-4 sm:p-5 border-b border-brand-border">
@@ -650,6 +695,16 @@ export default function KitchenPage() {
                     <AvatarChip name={row.customer_name || "?"} />
                     <div className="flex-1 min-w-0">
                       <div className="font-semibold truncate leading-snug">{row.customer_name}</div>
+                      {row.items?.length ? (
+                        <div
+                          className="text-xs text-muted-foreground mt-0.5"
+                          data-testid={`kitchen-pack-items-${row.delivery_id}`}
+                        >
+                          {row.items
+                            .map((it: any) => `${it.name} ×${fmtQty(it.quantity)}`)
+                            .join(" · ")}
+                        </div>
+                      ) : null}
                       {row.notes ? (
                         <div className="text-xs text-muted-foreground mt-0.5 whitespace-pre-wrap line-clamp-2">
                           {row.notes}

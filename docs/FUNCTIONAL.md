@@ -111,7 +111,7 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 | Delivery proof view | Thumbnail + **View** on deliveries list (Delivered/All tabs), customer 360 Deliveries tab, and dashboard delivered rows; in-app sheet with full image + open in new tab |
 | Consumer cancel | Upcoming `pending` only; blocked for past dates; within `cutoff_hours` before assumed **local noon** (provider timezone) |
 | Adjust meal | **Day plan** with per-slot **type×qty×price lines** (e.g. Regular×1 + Fasting×1). Loads adjust-context; Save via adjust-day. Qty **0** cancels pending stop. Preview expands lines into kitchen plan. |
-| Kitchen cook plan | `/provider/kitchen` for admin/driver/viewer; `GET /reports/kitchen-summary` (shared helper also returned from adjust); counts by meal type × slot for pending+delivered; pack list with CRM notes; delivery snapshots `meal_type_id`/`meal_type_name` at generate/adjust. **Print** downloads `GET /reports/kitchen-print.pdf` for the **full** filter-matched pack list (not only the current UI page), generated server-side via Playwright Chromium. |
+| Kitchen cook plan | `/provider/kitchen` for admin/driver/viewer; `GET /reports/kitchen-summary` (shared helper also returned from adjust); counts by meal type × slot for pending+delivered; pack list with CRM notes; delivery snapshots `meal_type_id`/`meal_type_name` at generate/adjust. **Print** downloads `GET /reports/kitchen-print.pdf` for the **full** filter-matched pack list (not only the current UI page), generated server-side via Playwright Chromium. When the kitchen keeps a weekly menu (§4.6d), the page and the PDF add an **Items to cook** table — how much of each item to make that day, split by lunch/dinner, already accounting for every customer's choices — and each pack row lists that tiffin's items. |
 
 ### 4.5 Payments (Interac)
 
@@ -173,11 +173,34 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 
 - `PATCH /consumer/me/profile` — phone, address, apartment, city, province, postal_code, delivery_days  
 - Statement CSV download from payments/profile  
+- **Your weekly menu** card (only when the kitchen keeps a detailed menu, §4.6d): what comes in the tiffin each day they receive one, plus any “pick 2 of 3” choices. Picks repeat weekly until changed.  
 
 ### 4.6c Onboarding
 
 - Provider dashboard checklist when Interac email missing, no customers, or first visit (dismissible)  
 - Consumer pending-approval empty state explains “what happens next”
+### 4.6d Menu (`/provider/menu`)
+
+Three tabs. A kitchen can stop after the first one — the rest is optional and turns itself on.
+
+| Tab | Purpose |
+|-----|---------|
+| **Menu picture** | The original poster flow: upload an image anytime, keep history, email notify, WhatsApp share. Unchanged. |
+| **Items** | Item master — every dish the kitchen can cook, with category, unit, veg/non-veg, and a default per-tiffin quantity. Search + category + diet filter. Every kitchen is pre-filled with a starter veg + non-veg list. |
+| **Weekly menu** | Grid of **weekday × meal type**. Fill a cell with fixed items and/or choice groups. Copy a day onto others. One weekly picture per meal type. |
+
+**No setting to switch this on.** The detailed menu is considered “in use” the moment one grid cell has content. Seeding the starter item list does **not** count. Until a cell is filled, the consumer portal, the customer master, and the kitchen report show nothing new, so a poster-only kitchen never sees this feature.
+
+**Days and slots.** The grid is 2‑D (weekday × meal type) by default. A kitchen that genuinely cooks different food at lunch and dinner turns on **separate lunch and dinner menus** and gets extra per-slot cells; anything left unset falls back to the all-day cell.
+
+**Choice groups (“any 2 of 3”).** A cell can hold a group like *Pick 2 of Aloo Gobi / Bhindi / Paneer*. The provider marks exactly as many defaults as the customer picks, so there is always a valid answer before anyone chooses.
+
+**Standing weekly preference.** A consumer picks **once per group per weekday**, and that repeats every week until they change it. Picks are re-validated against the live plan, so if the provider edits or removes an option the customer falls back to the current defaults rather than erroring. Provider staff can set or correct picks from **Customers → detail → Menu choices**.
+
+**Cutoff.** Consumers cannot change **today’s** meal inside the kitchen’s `cutoff_hours` before local noon; the change applies from next week instead. Providers editing on a customer’s behalf are not restricted.
+
+Frontend: `src/app/(provider)/provider/menu/_components/` (`PosterTab` / `ItemsTab` / `WeeklyMenuTab`), shared `src/components/MenuWeekPanel.tsx` and `src/lib/menuPlan.ts`.
+
 ### 4.7 SaaS subscription (provider)
 
 | Feature | Behavior |
@@ -374,6 +397,16 @@ WhatsApp menu shares are **not** included in the SaaS subscription.
 | Audit log | `audit.log_activity`; writers; More-page activity list |
 | GST/HST | `tax_rate_percent`; outstanding add-on; statement tax lines |
 | Brand rename | User-facing **Zorvia** (layouts, landing, emails) |
+
+### Detailed menus (shipped)
+
+| Item | Notes |
+|------|-------|
+| Item master | `/provider/menu?tab=items` — starter veg + non-veg catalog on signup and deploy; dish list with category, unit, default per-tiffin quantity; deactivate (never delete) and only when unused |
+| Weekly menu grid | `/provider/menu?tab=plan` — weekday × meal type; fixed items + “any *N* of *M*” choice groups; copy-day; optional lunch/dinner split; one weekly picture per meal type |
+| Consumer choices | Standing weekly preference (pick once, repeats until changed) on the consumer portal; provider can edit on a customer's behalf from the customer master |
+| Kitchen item totals | **Items to cook** on `/provider/kitchen` and the print PDF, resolved per customer choice, split by lunch/dinner |
+| Opt-in by use | No setting: the whole layer stays hidden until a grid cell is filled, so poster-only kitchens are unaffected |
 
 ### Phase 2 / deferred
 
