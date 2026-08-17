@@ -152,6 +152,17 @@ export default function KitchenPage() {
   }, [date, debouncedQ, driverId, slotFilter, filterCity, isDriver, paging.pageSize]);
 
   useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState !== "visible") return;
+      paging.resetToFirstPage();
+      load({ cursor: null });
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [load]);
+
+  useEffect(() => {
     if (isDriver) return;
     let cancelled = false;
     (async () => {

@@ -383,7 +383,20 @@ export default function ImportCustomersSheet({
               </p>
               <p>
                 <code className="text-[11px]">driver_name</code> — required; must match a driver in Settings →
-                staff. Stop sequence is applied automatically (best route gap).
+                staff (case-insensitive, e.g. <code className="text-[11px]">Driver1</code> /{" "}
+                <code className="text-[11px]">DRIVER1</code>). Stop sequence is applied automatically (best route
+                gap).
+              </p>
+              <p>
+                <code className="text-[11px]">meal_type</code> — Settings name or id (case-insensitive:{" "}
+                <code className="text-[11px]">Jain</code> / <code className="text-[11px]">jain</code> /{" "}
+                <code className="text-[11px]">JAIN</code>). Blank = Regular. Unknown type fails the row.
+              </p>
+              <p>
+                <code className="text-[11px]">city</code> / <code className="text-[11px]">province</code> —
+                case-insensitive against the Canada master (
+                <code className="text-[11px]">toronto</code> → Toronto,{" "}
+                <code className="text-[11px]">ontario</code> → ON). Unknown province fails the row.
               </p>
               <p>
                 Phone and email must be unique in this kitchen — a row fails if either already exists (or
