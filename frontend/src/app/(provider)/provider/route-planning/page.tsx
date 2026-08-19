@@ -7,7 +7,6 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canMutateAdmin } from "@/lib/roles";
 import { mealSlotBadgeLabel } from "@/lib/mealSlots";
-import OverviewMode from "./OverviewMode";
 import PlanMode from "./PlanMode";
 import StartSheet from "./StartSheet";
 import AssignRangeSheet from "./AssignRangeSheet";
@@ -46,23 +45,19 @@ export default function RoutePlanningPage() {
   const [evenSplitDriverIds, setEvenSplitDriverIds] = useState<string[]>([]);
   const [showOptimizeSheet, setShowOptimizeSheet] = useState(false);
   const [showRangeSheet, setShowRangeSheet] = useState(false);
-  const [selectedCity, setSelectedCity] = useState("");
+  const [selectedCity, setSelectedCity] = useState("all");
   const [planningDate, setPlanningDate] = useState(todayIsoLocal);
   const [startSheet, setStartSheet] = useState<StartSheetState | null>(null);
   const [listFilter, setListFilter] = useState("all");
 
-  /* ── Derived: are we in city planner or summary view? ── */
-  const inPlanMode = !!selectedCity;
-
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const params: Record<string, string> = { meal_slot: slot, planning_date: planningDate };
-      if (!inPlanMode) {
-        params.city = "all";
-      } else if (selectedCity) {
-        params.city = selectedCity;
-      }
+      const params: Record<string, string> = {
+        meal_slot: slot,
+        planning_date: planningDate,
+        city: "all",
+      };
       const { data } = await api.get<RoutePlan>("/route-planning", { params });
       setPlan(data);
       setSelected(new Set());
@@ -72,7 +67,7 @@ export default function RoutePlanningPage() {
     } finally {
       setLoading(false);
     }
-  }, [slot, selectedCity, planningDate, inPlanMode]);
+  }, [slot, planningDate]);
 
   useEffect(() => {
     void load();
@@ -104,9 +99,19 @@ export default function RoutePlanningPage() {
     [plan]
   );
 
+  const displayedStops: Stop[] = useMemo(() => {
+    if (!selectedCity || selectedCity === "all") return stops
+    const key = selectedCity.trim().toLowerCase()
+    return stops.filter((s) => {
+      const c0 = (s.city || "").trim().toLowerCase()
+      const c1 = (s.city_key || "").trim().toLowerCase()
+      return c0 === key || c1 === key
+    })
+  }, [stops, selectedCity])
+
   const sections: PoolSection[] = useMemo(
-    () => buildSections(stops, drivers),
-    [stops, drivers]
+    () => buildSections(displayedStops, drivers),
+    [displayedStops, drivers]
   );
 
   const toggle = (id: string) => {
@@ -132,24 +137,18 @@ export default function RoutePlanningPage() {
   const runOptimize = useCallback(
     async (opts?: { quiet?: boolean }) => {
       if (!admin) return false;
-      if (!selectedCity) {
-        if (!opts?.quiet) toast.error("Select a city first");
-        return false;
-      }
       setBusy(true);
       try {
         const { data } = await api.post("/route-planning/optimize", {
           meal_slot: slot,
-          city: selectedCity,
           planning_date: planningDate,
         });
         const n = data?.ordered_ids?.length ?? 0;
-        const boot = data?.bootstrapped_start ? " · first stop as start" : "";
         const skip = data?.skipped?.length ? ` (${data.skipped.length} skipped)` : "";
         toast.success(
           opts?.quiet
-            ? `Route optimized for ${selectedCity}${boot}${skip}`
-            : `Optimized ${n} stops in ${selectedCity}${boot}${skip}`
+            ? `Route optimized${skip}`
+            : `Optimized ${n} stops${skip}`
         );
         await load();
         return true;
@@ -160,7 +159,7 @@ export default function RoutePlanningPage() {
         setBusy(false);
       }
     },
-    [admin, selectedCity, slot, planningDate, load]
+    [admin, slot, planningDate, load]
   );
 
   const runGeocode = async () => {
@@ -168,7 +167,7 @@ export default function RoutePlanningPage() {
     setBusy(true);
     try {
       const { data } = await api.post("/route-planning/geocode-missing", null, {
-        params: { meal_slot: slot, city: selectedCity || undefined, limit: 40 },
+        params: { meal_slot: slot, city: (selectedCity && selectedCity !== "all") ? selectedCity : undefined, limit: 40 },
       });
       const n = data?.customers?.length ?? 0;
       toast.success(n ? `Geocoded ${n} address(es)` : "Nothing to geocode");
@@ -181,7 +180,7 @@ export default function RoutePlanningPage() {
   };
 
   const saveStartFromSheet = async () => {
-    if (!startSheet || !selectedCity) return;
+    if (!startSheet || !selectedCity || selectedCity === "all") return;
     setBusy(true);
     try {
       if (startSheet.mode === "default") {
@@ -218,7 +217,7 @@ export default function RoutePlanningPage() {
   };
 
   const setKitchenAsDefault = async () => {
-    if (!selectedCity) return;
+    if (!selectedCity || selectedCity === "all") return;
     setBusy(true);
     try {
       await api
@@ -238,7 +237,7 @@ export default function RoutePlanningPage() {
   };
 
   const clearTemporaryStart = async () => {
-    if (!selectedCity) return;
+    if (!selectedCity || selectedCity === "all") return;
     setBusy(true);
     try {
       await api.delete("/route-planning/city-start-override", {
@@ -262,7 +261,7 @@ export default function RoutePlanningPage() {
         meal_slot: slot,
         driver_id: driverId || null,
       });
-      toast.success("Placed on route");
+      toast.success("Placed and fitted into route");
       await load();
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || "Insert failed");
@@ -284,7 +283,9 @@ export default function RoutePlanningPage() {
         meal_slot: slot,
         planning_date: planningDate,
       });
-      toast.success(target ? "Assigned to driver (appended to route)" : "Moved to unassigned pool");
+      toast.success(
+        target ? "Assigned and fitted into route" : "Moved to unassigned pool"
+      );
       await load();
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || "Assign failed");
@@ -396,7 +397,7 @@ export default function RoutePlanningPage() {
   };
 
   const backToCities = () => {
-    setSelectedCity("");
+    setSelectedCity("all");
     setListFilter("all");
   };
 
@@ -454,58 +455,46 @@ export default function RoutePlanningPage() {
         </label>
       </div>
 
-      {/* ── Content: City summary or City planner ── */}
-      {!inPlanMode ? (
-        <OverviewMode stops={stops} loading={loading} onFixCity={enterPlanForCity} />
-      ) : (
-        <PlanMode
-          loading={loading}
-          busy={busy}
-          cities={cities}
-          selectedCity={selectedCity}
-          stops={stops}
-          sections={sections}
-          drivers={drivers}
-          kitchen={kitchen}
-          effectiveStart={effectiveStart}
-          activeOverride={activeOverride}
-          routingConfigured={configured}
-          originLine={originLine}
-          selected={selected}
-          assignDriverId={assignDriverId}
-          listFilter={listFilter}
-          onSelectedCityChange={setSelectedCity}
-          onListFilterChange={setListFilter}
-          onToggleStop={toggle}
-          onToggleSection={toggleSection}
-          onClearSelection={() => setSelected(new Set())}
-          onAssignDriverIdChange={setAssignDriverId}
-          onAssign={() => void assignDriver()}
-          onOpenRange={() => setShowRangeSheet(true)}
-          onUseKitchen={() => void setKitchenAsDefault()}
-          onClearTemporary={() => void clearTemporaryStart()}
-          onGeocode={() => void runGeocode()}
-          onOptimize={() => setShowOptimizeSheet(true)}
-          onReorder={(section, ids) => void reorderPool(section, ids)}
-          onReassign={(ids, driverId) => void assignDriver(ids, driverId)}
-          onOpenStart={(stop) =>
-            setStartSheet({
-              customerId: stop.id,
-              customerName: stop.name || stop.id,
-              mode: "default",
-              duration: "today",
-              days: 3,
-            })
-          }
-          onPlace={(stop) => void placeOne(stop.id, stop.driver_id || null)}
-          onMoveDriver={(stop, driverId) => void assignDriver([stop.id], driverId)}
-          onBack={backToCities}
-        />
-      )}
+      {/* ── Content: Global planner (city=all) ── */}
+      <PlanMode
+        loading={loading}
+        busy={busy}
+        cities={cities}
+        selectedCity={selectedCity}
+        stops={displayedStops}
+        sections={sections}
+        drivers={drivers}
+        kitchen={kitchen}
+        effectiveStart={effectiveStart}
+        activeOverride={activeOverride}
+        routingConfigured={configured}
+        originLine={originLine}
+        selected={selected}
+        assignDriverId={assignDriverId}
+        listFilter={listFilter}
+        onSelectedCityChange={setSelectedCity}
+        onListFilterChange={setListFilter}
+        onToggleStop={toggle}
+        onToggleSection={toggleSection}
+        onClearSelection={() => setSelected(new Set())}
+        onAssignDriverIdChange={setAssignDriverId}
+        onAssign={() => void assignDriver()}
+        onOpenRange={() => setShowRangeSheet(true)}
+        onUseKitchen={() => void setKitchenAsDefault()}
+        onClearTemporary={() => void clearTemporaryStart()}
+        onGeocode={() => void runGeocode()}
+        onOptimize={() => setShowOptimizeSheet(true)}
+        onReorder={(section, ids) => void reorderPool(section, ids)}
+        onReassign={(ids, driverId) => void assignDriver(ids, driverId)}
+        onOpenStart={() => undefined}
+        onPlace={(stop) => void placeOne(stop.id, stop.driver_id || null)}
+        onMoveDriver={(stop, driverId) => void assignDriver([stop.id], driverId)}
+        onBack={backToCities}
+      />
 
       <OptimizeSheet
         open={showOptimizeSheet}
-        city={selectedCity}
+        city={selectedCity || "all"}
         busy={busy}
         onClose={() => setShowOptimizeSheet(false)}
         onConfirm={() => {

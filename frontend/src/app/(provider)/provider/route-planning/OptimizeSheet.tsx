@@ -13,11 +13,12 @@ type Props = {
 };
 
 export default function OptimizeSheet({ open, city, busy, onClose, onConfirm }: Props) {
+  const scopeLabel = city === "all" || !city ? "all cities" : city
   return (
     <AppSheet
       open={open}
       onClose={onClose}
-      title="Optimize city route?"
+      title="Optimize route?"
       size="md"
       closeTestId="route-optimize-sheet-close"
       footer={
@@ -41,7 +42,7 @@ export default function OptimizeSheet({ open, city, busy, onClose, onConfirm }: 
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 flex gap-2">
           <WarningCircle size={18} className="shrink-0 mt-0.5" />
           <div>
-            <p className="font-medium">This reorders stops for {city || "this city"}.</p>
+          <p className="font-medium">This reorders stops for {scopeLabel}.</p>
             <p className="text-xs mt-1">
               Driver assignments are kept. Sequences are renumbered within each driver pool. You
               can adjust order manually afterward.
@@ -49,8 +50,8 @@ export default function OptimizeSheet({ open, city, busy, onClose, onConfirm }: 
           </div>
         </div>
         <p className="text-xs text-muted-foreground">
-          If no start is set, Optimize will temporarily use the first geocoded stop as the depot for
-          this planning date.
+          OpenRouteService drives the road-smart sequencing. MealHQ keeps the kitchen as the
+          depot for global optimization.
         </p>
       </div>
     </AppSheet>

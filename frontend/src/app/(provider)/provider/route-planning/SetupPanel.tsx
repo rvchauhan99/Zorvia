@@ -71,53 +71,19 @@ export default function SetupPanel({
               </div>
             </div>
             <div className="flex flex-wrap gap-1.5 shrink-0">
-              {!!activeOverride && (
-                <button
-                  type="button"
-                  className="pill-btn btn-outline h-8 text-[11px] px-2.5 gap-1"
-                  disabled={busy}
-                  onClick={onClearTemporary}
-                  data-testid="route-clear-temporary"
-                >
-                  <X size={12} /> Clear temp
-                </button>
-              )}
-              {kitchenCityMatches && (
-                <button
-                  type="button"
-                  className="pill-btn btn-outline h-8 text-[11px] px-2.5"
-                  disabled={busy}
-                  onClick={onUseKitchen}
-                  data-testid="route-kitchen-default"
-                >
-                  Use kitchen
-                </button>
+              {activeOverride?.ends_on && (
+                <span className="text-[10px] text-muted-foreground">until {activeOverride.ends_on}</span>
               )}
             </div>
           </>
         ) : (
           <div className="min-w-0 flex-1">
             <p className="text-sm text-muted-foreground">
-              No start point set for <span className="font-medium text-foreground">{selectedCity || "this city"}</span>
+              Depot is kitchen for <span className="font-medium text-foreground">all cities</span>
             </p>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              {kitchenCityMatches
-                ? "Use kitchen as start, or set a customer as start from a stop's menu."
-                : onChangeStartHint
-                  ? "Set a customer as start from a stop's menu."
-                  : "Optimize will auto-pick the first geocoded stop as start."}
+              Optimize uses kitchen as the depot. Driver assignments are kept and sequences are renumbered inside each driver pool.
             </p>
-            {kitchenCityMatches && (
-              <button
-                type="button"
-                className="pill-btn btn-outline h-8 text-[11px] px-3 mt-2"
-                disabled={busy}
-                onClick={onUseKitchen}
-                data-testid="route-kitchen-default"
-              >
-                Use kitchen as start
-              </button>
-            )}
           </div>
         )}
       </div>
@@ -157,7 +123,7 @@ export default function SetupPanel({
         <button
           type="button"
           className="pill-btn btn-primary h-9 text-xs px-4 gap-1"
-          disabled={busy || !selectedCity}
+          disabled={busy}
           onClick={onOptimize}
           data-testid="route-optimize"
         >

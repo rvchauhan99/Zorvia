@@ -129,12 +129,14 @@ export default function PlanMode({
   }, [stops, originLine, listFilter]);
 
   const cityOptions = useMemo(
-    () =>
-      cities.map((c) => ({
+    () => [
+      { value: "all", label: `All cities (${totalStops})` },
+      ...cities.map((c) => ({
         value: c.name,
         label: `${c.name} (${c.count})`,
       })),
-    [cities]
+    ],
+    [cities, totalStops]
   );
 
   /* ── Filter chips ── */
@@ -278,10 +280,6 @@ export default function PlanMode({
 
       {loading ? (
         <InlineLoader label="Loading plan…" testid="route-plan-loading" />
-      ) : !selectedCity ? (
-        <div className="card-tinted p-4 text-sm text-muted-foreground">
-          Select a city above to plan its route.
-        </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] gap-3 items-start">
           <div className={mobilePane === "list" ? "block" : "hidden lg:block"}>
