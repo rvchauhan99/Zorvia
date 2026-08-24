@@ -60,8 +60,10 @@ export type UserSession = {
   tenant_id: string;
   display_name: string;
   email: string;
+  phone?: string;
   access_token?: string;
   role?: StaffRole;
+  must_change_password?: boolean;
 };
 
 export function saveSession(session: UserSession & { access_token?: string }) {
@@ -76,8 +78,10 @@ export function saveSession(session: UserSession & { access_token?: string }) {
       user_id: session.user_id,
       tenant_id: session.tenant_id,
       display_name: session.display_name,
-      email: session.email,
+      email: session.email || "",
+      phone: session.phone || "",
       role: session.role,
+      must_change_password: Boolean(session.must_change_password),
     })
   );
 }

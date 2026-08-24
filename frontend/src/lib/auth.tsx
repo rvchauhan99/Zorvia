@@ -3,15 +3,22 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from "react";
 import { api, clearSession, getSession, saveSession, UserSession } from "@/lib/api";
 
+type LoginCredentials = {
+  email?: string;
+  phone?: string;
+  password: string;
+  signup_code?: string;
+};
+
 type AuthContextType = {
   session: UserSession | null;
   /** True after client has finished reading storage / validating session */
   ready: boolean;
   /** True while login/signup request is in flight */
   loading: boolean;
-  login: (credentials: { email: string; password: string }) => Promise<UserSession>;
+  login: (credentials: LoginCredentials) => Promise<UserSession>;
   providerSignup: (payload: Record<string, unknown>) => Promise<UserSession | { pending_email_verification: true; email: string; user_type: string }>;
-  consumerSignup: (payload: Record<string, unknown>) => Promise<UserSession | { pending_email_verification: true; email: string; user_type: string }>;
+  consumerSignup: (payload: Record<string, unknown>) => Promise<UserSession>;
   logout: () => Promise<void>;
   refresh: () => Promise<unknown>;
   setSession: React.Dispatch<React.SetStateAction<UserSession | null>>;
@@ -23,7 +30,8 @@ function sessionFromMe(
   data: {
     user_type: "provider" | "consumer";
     tenant_id: string;
-    user?: { id?: string; name?: string; email?: string; role?: string };
+    must_change_password?: boolean;
+    user?: { id?: string; name?: string; email?: string; role?: string; phone_key?: string };
   },
   fallback: UserSession | null
 ): UserSession {
@@ -33,7 +41,9 @@ function sessionFromMe(
     tenant_id: data.tenant_id || fallback?.tenant_id || "",
     display_name: data.user?.name || fallback?.display_name || data.user?.email || "",
     email: data.user?.email || fallback?.email || "",
+    phone: data.user?.phone_key || fallback?.phone || "",
     role: (data.user?.role as UserSession["role"]) || fallback?.role || (data.user_type === "provider" ? "admin" : undefined),
+    must_change_password: Boolean(data.must_change_password),
   };
 }
 
@@ -91,10 +101,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const login = useCallback(async ({ email, password }: { email: string; password: string }) => {
+  const login = useCallback(async (credentials: LoginCredentials) => {
     setLoading(true);
     try {
-      const { data } = await api.post("/auth/login", { email, password });
+      const body: Record<string, string> = { password: credentials.password };
+      if (credentials.phone) body.phone = credentials.phone;
+      if (credentials.email) body.email = credentials.email;
+      if (credentials.signup_code) body.signup_code = credentials.signup_code;
+      const { data } = await api.post("/auth/login", body);
       saveSession(data);
       const next = getSession();
       setSession(next);
@@ -124,9 +138,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     try {
       const { data } = await api.post("/consumer/signup", payload);
-      if (data?.pending_email_verification) {
-        return data as UserSession & { pending_email_verification: true; email: string; user_type: string };
-      }
       saveSession(data);
       const next = getSession();
       setSession(next);

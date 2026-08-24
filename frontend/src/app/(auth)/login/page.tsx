@@ -21,6 +21,9 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const [role, setRole] = useState<LoginRole>(() => parseRole(searchParams.get("role")));
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [signupCode, setSignupCode] = useState("");
+  const [needKitchenCode, setNeedKitchenCode] = useState(false);
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -49,7 +52,7 @@ function LoginForm() {
             panelTitle: "Your meals and balance, in one place.",
             panelBody: "See upcoming deliveries, track outstanding, and submit Interac references.",
             title: "Welcome back",
-            subtitle: "Sign in to your meal account.",
+            subtitle: "Sign in with your phone number.",
             signupHref: "/consumer-signup",
             signupLabel: "New here? Sign up with your kitchen's code",
             signupTestId: "login-to-consumer-signup" as const,
@@ -59,6 +62,7 @@ function LoginForm() {
 
   function selectRole(next: LoginRole) {
     setRole(next);
+    setNeedKitchenCode(false);
     const params = new URLSearchParams(searchParams.toString());
     if (next === "provider") params.delete("role");
     else params.set("role", "consumer");
@@ -70,19 +74,32 @@ function LoginForm() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const s = await login({ email, password });
+      const s =
+        role === "consumer"
+          ? await login({
+              phone,
+              password,
+              signup_code: needKitchenCode ? signupCode : undefined,
+            })
+          : await login({ email, password });
       toast.success(`Welcome back, ${s.display_name}`);
       router.replace(resolveAppHome(s, searchParams.get("next")));
     } catch (err: any) {
       const detail = err?.response?.data?.detail || "Login failed";
       toast.error(detail);
-      if (err?.response?.status === 403 && String(detail).toLowerCase().includes("not verified")) {
+      if (role === "consumer" && err?.response?.status === 409) {
+        setNeedKitchenCode(true);
+      }
+      if (role === "provider" && err?.response?.status === 403 && String(detail).toLowerCase().includes("not verified")) {
         router.push(`/verify-email?email=${encodeURIComponent(email)}`);
       }
     } finally {
       setSubmitting(false);
     }
   }
+
+  const inputClass =
+    "h-11 px-4 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all";
 
   return (
     <div className="min-h-screen bg-brand-cream flex animate-fade-in-up">
@@ -147,18 +164,50 @@ function LoginForm() {
           <p className="text-sm text-muted-foreground mt-1">{copy.subtitle}</p>
 
           <form onSubmit={onSubmit} className="mt-8 flex flex-col gap-4">
-            <label className="flex flex-col gap-1.5">
-              <span className="label-overline">Email</span>
-              <input
-                data-testid="login-email"
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="h-11 px-4 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all"
-                placeholder="you@example.com"
-              />
-            </label>
+            {role === "provider" ? (
+              <label className="flex flex-col gap-1.5">
+                <span className="label-overline">Email</span>
+                <input
+                  data-testid="login-email"
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className={inputClass}
+                  placeholder="you@example.com"
+                />
+              </label>
+            ) : (
+              <>
+                <label className="flex flex-col gap-1.5">
+                  <span className="label-overline">Phone</span>
+                  <input
+                    data-testid="login-phone"
+                    type="tel"
+                    required
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className={inputClass}
+                    placeholder="416-555-1212"
+                    aria-label="Phone number"
+                  />
+                </label>
+                {needKitchenCode ? (
+                  <label className="flex flex-col gap-1.5">
+                    <span className="label-overline">Kitchen code</span>
+                    <input
+                      data-testid="login-kitchen-code"
+                      required
+                      value={signupCode}
+                      onChange={(e) => setSignupCode(e.target.value)}
+                      className={`${inputClass} uppercase tracking-widest`}
+                      placeholder="Your kitchen's code"
+                      aria-label="Kitchen code"
+                    />
+                  </label>
+                ) : null}
+              </>
+            )}
             <label className="flex flex-col gap-1.5">
               <span className="label-overline">Password</span>
               <input
@@ -167,14 +216,20 @@ function LoginForm() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="h-11 px-4 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all"
+                className={inputClass}
                 placeholder="••••••••"
               />
             </label>
             <div className="flex justify-end -mt-2">
-              <Link data-testid="login-forgot" href="/forgot-password" className="text-sm text-primary font-medium hover:underline">
-                Forgot password?
-              </Link>
+              {role === "provider" ? (
+                <Link data-testid="login-forgot" href="/forgot-password" className="text-sm text-primary font-medium hover:underline">
+                  Forgot password?
+                </Link>
+              ) : (
+                <p data-testid="login-forgot-kitchen-hint" className="text-sm text-muted-foreground text-right">
+                  Forgot password? Ask your kitchen to reset it from Customer Master.
+                </p>
+              )}
             </div>
             <button
               type="submit"
@@ -186,18 +241,22 @@ function LoginForm() {
             </button>
           </form>
 
-          <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
-            <div className="flex-1 h-px bg-brand-border" /> OR <div className="flex-1 h-px bg-brand-border" />
-          </div>
+          {role === "provider" ? (
+            <>
+              <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
+                <div className="flex-1 h-px bg-brand-border" /> OR <div className="flex-1 h-px bg-brand-border" />
+              </div>
 
-          <GoogleSignInButton
-            user_type={role}
-            label="Continue with Google"
-            testid={role === "provider" ? "google-login-provider" : "google-login-consumer"}
-          />
-          <p className="text-xs text-muted-foreground mt-2">
-            Same email works for Google and password.
-          </p>
+              <GoogleSignInButton
+                user_type="provider"
+                label="Continue with Google"
+                testid="google-login-provider"
+              />
+              <p className="text-xs text-muted-foreground mt-2">
+                Same email works for Google and password.
+              </p>
+            </>
+          ) : null}
 
           <div className="mt-8 text-sm text-muted-foreground">
             <Link
@@ -207,10 +266,9 @@ function LoginForm() {
             >
               {copy.signupLabel}
             </Link>
-            {/* Keep both testids discoverable for e2e when inactive */}
             {role === "provider" ? (
               <span className="sr-only">
-                <Link data-testid="login-to-consumer-signup" href="/consumer-signup">Sign up with a provider code</Link>
+                <Link data-testid="login-to-consumer-signup" href="/consumer-signup">Sign up with a kitchen code</Link>
               </span>
             ) : (
               <span className="sr-only">

@@ -138,6 +138,31 @@ export default function CustomerDetail() {
   const paymentsPaging = useCursorPagination({ initialPageSize: DEFAULT_PAGE_SIZE });
   const [menuWeek, setMenuWeek] = useState<MenuWeek | null>(null);
   const [savingChoices, setSavingChoices] = useState(false);
+  const [resetPw, setResetPw] = useState("");
+  const [resetPwConfirm, setResetPwConfirm] = useState("");
+  const [resetPwBusy, setResetPwBusy] = useState(false);
+
+  async function handleResetLoginPassword() {
+    if (resetPw.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+    if (resetPw !== resetPwConfirm) {
+      toast.error("Passwords do not match");
+      return;
+    }
+    setResetPwBusy(true);
+    try {
+      await api.post(`/customers/${id}/reset-login-password`, { password: resetPw });
+      toast.success("Temporary password set. Customer must change it on next login.");
+      setResetPw("");
+      setResetPwConfirm("");
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || "Could not reset password");
+    } finally {
+      setResetPwBusy(false);
+    }
+  }
 
   async function load() {
     try {
@@ -434,6 +459,55 @@ export default function CustomerDetail() {
             <div className="label-overline">Email</div>
             <div className="text-sm break-all">{c.email || "—"}</div>
           </div>
+          {canMutate ? (
+            <div className="sm:col-span-2 rounded-xl border border-brand-border bg-white p-4 flex flex-col gap-3" data-testid="customer-reset-login-card">
+              <div className="label-overline">Consumer login</div>
+              {c.has_consumer_login ? (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    Set a temporary password. On next login they must change it.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-xs text-muted-foreground">New password</span>
+                      <input
+                        data-testid="customer-reset-pw"
+                        type="password"
+                        minLength={6}
+                        className="h-11 px-3 rounded-xl bg-brand-cream border border-brand-border outline-none focus:ring-2 focus:ring-primary/30"
+                        value={resetPw}
+                        onChange={(e) => setResetPw(e.target.value)}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-xs text-muted-foreground">Confirm</span>
+                      <input
+                        data-testid="customer-reset-pw-confirm"
+                        type="password"
+                        minLength={6}
+                        className="h-11 px-3 rounded-xl bg-brand-cream border border-brand-border outline-none focus:ring-2 focus:ring-primary/30"
+                        value={resetPwConfirm}
+                        onChange={(e) => setResetPwConfirm(e.target.value)}
+                      />
+                    </label>
+                  </div>
+                  <button
+                    type="button"
+                    data-testid="customer-reset-pw-submit"
+                    disabled={resetPwBusy}
+                    onClick={handleResetLoginPassword}
+                    className="pill-btn btn-primary h-11 w-full sm:w-auto cursor-pointer disabled:opacity-60"
+                  >
+                    {resetPwBusy ? "Saving…" : "Reset login password"}
+                  </button>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground" data-testid="customer-no-login-hint">
+                  No login yet. They can sign up at /consumer-signup with your kitchen code and this phone number.
+                </p>
+              )}
+            </div>
+          ) : null}
           <div>
             <div className="label-overline">Joining date</div>
             <div className="text-sm" data-testid="customer-joining-date">

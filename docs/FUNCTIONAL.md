@@ -57,13 +57,13 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 
 | Feature | Behavior | Acceptance |
 |---------|----------|------------|
-| Provider email signup | Creates `providers` + `platform_users`, starts **trial**; provider chooses unique alphanumeric `signup_code`; captures **CA kitchen address** (street, apt, city, province, postal — same fields as customer master); sends email OTP via Resend; **no JWT until verified** | After `/verify-email`, can log in; org + code + structured address exist |
-| Unified email login | Tries provider then consumer; blocks unverified (`403`) and inaccessible provider subscription | Correct `user_type` session |
-| Google Sign-In | Firebase ID token → `POST /api/auth/google`; matches existing account by **email** (primary id) or `google_uid`, then backfills `google_uid`; new provider needs `org_name` + `signup_code`; new consumer needs `signup_code`; email treated verified | Same account as password signup for that email; buttons disabled until Firebase client + fields ready; **501** if server Firebase unset |
-| Account linking | Email is the primary identity. Manual signup → later Google login links; Google-only → set password via forgot/reset or Settings/Profile **Set password** | Same `user_id`; both methods work |
-| Email verification | 6-digit OTP (10 min); account/tenant created only after `POST /auth/verify-email` | Session issued only after OTP; pending signup kept until verified |
-| Forgot / reset password | OTP for any existing account (including Google-only with no prior password); `POST /auth/forgot-password`, `POST /auth/reset-password` | Can log in with new/set password |
-| Change / set password | `POST /auth/change-password`: with existing hash requires current; without hash sets first password | `has_password` on `/auth/me`; UI shows Set vs Change |
+| Provider email signup | Creates `providers` + `platform_users`, starts **trial**; provider chooses unique alphanumeric `signup_code` (**kitchen code**); captures **CA kitchen address**; sends email OTP via Resend; **no JWT until verified** | After `/verify-email`, can log in; org + code + structured address exist |
+| Unified login | **Kitchen:** email + password (or Google). **Consumer:** phone + password; optional kitchen code on multi-match | Correct `user_type` session |
+| Google Sign-In | **Providers only** via Firebase; consumer Google disabled | Provider Google works; consumers use phone |
+| Account linking | Provider: email is primary. Consumer: phone (`phone_key`, country code ignored) | Same `user_id` |
+| Forgot / reset password | Provider: email OTP. Consumer: kitchen resets from Customer Master; forced change on next login | Consumer cannot self-serve OTP |
+| Email verification | Provider 6-digit OTP (10 min); consumer phone signup skips email OTP | Provider session only after OTP |
+| Change / set password | `POST /auth/change-password`; clears `must_change_password` for consumers | `has_password` / `must_change_password` on `/auth/me` |
 | Session | Bearer JWT in `tiffin_token` / session in `tiffin_session` localStorage | `/api/auth/me` restores user |
 | Logged-in landing | Visiting `/` with an active session redirects to `/provider` or `/consumer` (same as `/login`) | No marketing home flash for returning users after hydrate |
 
@@ -266,14 +266,13 @@ WhatsApp menu shares are **not** included in the SaaS subscription.
 
 **Done when:** Dashboard loads; signup code visible; customers appear on delivery day after approval.
 
-### Journey B — Consumer joins via code
+### Journey B — Consumer joins via kitchen code
 
-1. `/consumer-signup` with provider signup code (confirm password; optional photo); invite emails open this URL with `?code=&email=&name=` prefilled  
-2. Verify email OTP → account created; if a CRM customer already exists for that email/tenant (from invite), it is reused (no duplicate); otherwise customer is `pending_approval`  
-3. Provider approves in Customers (when pending)  
-4. Consumer sees deliveries when generated; can change password / avatar in profile  
+1. `/consumer-signup` with kitchen code + phone + password (verify password). Prefill `?code=` works  
+2. Account created only if that phone already exists on the kitchen’s Customer Master (country code ignored). No email OTP  
+3. Sign in with phone + password. Forgot password → ask kitchen to reset from Customer Master; change password on next login  
 
-**Done when:** Consumer home shows upcoming meals after approval + generate.
+**Done when:** Consumer home shows upcoming meals after generate.
 
 ### Journey C — Daily delivery run
 
