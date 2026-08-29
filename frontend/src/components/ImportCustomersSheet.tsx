@@ -20,10 +20,11 @@ type JobSnapshot = {
   total?: number;
   processed?: number;
   created?: number;
+  updated?: number;
   geocoded?: number;
   route_placed?: number;
   route_skipped?: number;
-  successes?: { index: number; name: string; id?: string }[];
+  successes?: { index: number; name: string; id?: string; action?: string }[];
   errors?: { index: number; error: string }[];
 };
 
@@ -123,6 +124,7 @@ export default function ImportCustomersSheet({
         total: snap.total ?? prev?.total,
         processed: snap.processed ?? prev?.processed,
         created: snap.created ?? prev?.created,
+        updated: snap.updated ?? prev?.updated,
         errors: snap.errors ?? prev?.errors,
         successes: snap.successes ?? prev?.successes,
       };
@@ -133,11 +135,18 @@ export default function ImportCustomersSheet({
     }
   }
 
-  function notifyFinished(status: string, created?: number) {
+  function notifyFinished(status: string, created?: number, updated?: number) {
     if (finishedToastRef.current) return;
     finishedToastRef.current = true;
     if (status === "completed") {
-      toast.success(`Imported ${created || 0} customer(s)`);
+      const newCount = created || 0;
+      const updCount = updated || 0;
+      const total = newCount + updCount;
+      if (updCount > 0) {
+        toast.success(`Imported ${total} customer(s) (${newCount} new, ${updCount} updated)`);
+      } else {
+        toast.success(`Imported ${newCount} customer(s)`);
+      }
       onFinished();
     } else if (status === "failed") {
       toast.error("Import failed");
@@ -154,7 +163,7 @@ export default function ImportCustomersSheet({
         applySnapshot(data);
         if (data.status === "completed" || data.status === "failed") {
           stopWatching();
-          notifyFinished(data.status, data.created);
+          notifyFinished(data.status, data.created, data.updated);
         }
       } catch {
         pollFailRef.current += 1;
@@ -185,12 +194,15 @@ export default function ImportCustomersSheet({
       try {
         const msg = JSON.parse(ev.data);
         if (msg.type === "row_ok" && msg.name) {
-          setLiveNames((prev) => [...prev.slice(-7), msg.name]);
+          const label =
+            msg.action === "updated" ? `Updated ${msg.name}` : msg.name;
+          setLiveNames((prev) => [...prev.slice(-7), label]);
           setJob((j) => ({
             ...(j || {}),
             processed: msg.processed ?? j?.processed,
             total: msg.total ?? j?.total,
             created: msg.created ?? j?.created,
+            updated: msg.updated ?? j?.updated,
             errors: j?.errors,
           }));
         } else if (msg.type === "row_err") {
@@ -199,13 +211,18 @@ export default function ImportCustomersSheet({
             processed: msg.processed ?? j?.processed,
             total: msg.total ?? j?.total,
             created: msg.created ?? j?.created,
+            updated: msg.updated ?? j?.updated,
             errors: [...(j?.errors || []), { index: msg.index, error: msg.error }],
           }));
         } else if (msg.type === "progress" || msg.type === "done") {
           applySnapshot(msg);
           if (msg.type === "done" || msg.status === "completed" || msg.status === "failed") {
             stopWatching();
-            notifyFinished(msg.status === "failed" ? "failed" : "completed", msg.created);
+            notifyFinished(
+              msg.status === "failed" ? "failed" : "completed",
+              msg.created,
+              msg.updated,
+            );
           }
         }
       } catch {
@@ -241,6 +258,7 @@ export default function ImportCustomersSheet({
         total: typeof data.total === "number" ? data.total : 0,
         processed: 0,
         created: 0,
+        updated: 0,
         errors: [],
         successes: [],
       });
@@ -399,8 +417,9 @@ export default function ImportCustomersSheet({
                 <code className="text-[11px]">ontario</code> → ON). Unknown province fails the row.
               </p>
               <p>
-                Phone and email must be unique in this kitchen — a row fails if either already exists (or
-                repeats earlier in the same file).
+                Matching <code className="text-[11px]">phone</code> updates an existing customer (fresh
+                geocode + route). Email must still be unique — a row fails if email belongs to someone
+                else. Duplicate phones in the same file also fail.
               </p>
               <p>
                 Address must geocode successfully (or provide <code className="text-[11px]">lat</code>/
@@ -472,12 +491,16 @@ export default function ImportCustomersSheet({
                     data-testid="import-progress-bar"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
                   <div className="flex items-center gap-1.5 text-emerald-700">
                     <CheckCircle size={16} weight="fill" />
                     <span data-testid="import-created-count">{job.created || 0} created</span>
                   </div>
-                  <div className="flex items-center gap-1.5 text-amber-700">
+                  <div className="flex items-center gap-1.5 text-sky-700">
+                    <CheckCircle size={16} weight="fill" />
+                    <span data-testid="import-updated-count">{job.updated || 0} updated</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-amber-700 col-span-2 sm:col-span-1">
                     <WarningCircle size={16} weight="fill" />
                     <span data-testid="import-error-count">{errorCount} errors</span>
                   </div>
