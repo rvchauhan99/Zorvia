@@ -1762,7 +1762,7 @@ export default function Customers() {
           <button data-testid="delete-confirm" type="button" onClick={confirmDelete} className="pill-btn btn-danger flex-1 h-11 cursor-pointer">Delete</button>
         </div>
       )}>
-        <p className="text-sm text-muted-foreground">This cannot be undone. Their delivery history and payment records may remain for your reports.</p>
+        <p className="text-sm text-muted-foreground">This cannot be undone. Future deliveries and kitchen counts are cleared; past delivery and payment history may remain for your reports.</p>
       </AppSheet>
 
       <AppSheet open={!!rejectTarget} onClose={() => setRejectTarget(null)} title={rejectTarget ? `Reject ${rejectTarget.name}?` : "Reject"} size="md" footer={(

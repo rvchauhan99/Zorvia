@@ -95,6 +95,7 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 | Opening balance | Signed CAD on create/edit/import: positive = outstanding owed at onboard; negative = advance credit; included in displayed outstanding |
 | Joining date | Optional `joining_date` (defaults to today on create/import); distinct from system `created_at`. Sample CSV uses `yyyy-mm-dd`; import accepts common date formats. Outstanding never accrues before `created_at` — use `opening_balance` (per-meal) or monthly `last_collection_status` for last collection collected/pending |
 | Pause / resume | Date window; deliveries in window generated as `paused`; resume restores future `paused` → `pending` |
+| Delete | Soft-delete; cancels open future deliveries from provider-today so Deliveries and Kitchen adjust; past history retained |
 | Approve | Self-signup consumers start `pending_approval=true`; provider must approve before deliveries generate |
 | Reject | `POST /customers/{id}/reject` with optional reason; sets inactive + `rejected`; notifies consumer account if present |
 
