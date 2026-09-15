@@ -2,7 +2,12 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowClockwise, CaretDown, ClockCounterClockwise } from "@phosphor-icons/react";
+import {
+  ArrowClockwise,
+  CalendarBlank,
+  CaretDown,
+  ClockCounterClockwise,
+} from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -15,6 +20,7 @@ import {
 } from "@/lib/monthlyBillingCopy";
 import { InlineLoader, PageLoader } from "@/components/loaders";
 import RecordPaymentSheet from "@/components/RecordPaymentSheet";
+import AppSheet from "@/components/AppSheet";
 import CursorPaginationBar from "@/components/CursorPaginationBar";
 import CityFilterSelect from "@/components/CityFilterSelect";
 import { type AllowedPageSize } from "@/lib/pagination";
@@ -49,11 +55,22 @@ type DueRow = {
   standard_daily_rate?: number | null;
   recalc_daily_rate_cad?: number | null;
   charge_explainer?: string | null;
+  cycle_days?: number | null;
+  cycle_index?: number | null;
+  cycle_anchor_date?: string | null;
+  cycle_period_start?: string | null;
+  cycle_period_end?: string | null;
+  cycle_anchor_missing?: boolean | null;
+  prepaid_cycles?: number | null;
 };
+
+const isCycleRow = (row: DueRow) => row.policy_variant === "cycle_fixed";
 
 function MonthCalcBreakdown({ row }: { row: DueRow }) {
   const tier = monthlyTierLabel(row.tier_applied);
-  const isFixed = row.policy_variant === "monthly_fixed" || row.tier_applied === "fixed_monthly";
+  const isCycle = isCycleRow(row);
+  const isFixed =
+    isCycle || row.policy_variant === "monthly_fixed" || row.tier_applied === "fixed_monthly";
   const before = row.month_charge_before_tax;
   const after = row.month_charge_after_tax ?? before;
   const tax = row.tax_amount;
@@ -63,13 +80,24 @@ function MonthCalcBreakdown({ row }: { row: DueRow }) {
       className="rounded-xl border border-brand-border bg-brand-surface/50 px-3 py-2.5 text-xs space-y-1.5"
       data-testid={`monthly-dues-calc-panel-${row.customer_id}`}
     >
-      <div className="font-medium text-foreground">
-        {formatBillingMonthLabel(row.billing_month)}
-        <span className="font-normal text-muted-foreground">
-          {" "}
-          · calendar month 1st–last · by delivery date
-        </span>
-      </div>
+      {isCycle ? (
+        <div className="font-medium text-foreground">
+          Cycle {row.cycle_index ?? 0}
+          <span className="font-normal text-muted-foreground">
+            {" "}
+            · {row.cycle_period_start || "—"} → {row.cycle_period_end || "—"} ·{" "}
+            {row.cycle_days ?? "—"} plan days
+          </span>
+        </div>
+      ) : (
+        <div className="font-medium text-foreground">
+          {formatBillingMonthLabel(row.billing_month)}
+          <span className="font-normal text-muted-foreground">
+            {" "}
+            · calendar month 1st–last · by delivery date
+          </span>
+        </div>
+      )}
       {tier ? (
         <div className="text-muted-foreground">
           Tier: <span className="text-foreground font-medium capitalize">{tier}</span>
@@ -112,12 +140,174 @@ function MonthCalcBreakdown({ row }: { row: DueRow }) {
           {after != null ? (
             <>
               {" "}
-              · <span className="text-foreground font-semibold">this month {fmtCAD(Number(after))}</span>
+              ·{" "}
+              <span className="text-foreground font-semibold">
+                {isCycle ? "this cycle" : "this month"} {fmtCAD(Number(after))}
+              </span>
             </>
           ) : null}
         </div>
       ) : null}
+      {isCycle && row.cycle_anchor_missing ? (
+        <div className="text-amber-600 font-medium">
+          No next payment collection date set — this customer will not renew until you set one.
+        </div>
+      ) : null}
     </div>
+  );
+}
+
+type AdjustTarget = { id: string; name: string; row: DueRow };
+
+function AdjustCycleSheet({
+  target,
+  onClose,
+  onAdjusted,
+}: {
+  target: AdjustTarget | null;
+  onClose: () => void;
+  onAdjusted: () => void;
+}) {
+  const [mode, setMode] = useState<"postpone" | "set_date">("postpone");
+  const [days, setDays] = useState("1");
+  const [newDate, setNewDate] = useState("");
+  const [which, setWhich] = useState<"next" | "current">("next");
+  const [reason, setReason] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!target) return;
+    setMode("postpone");
+    setDays("1");
+    setNewDate("");
+    // An overdue collection defaults to re-dating the one already due.
+    setWhich(target.row.is_overdue ? "current" : "next");
+    setReason("");
+  }, [target]);
+
+  if (!target) return null;
+
+  const { id: customerId, row } = target;
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const payload: Record<string, unknown> = { mode, target: which, reason };
+      if (mode === "postpone") payload.days = Number(days);
+      else payload.date = newDate;
+      const { data } = await api.patch(`/customers/${customerId}/billing-cycle`, payload);
+      const movedDate = data?.cycle_anchor_date || "the new date"
+      toast.success(
+        which === "current"
+          ? `Collection already due moved to ${movedDate}`
+          : `Next collection moved to ${movedDate}`
+      );
+      onAdjusted();
+      onClose();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || "Failed to adjust the cycle");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const inputClass =
+    "h-11 w-full px-4 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all";
+
+  return (
+    <AppSheet
+      open={!!target}
+      onClose={onClose}
+      title={`Adjust cycle · ${target.name}`}
+      size="md"
+      as="form"
+      onSubmit={submit}
+      footer={
+        <button
+          type="submit"
+          data-testid="adjust-cycle-submit"
+          disabled={saving || (mode === "set_date" && !newDate)}
+          className="pill-btn btn-primary h-12 w-full cursor-pointer disabled:opacity-60"
+        >
+          {saving ? "Saving…" : "Move collection date"}
+        </button>
+      }
+    >
+      <div className="flex flex-col gap-4 pb-2" data-testid="adjust-cycle-sheet">
+        <div className="card-tinted p-3 text-xs text-muted-foreground">
+          Cycle #{row.cycle_index ?? 0} · every {row.cycle_days ?? "—"} plan days · current
+          collection {row.collection_due_date || row.renewal_date || "—"}. Cycles already
+          collected are preserved, so this never re-bills or skips a cycle.
+        </div>
+
+        <label className="flex flex-col gap-1.5">
+          <span className="label-overline">Which collection</span>
+          <select
+            data-testid="adjust-cycle-target"
+            value={which}
+            onChange={(e) => setWhich(e.target.value as "next" | "current")}
+            className={inputClass}
+          >
+            <option value="next">The next upcoming collection</option>
+            <option value="current">The collection already due (grant grace)</option>
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1.5">
+          <span className="label-overline">How to move it</span>
+          <select
+            data-testid="adjust-cycle-mode"
+            value={mode}
+            onChange={(e) => setMode(e.target.value as "postpone" | "set_date")}
+            className={inputClass}
+          >
+            <option value="postpone">Postpone by N plan days</option>
+            <option value="set_date">Set an exact date</option>
+          </select>
+        </label>
+
+        {mode === "postpone" ? (
+          <label className="flex flex-col gap-1.5">
+            <span className="label-overline">Plan days to add</span>
+            <input
+              type="number"
+              min={1}
+              data-testid="adjust-cycle-days"
+              value={days}
+              onChange={(e) => setDays(e.target.value)}
+              className={inputClass}
+            />
+            <span className="text-xs text-muted-foreground">
+              Counts plan weekdays only and skips kitchen closed dates, same as a renewal.
+            </span>
+          </label>
+        ) : (
+          <label className="flex flex-col gap-1.5">
+            <span className="label-overline">New collection date</span>
+            <input
+              type="date"
+              data-testid="adjust-cycle-date"
+              value={newDate}
+              onChange={(e) => setNewDate(e.target.value)}
+              className={inputClass}
+            />
+          </label>
+        )}
+
+        <label className="flex flex-col gap-1.5">
+          <span className="label-overline">Reason (optional)</span>
+          <input
+            type="text"
+            data-testid="adjust-cycle-reason"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="e.g. customer travelling"
+            className={inputClass}
+          />
+        </label>
+      </div>
+    </AppSheet>
   );
 }
 
@@ -131,6 +321,7 @@ export default function MonthlyDuesPage() {
   const [rows, setRows] = useState<DueRow[]>([]);
   const [totals, setTotals] = useState<{ due_amount?: number; overdue_amount?: number; overdue_count?: number; customer_count?: number } | null>(null);
   const [renewCustomer, setRenewCustomer] = useState<{ id: string; name: string } | null>(null);
+  const [adjustTarget, setAdjustTarget] = useState<AdjustTarget | null>(null);
   const [filterCity, setFilterCity] = useState("");
   const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
   // Default to 100 so paid-up / new customers are visible without extra paging
@@ -187,8 +378,9 @@ export default function MonthlyDuesPage() {
 
   // Drive blurb from row policies (report billing_mode may be "mixed")
   const isAdjustable = rows.some((r) => r.policy_variant === "monthly_adjustable");
+  const hasCycleRows = rows.some(isCycleRow);
 
-  const colCount = 4 + (showMoney ? 4 : 0) + 1;
+  const colCount = 4 + (hasCycleRows ? 1 : 0) + (showMoney ? 4 : 0) + 1;
 
   if (loading && !rows.length && !totals) {
     return <PageLoader testid="monthly-dues-loading" label="Loading customer subscriptions…" />;
@@ -349,11 +541,23 @@ export default function MonthlyDuesPage() {
                         <ClockCounterClockwise size={18} />
                         Payment history
                       </button>
+                      {canMutate && isCycleRow(r) ? (
+                        <button
+                          type="button"
+                          data-testid={`monthly-dues-adjust-cycle-mobile-${r.customer_id}`}
+                          aria-label={`Adjust cycle for ${r.name}`}
+                          onClick={() => setAdjustTarget({ id: r.customer_id, name: r.name, row: r })}
+                          className="h-10 rounded-full border border-brand-border bg-white text-sm font-semibold cursor-pointer inline-flex items-center justify-center gap-2"
+                        >
+                          <CalendarBlank size={18} />
+                          Adjust cycle
+                        </button>
+                      ) : null}
                       {canMutate && showMoney ? (
                         <button
                           type="button"
                           data-testid={`monthly-dues-renew-mobile-${r.customer_id}`}
-                          aria-hidden="true"
+                          aria-label={`Quick Renew for ${r.name}`}
                           onClick={() => setRenewCustomer({ id: r.customer_id, name: r.name })}
                           className="h-10 rounded-full bg-primary text-primary-foreground text-sm font-semibold cursor-pointer"
                         >
@@ -372,6 +576,7 @@ export default function MonthlyDuesPage() {
                     <th className="px-3 py-2 label-overline">Customer</th>
                     <th className="px-3 py-2 label-overline">Plan</th>
                     <th className="px-3 py-2 label-overline">Renewal date</th>
+                    {hasCycleRows ? <th className="px-3 py-2 label-overline">Cycle</th> : null}
                     <th className="px-3 py-2 label-overline">Overdue by</th>
                     {showMoney ? <th className="px-3 py-2 label-overline text-right">Plan fee</th> : null}
                     {showMoney ? <th className="px-3 py-2 label-overline text-right">This month</th> : null}
@@ -408,6 +613,24 @@ export default function MonthlyDuesPage() {
                           <td className="px-3 py-2 text-muted-foreground">
                             {r.renewal_date || r.collection_due_date || "—"}
                           </td>
+                          {hasCycleRows ? (
+                            <td className="px-3 py-2 text-muted-foreground">
+                              {isCycleRow(r) ? (
+                                <>
+                                  <div>
+                                    #{r.cycle_index ?? 0} · {r.cycle_days ?? "—"}d
+                                  </div>
+                                  {r.cycle_period_start || r.cycle_period_end ? (
+                                    <div className="text-[10px] text-muted-foreground/80">
+                                      {r.cycle_period_start || "—"} → {r.cycle_period_end || "—"}
+                                    </div>
+                                  ) : null}
+                                </>
+                              ) : (
+                                "—"
+                              )}
+                            </td>
+                          ) : null}
                           <td className="px-3 py-2 text-muted-foreground">
                             {r.is_overdue && r.days_overdue ? `${r.days_overdue}d` : "—"}
                           </td>
@@ -463,10 +686,26 @@ export default function MonthlyDuesPage() {
                                 <ClockCounterClockwise size={16} />
                                 History
                               </button>
+                              {canMutate && isCycleRow(r) ? (
+                                <button
+                                  type="button"
+                                  data-testid={`monthly-dues-adjust-cycle-${r.customer_id}`}
+                                  aria-label={`Adjust cycle for ${r.name}`}
+                                  onClick={() =>
+                                    setAdjustTarget({ id: r.customer_id, name: r.name, row: r })
+                                  }
+                                  className="h-9 px-3 rounded-full border border-brand-border bg-white text-xs font-semibold cursor-pointer inline-flex items-center gap-1.5"
+                                  title="Postpone or re-date this collection"
+                                >
+                                  <CalendarBlank size={16} />
+                                  Adjust cycle
+                                </button>
+                              ) : null}
                               {canMutate && showMoney ? (
                                 <button
                                   type="button"
                                   data-testid={`monthly-dues-renew-${r.customer_id}`}
+                                  aria-label={`Quick Renew for ${r.name}`}
                                   onClick={() => setRenewCustomer({ id: r.customer_id, name: r.name })}
                                   className="h-9 px-3 rounded-full bg-primary text-primary-foreground text-xs font-semibold cursor-pointer"
                                 >
@@ -522,6 +761,12 @@ export default function MonthlyDuesPage() {
           setRenewCustomer(null);
           reloadCurrentPage();
         }}
+      />
+
+      <AdjustCycleSheet
+        target={adjustTarget}
+        onClose={() => setAdjustTarget(null)}
+        onAdjusted={reloadCurrentPage}
       />
     </div>
   );

@@ -135,9 +135,11 @@ export default function ConsumerHome() {
   const cutoffHours = me?.provider?.settings?.cutoff_hours ?? 4;
   const mealPrice = Number(me?.customer?.meal_price) || 0;
   const billing = me?.billing;
-  const monthlyBilling = billing?.billing_mode === "monthly_flat";
+  const cycleBilling = billing?.billing_mode === "cycle_flat";
+  const monthlyBilling = billing?.billing_mode === "monthly_flat" || cycleBilling;
   const monthlyFixed = billing?.policy_variant === "monthly_fixed";
   const currentMonth = me?.current_month_billing;
+  const currentCycle = me?.current_cycle_billing;
   const extraOpen = extraTarget !== null;
   const extraDefaultDate =
     extraTarget && extraTarget !== "new" ? extraTarget.delivery_date : todayISO();
@@ -207,7 +209,9 @@ export default function ConsumerHome() {
         </div>
         <div className="stat-card">
           <div className="flex items-center justify-between">
-            <span className="label-overline">{monthlyBilling ? "Monthly plan" : "Next delivery"}</span>
+            <span className="label-overline">
+              {cycleBilling ? "Subscription plan" : monthlyBilling ? "Monthly plan" : "Next delivery"}
+            </span>
             <Truck size={20} className="text-secondary" weight="duotone" />
           </div>
           {monthlyBilling ? (
@@ -215,7 +219,12 @@ export default function ConsumerHome() {
               <div className="font-display font-black text-xl sm:text-2xl">{billing?.monthly_plan_name || "Plan"}</div>
               <div className="text-xs text-muted-foreground truncate">
                 {fmtCAD(billing?.monthly_fee ?? 0)}
-                {billing?.collection_due_date ? ` · due ${fmtDate(billing.collection_due_date)}` : ""}
+                {(() => {
+                  const due = cycleBilling
+                    ? currentCycle?.renewal_date || billing?.collection_due_date
+                    : billing?.collection_due_date
+                  return due ? ` · due ${fmtDate(due)}` : ""
+                })()}
               </div>
             </>
           ) : (
@@ -227,7 +236,18 @@ export default function ConsumerHome() {
         </div>
       </div>
 
-      {monthlyBilling && currentMonth ? (
+      {cycleBilling ? (
+        <div className="card-tinted p-4 text-sm text-muted-foreground" data-testid="consumer-cycle-billing-summary">
+          <p className="label-overline text-foreground">Day-cycle subscription</p>
+          <p className="mt-1">
+            Your subscription fee is {fmtCAD(currentCycle?.cycle_fee ?? billing?.monthly_fee ?? 0)}{" "}
+            every {billing?.cycle_days ?? "—"} plan days, regardless of skips.
+            {currentCycle?.renewal_date || billing?.collection_due_date
+              ? ` Next renewal ${currentCycle?.renewal_date || billing?.collection_due_date}.`
+              : ""}
+          </p>
+        </div>
+      ) : monthlyBilling && currentMonth ? (
         <div className="card-tinted p-4 text-sm text-muted-foreground" data-testid="consumer-monthly-billing-summary">
           {monthlyFixed ? (
             <p>Your fixed monthly fee is {fmtCAD(currentMonth.monthly_fee)} for this month regardless of skips.</p>
@@ -404,7 +424,9 @@ export default function ConsumerHome() {
       >
         <p className="text-sm text-muted-foreground">
           Subject to your provider&apos;s {cutoffHours}h cutoff before delivery.{" "}
-          {monthlyFixed
+          {cycleBilling
+            ? "Your subscription fee and renewal date are unchanged if cancellation succeeds."
+            : monthlyFixed
             ? "Your monthly fee is unchanged if cancellation succeeds."
             : monthlyBilling
               ? "Cancellation may reduce this month\u2019s flat fee (adjustable plan)."

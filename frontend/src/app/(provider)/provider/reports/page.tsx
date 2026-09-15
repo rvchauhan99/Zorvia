@@ -25,6 +25,11 @@ function tabButton(active: boolean, label: string, onClick: () => void, testid: 
   );
 }
 
+/** Flat-fee policies whose rows carry a renewal / collection date. */
+function isDatedFlatMode(mode?: string | null): boolean {
+  return mode === "monthly_fixed" || mode === "cycle_fixed" || mode === "mixed";
+}
+
 function toCSV(rows: any[]) {
   if (!rows || !rows.length) return "";
   const keys = Object.keys(rows[0]);
@@ -68,9 +73,8 @@ export default function Reports() {
   const rows = data?.rows ?? [];
   const balanceListTab = tab === "outstanding" || tab === "customer-credit";
   const pagedTab = tab === "outstanding" || tab === "customer-credit" || tab === "statement" || tab === "area";
-  const fixedOutstanding =
-    tab === "outstanding" &&
-    (data?.billing_mode === "monthly_fixed" || data?.billing_mode === "mixed");
+  const fixedOutstanding = tab === "outstanding" && isDatedFlatMode(data?.billing_mode);
+  const hasCycleRows = rows.some((r: any) => r.policy_variant === "cycle_fixed");
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(listQ.trim()), 300);
@@ -216,8 +220,7 @@ export default function Reports() {
                 email: r.email,
                 credit: r.credit ?? Math.abs(Number(r.outstanding) || 0),
               }))
-            : tab === "outstanding" &&
-                (data?.billing_mode === "monthly_fixed" || data?.billing_mode === "mixed")
+            : tab === "outstanding" && isDatedFlatMode(data?.billing_mode)
               ? rows.map((r: any) => ({
                   customer_id: r.customer_id,
                   name: r.name,
@@ -227,6 +230,8 @@ export default function Reports() {
                   renewal_date: r.renewal_date || r.collection_due_date || r.last_due_date || "",
                   days_overdue: r.days_overdue ?? 0,
                   outstanding: r.outstanding,
+                  cycle_days: r.cycle_days ?? "",
+                  cycle_period_end: r.cycle_period_end || "",
                 }))
               : rows;
     downloadCSV(`tiffin-${tab}-${todayISO()}`, exportRows.length ? exportRows : [data.totals || data]);
@@ -524,7 +529,7 @@ export default function Reports() {
                       <div className="min-w-0">
                         <div className="font-medium truncate flex items-center gap-2 flex-wrap">
                           <span>{r.name}</span>
-                          {fixedOutstanding ? (
+                          {r.is_overdue ?? fixedOutstanding ? (
                             <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-destructive/15 text-destructive">
                               Overdue
                             </span>
@@ -537,6 +542,9 @@ export default function Reports() {
                           <div className="text-xs text-muted-foreground mt-1">
                             Renewal {r.renewal_date || r.collection_due_date || r.last_due_date || "—"}
                             {r.days_overdue ? ` · ${r.days_overdue}d overdue` : null}
+                            {r.policy_variant === "cycle_fixed"
+                              ? ` · cycle #${r.cycle_index ?? 0} · ${r.cycle_days ?? "—"}d`
+                              : null}
                           </div>
                         ) : null}
                       </div>
@@ -553,6 +561,7 @@ export default function Reports() {
                       {fixedOutstanding ? (
                         <>
                           <th className="px-3 py-2 label-overline">Renewal date</th>
+                          {hasCycleRows ? <th className="px-3 py-2 label-overline">Cycle</th> : null}
                           <th className="px-3 py-2 label-overline">Overdue by</th>
                         </>
                       ) : (
@@ -566,13 +575,13 @@ export default function Reports() {
                       <tr
                         key={r.customer_id || `outstanding-${r.email || r.name || i}`}
                         className={`hover:bg-brand-surface/60 transition-colors ${
-                          fixedOutstanding ? "bg-destructive/5" : ""
+                          (r.is_overdue ?? fixedOutstanding) ? "bg-destructive/5" : ""
                         }`}
                       >
                         <td className="px-3 py-2 font-medium">
                           <span className="inline-flex items-center gap-2 flex-wrap">
                             {r.name}
-                            {fixedOutstanding ? (
+                            {r.is_overdue ?? fixedOutstanding ? (
                               <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-destructive/15 text-destructive">
                                 Overdue
                               </span>
@@ -585,6 +594,13 @@ export default function Reports() {
                             <td className="px-3 py-2 text-muted-foreground">
                               {r.renewal_date || r.collection_due_date || r.last_due_date || "—"}
                             </td>
+                            {hasCycleRows ? (
+                              <td className="px-3 py-2 text-muted-foreground">
+                                {r.policy_variant === "cycle_fixed"
+                                  ? `#${r.cycle_index ?? 0} · ${r.cycle_days ?? "—"}d`
+                                  : "—"}
+                              </td>
+                            ) : null}
                             <td className="px-3 py-2 text-muted-foreground">
                               {r.days_overdue ? `${r.days_overdue}d` : "—"}
                             </td>
@@ -625,13 +641,14 @@ export default function Reports() {
                       <div className="min-w-0">
                         <div className="font-medium truncate">{r.name}</div>
                         <div className="text-xs text-muted-foreground mt-0.5 truncate">{[r.phone, r.email].filter(Boolean).join(" · ")}</div>
-                        {(data?.billing_mode === "monthly_fixed" ||
-                          data?.billing_mode === "mixed" ||
-                          r.billing_mode === "monthly_fixed") &&
+                        {(isDatedFlatMode(data?.billing_mode) ||
+                          isDatedFlatMode(r.billing_mode)) &&
                         (r.renewal_date || r.collection_due_date) ? (
                           <div className="text-xs text-muted-foreground mt-1">
                             Next renewal {r.renewal_date || r.collection_due_date}
-                            {r.prepaid_months ? ` · ${r.prepaid_months} mo prepaid` : ""}
+                            {r.prepaid_months
+                              ? ` · ${r.prepaid_months} ${r.policy_variant === "cycle_fixed" ? (r.prepaid_months === 1 ? "cycle" : "cycles") : "mo"} prepaid`
+                              : ""}
                           </div>
                         ) : null}
                       </div>
@@ -649,7 +666,7 @@ export default function Reports() {
                         <th className="px-3 py-2 label-overline">Customer</th>
                         <th className="px-3 py-2 label-overline">Phone</th>
                         <th className="px-3 py-2 label-overline">Email</th>
-                        {data?.billing_mode === "monthly_fixed" || data?.billing_mode === "mixed" ? (
+                        {isDatedFlatMode(data?.billing_mode) ? (
                           <th className="px-3 py-2 label-overline">Next renewal</th>
                         ) : null}
                         <th className="px-3 py-2 label-overline text-right">Credit</th>
@@ -661,11 +678,19 @@ export default function Reports() {
                           <td className="px-3 py-2 font-medium">{r.name}</td>
                           <td className="px-3 py-2 text-muted-foreground">{r.phone}</td>
                           <td className="px-3 py-2 text-muted-foreground">{r.email}</td>
-                          {data?.billing_mode === "monthly_fixed" || data?.billing_mode === "mixed" ? (
+                          {isDatedFlatMode(data?.billing_mode) ? (
                             <td className="px-3 py-2 text-muted-foreground">
                               {r.renewal_date || r.collection_due_date || "—"}
                               {r.prepaid_months ? (
-                                <div className="text-[10px] text-secondary">{r.prepaid_months} mo prepaid</div>
+                                <div className="text-[10px] text-secondary">
+                                  {r.prepaid_months}{" "}
+                                  {r.policy_variant === "cycle_fixed"
+                                    ? r.prepaid_months === 1
+                                      ? "cycle"
+                                      : "cycles"
+                                    : "mo"}{" "}
+                                  prepaid
+                                </div>
                               ) : null}
                             </td>
                           ) : null}
@@ -702,17 +727,27 @@ export default function Reports() {
                           <th className="px-3 py-2 label-overline">Customer</th>
                           <th className="px-3 py-2 label-overline">Plan</th>
                           <th className="px-3 py-2 label-overline">Due date</th>
-                          <th className="px-3 py-2 label-overline text-right">Month charge</th>
+                          {hasCycleRows ? <th className="px-3 py-2 label-overline">Cycle</th> : null}
+                          <th className="px-3 py-2 label-overline text-right">
+                            {hasCycleRows ? "Charge" : "Month charge"}
+                          </th>
                           <th className="px-3 py-2 label-overline text-right">Balance due</th>
                           <th className="px-3 py-2 label-overline">Status</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-brand-border">
-                        {rows.map((r: any) => (
-                          <tr key={r.customer_id} className="hover:bg-brand-surface/60">
+                        {rows.map((r: any, i: number) => (
+                          <tr key={r.customer_id ? `due-${r.customer_id}` : `due-${i}`} className="hover:bg-brand-surface/60">
                             <td className="px-3 py-2 font-medium">{r.name}</td>
                             <td className="px-3 py-2">{r.monthly_plan_name}</td>
                             <td className="px-3 py-2">{r.collection_due_date || "—"}</td>
+                            {hasCycleRows ? (
+                              <td className="px-3 py-2 text-muted-foreground">
+                                {r.policy_variant === "cycle_fixed"
+                                  ? `#${r.cycle_index ?? 0} · ${r.cycle_days ?? "—"}d`
+                                  : "—"}
+                              </td>
+                            ) : null}
                             <td className="px-3 py-2 text-right">{fmtCAD(r.month_charge_after_tax ?? r.month_charge)}</td>
                             <td className="px-3 py-2 text-right font-semibold text-secondary">{fmtCAD(r.balance_due)}</td>
                             <td className="px-3 py-2">{r.is_overdue ? `${r.days_overdue}d overdue` : "Current"}</td>
@@ -799,7 +834,7 @@ export default function Reports() {
             </div>
             {rows.length === 0 ? (
               <div className="p-4 text-center text-muted-foreground">No statement rows for this month.</div>
-            ) : data.billing_mode === "monthly_flat" ? (
+            ) : isDatedFlatMode(data.billing_mode) ? (
               <>
                 <ul className="md:hidden divide-y divide-brand-border -mx-4 sm:-mx-5">
                   {rows.map((r: any, i: number) => (
@@ -808,11 +843,23 @@ export default function Reports() {
                       <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
                         <span className="text-muted-foreground">Plan</span>
                         <span className="text-right">{r.plan_name || "—"}</span>
-                        <span className="text-muted-foreground">Month charge</span>
+                        <span className="text-muted-foreground">
+                          {r.policy_variant === "cycle_fixed" ? "Cycle charge" : "Month charge"}
+                        </span>
                         <span className="text-right font-semibold">{fmtCAD(r.month_charge_after_tax ?? r.month_charge_before_tax)}</span>
                         <span className="text-muted-foreground">Due</span>
                         <span className="text-right">{r.collection_due_date || "—"}</span>
-                        {r.tier_applied && r.policy_variant !== "monthly_fixed" ? (
+                        {r.policy_variant === "cycle_fixed" ? (
+                          <>
+                            <span className="text-muted-foreground">Cycle</span>
+                            <span className="text-right">
+                              #{r.cycle_index ?? 0} · {r.cycle_days ?? "—"}d
+                            </span>
+                          </>
+                        ) : null}
+                        {r.tier_applied &&
+                        r.policy_variant !== "monthly_fixed" &&
+                        r.policy_variant !== "cycle_fixed" ? (
                           <>
                             <span className="text-muted-foreground">Tier</span>
                             <span className="text-right">{String(r.tier_applied).replace(/_/g, " ")}</span>
@@ -834,7 +881,9 @@ export default function Reports() {
                       <tr>
                         <th className="px-3 py-2 label-overline">Customer</th>
                         <th className="px-3 py-2 label-overline">Plan</th>
-                        <th className="px-3 py-2 label-overline text-right">Month charge</th>
+                        <th className="px-3 py-2 label-overline text-right">
+                          {hasCycleRows ? "Cycle charge" : "Month charge"}
+                        </th>
                         <th className="px-3 py-2 label-overline">Due</th>
                         <th className="px-3 py-2 label-overline">Tier</th>
                         <th className="px-3 py-2 label-overline">Meals</th>
@@ -849,7 +898,15 @@ export default function Reports() {
                           <td className="px-3 py-2">{r.plan_name || "—"}</td>
                           <td className="px-3 py-2 text-right font-semibold">{fmtCAD(r.month_charge_after_tax ?? r.month_charge_before_tax)}</td>
                           <td className="px-3 py-2">{r.collection_due_date || "—"}</td>
-                          <td className="px-3 py-2">{r.policy_variant === "monthly_fixed" ? "fixed" : (r.tier_applied ? String(r.tier_applied).replace(/_/g, " ") : "—")}</td>
+                          <td className="px-3 py-2">
+                            {r.policy_variant === "cycle_fixed"
+                              ? `cycle #${r.cycle_index ?? 0} · ${r.cycle_days ?? "—"}d`
+                              : r.policy_variant === "monthly_fixed"
+                                ? "fixed"
+                                : r.tier_applied
+                                  ? String(r.tier_applied).replace(/_/g, " ")
+                                  : "—"}
+                          </td>
                           <td className="px-3 py-2">{r.delivered_count}</td>
                           <td className="px-3 py-2 text-right text-secondary">{fmtCAD(r.verified_payments_amount)}</td>
                           <td className="px-3 py-2 text-right font-semibold text-primary">{fmtCAD(r.outstanding)}</td>

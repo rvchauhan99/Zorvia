@@ -31,6 +31,11 @@ import { useCursorPagination } from "@/hooks/useCursorPagination";
 
 type Tab = "overview" | "analysis" | "deliveries" | "payments" | "pauses" | "menu" | "notes";
 
+/** Monthly and day-cycle both bill a flat plan fee rather than per delivered meal. */
+function isFlatBillingMode(mode?: string | null): boolean {
+  return mode === "monthly_flat" || mode === "cycle_flat";
+}
+
 function stagger(index: number) {
   return { animationDelay: `${index * 70}ms` } as React.CSSProperties;
 }
@@ -326,7 +331,7 @@ export default function CustomerDetail() {
       paymentsPaging.resetToFirstPage();
       fetchPayments({ cursor: null });
       // Per-meal: also refresh timeline for mixed meals+payments ledger
-      if (c?.billing?.billing_mode !== "monthly_flat") {
+      if (!isFlatBillingMode(c?.billing?.billing_mode)) {
         api.get<{ events: CustomerTimelineEvent[] }>(`/customers/${id}/timeline`)
           .then((res) => setTimeline(res.data.events || []))
           .catch(() => {});
@@ -396,6 +401,9 @@ export default function CustomerDetail() {
   if (!c) return <PageLoader testid="customer-detail-loader" />;
 
   const isPaused = (c.pauses || []).some((p: any) => p.start <= todayISO() && todayISO() <= p.end);
+  const flatBilling = isFlatBillingMode(c.billing?.billing_mode);
+  const isCycleBilling = c.billing?.billing_mode === "cycle_flat";
+  const cycleAdjustments: any[] = Array.isArray(c.cycle_adjustments) ? c.cycle_adjustments : [];
   const k = insights?.kpis || {};
   const busyAnalysis = analysisLoading || isPending;
   const refreshingAnalysis = busyAnalysis && !!insights;
@@ -534,36 +542,94 @@ export default function CustomerDetail() {
               </div>
             ) : null}
           </div>
-          {showMoney && c.billing?.billing_mode === "monthly_flat" ? (
+          {showMoney && flatBilling ? (
             <div className="sm:col-span-2 rounded-xl border border-brand-border bg-white p-4 flex flex-col gap-2" data-testid="customer-monthly-billing-card">
-              <div className="label-overline">Monthly billing</div>
+              <div className="label-overline">
+                {isCycleBilling ? "Day-cycle subscription" : "Monthly billing"}
+              </div>
               <div className="font-medium" data-testid="customer-billing-policy-badge">
                 {c.billing?.monthly_plan_name || c.current_month_billing?.plan_name || "Plan"}
                 {" · "}
                 {fmtCAD(c.billing?.monthly_fee ?? c.current_month_billing?.monthly_fee ?? 0)}
-                {c.billing?.policy_variant === "monthly_fixed" ? " · Fixed" : " · Adjustable"}
+                {isCycleBilling
+                  ? ` per ${c.billing?.cycle_days ?? "—"} plan days`
+                  : c.billing?.policy_variant === "monthly_fixed"
+                    ? " · Fixed"
+                    : " · Adjustable"}
                 {c.billing?.policy_source === "inherit"
                   ? " · Inherited"
                   : c.billing?.policy_source === "override"
                     ? " · Override"
                     : ""}
               </div>
-              {c.current_month_billing ? (
-                <div className="text-sm text-muted-foreground">
-                  This month: {fmtCAD(c.current_month_billing.month_charge_after_tax ?? c.current_month_billing.month_charge_before_tax)}
-                  {c.current_month_billing.tier_applied ? ` · ${String(c.current_month_billing.tier_applied).replace(/_/g, " ")}` : ""}
-                </div>
-              ) : null}
-              <div className="text-sm text-muted-foreground">
-                Collection day: {c.billing?.payment_collection_day ?? "—"}
-                {c.billing?.collection_due_date ? ` · Due ${c.billing.collection_due_date}` : ""}
-              </div>
+              {isCycleBilling ? (
+                <>
+                  {c.current_cycle_billing ? (
+                    <div className="text-sm text-muted-foreground" data-testid="customer-cycle-charge">
+                      This cycle:{" "}
+                      {fmtCAD(
+                        c.current_cycle_billing.cycle_charge_after_tax ??
+                          c.current_cycle_billing.cycle_charge_before_tax,
+                      )}
+                      {" · cycle #"}
+                      {c.current_cycle_billing.cycle_index ?? 0}
+                    </div>
+                  ) : null}
+                  <div className="text-sm text-muted-foreground" data-testid="customer-cycle-dates">
+                    Next collection:{" "}
+                    {c.current_cycle_billing?.renewal_date || c.billing?.cycle_period_end || "—"}
+                    {c.billing?.cycle_period_start
+                      ? ` · current cycle from ${c.billing.cycle_period_start}`
+                      : ""}
+                  </div>
+                  {c.billing?.cycle_anchor_missing ? (
+                    <div className="text-sm text-amber-600 font-medium">
+                      No next payment collection date set — this customer will not renew until you
+                      set one.
+                    </div>
+                  ) : null}
+                  {cycleAdjustments.length ? (
+                    <div className="pt-2 border-t border-brand-border/60" data-testid="customer-cycle-adjustments">
+                      <div className="label-overline">Cycle adjustments</div>
+                      <ul className="mt-1.5 flex flex-col gap-1">
+                        {cycleAdjustments
+                          .slice()
+                          .reverse()
+                          .slice(0, 5)
+                          .map((a: any) => (
+                            <li key={a.id} className="text-xs text-muted-foreground">
+                              {String(a.at || "").slice(0, 10)} ·{" "}
+                              {a.mode === "postpone"
+                                ? `postponed ${a.days} plan day${a.days === 1 ? "" : "s"}`
+                                : "re-dated"}{" "}
+                              · {a.previous_due_date} → {a.new_due_date}
+                              {a.reason ? ` · ${a.reason}` : ""}
+                            </li>
+                          ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  {c.current_month_billing ? (
+                    <div className="text-sm text-muted-foreground">
+                      This month: {fmtCAD(c.current_month_billing.month_charge_after_tax ?? c.current_month_billing.month_charge_before_tax)}
+                      {c.current_month_billing.tier_applied ? ` · ${String(c.current_month_billing.tier_applied).replace(/_/g, " ")}` : ""}
+                    </div>
+                  ) : null}
+                  <div className="text-sm text-muted-foreground">
+                    Collection day: {c.billing?.payment_collection_day ?? "—"}
+                    {c.billing?.collection_due_date ? ` · Due ${c.billing.collection_due_date}` : ""}
+                  </div>
+                </>
+              )}
             </div>
           ) : null}
           {showMoney ? (
             <div>
               <div className="label-overline">
-                {c.billing?.billing_mode === "monthly_flat" ? "Meal type (kitchen)" : "Meal type / price"}
+                {flatBilling ? "Meal type (kitchen)" : "Meal type / price"}
               </div>
               <div className="font-medium" data-testid="customer-meal-type-price">
                 Default: {(c.meal_type_id || "regular").replace(/^\w/, (ch: string) => ch.toUpperCase())}
@@ -721,7 +787,7 @@ export default function CustomerDetail() {
               <div>
                 <h3 className="font-display font-bold text-lg">Payment history</h3>
                 <p className="text-xs text-muted-foreground">
-                  {c.billing?.billing_mode === "monthly_flat"
+                  {flatBilling
                     ? "Recent payments and renewal comments."
                     : "Recent payments and meals."}
                 </p>
@@ -744,7 +810,7 @@ export default function CustomerDetail() {
             ) : (
               <ul className="divide-y divide-brand-border">
                 {timeline.filter((ev) =>
-                  c.billing?.billing_mode === "monthly_flat"
+                  flatBilling
                     ? ev.type === "payment"
                     : ev.type === "payment" || ev.type === "delivery"
                 ).length === 0 ? (
@@ -752,7 +818,7 @@ export default function CustomerDetail() {
                 ) : (
                   timeline
                     .filter((ev) =>
-                      c.billing?.billing_mode === "monthly_flat"
+                      flatBilling
                         ? ev.type === "payment"
                         : ev.type === "payment" || ev.type === "delivery"
                     )
@@ -893,13 +959,17 @@ export default function CustomerDetail() {
               </button>
             </div>
           ) : null}
-          {c.billing?.billing_mode === "monthly_flat" && showMoney ? (
+          {flatBilling && showMoney ? (
             <div className="card-tinted p-4 text-sm" data-testid="payment-history-monthly-summary">
               <div className="font-medium">
-                {c.billing?.monthly_plan_name || "Monthly plan"}
+                {c.billing?.monthly_plan_name || (isCycleBilling ? "Day-cycle plan" : "Monthly plan")}
                 {" · "}
                 {fmtCAD(c.billing?.monthly_fee ?? 0)}
-                {c.billing?.policy_variant === "monthly_fixed" ? " · Fixed" : " · Adjustable"}
+                {isCycleBilling
+                  ? ` per ${c.billing?.cycle_days ?? "—"} plan days`
+                  : c.billing?.policy_variant === "monthly_fixed"
+                    ? " · Fixed"
+                    : " · Adjustable"}
                 {c.billing?.policy_source === "inherit"
                   ? " · Inherited"
                   : c.billing?.policy_source === "override"
@@ -912,8 +982,14 @@ export default function CustomerDetail() {
                 ) : (
                   <>Outstanding: {fmtCAD(c.outstanding || 0)}</>
                 )}
-                {c.billing?.collection_due_date || c.billing?.renewal_date
-                  ? ` · Next renewal ${c.billing?.renewal_date || c.billing?.collection_due_date}`
+                {c.current_cycle_billing?.renewal_date ||
+                c.billing?.collection_due_date ||
+                c.billing?.renewal_date
+                  ? ` · Next renewal ${
+                      c.current_cycle_billing?.renewal_date ||
+                      c.billing?.renewal_date ||
+                      c.billing?.collection_due_date
+                    }`
                   : ""}
               </div>
             </div>
@@ -922,12 +998,12 @@ export default function CustomerDetail() {
             <div className="px-4 py-3 border-b border-brand-border">
               <h3 className="font-display font-bold text-lg">Payment history</h3>
               <p className="text-xs text-muted-foreground">
-                {c.billing?.billing_mode === "monthly_flat"
+                {flatBilling
                   ? "Payments with renewal / credit comments."
                   : "Payments and meal deliveries with operation comments."}
               </p>
             </div>
-            {c.billing?.billing_mode === "monthly_flat" ? (
+            {flatBilling ? (
               paymentsLoading && customerPayments.length === 0 ? (
                 <InlineLoader testid="customer-payments-loading" />
               ) : (
@@ -977,7 +1053,7 @@ export default function CustomerDetail() {
               </ul>
             )}
           </div>
-          {c.billing?.billing_mode === "monthly_flat" ? (
+          {flatBilling ? (
             <CursorPaginationBar
               currentPage={paymentsPaging.currentPage}
               totalPages={paymentsPaging.totalPages}

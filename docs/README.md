@@ -5,6 +5,7 @@ Product and marketing docs for the public MealHQ UI repo.
 | Doc | Purpose |
 |-----|---------|
 | [FUNCTIONAL.md](./FUNCTIONAL.md) | Product behavior and journeys |
+| [DAY_CYCLE_ONBOARDING.md](./DAY_CYCLE_ONBOARDING.md) | Day-cycle billing setup + customer import (shareable with kitchens) |
 | [CONSUMER_ACCOUNT.md](./CONSUMER_ACCOUNT.md) | Consumer create account & sign-in (shareable with kitchens / BA) |
 | [SEO.md](./SEO.md) | SEO / apex domain / GA |
 | [SOCIAL_MEDIA_SETUP.md](./SOCIAL_MEDIA_SETUP.md) | Social / share setup |
