@@ -76,7 +76,15 @@ interface FormState {
   payment_collection_day: string;
   monthly_plan_id: string;
   billing_policy: string;
+  cycle_anchor_date: string;
 }
+
+const BILLING_POLICY_LABELS: Record<string, string> = {
+  monthly_adjustable: "Adjustable Monthly",
+  monthly_fixed: "Fixed Monthly",
+  cycle_fixed: "Day-cycle subscription",
+  per_meal: "Per-meal",
+};
 
 const EMPTY: FormState = {
   name: "",
@@ -103,6 +111,7 @@ const EMPTY: FormState = {
   payment_collection_day: "",
   monthly_plan_id: "",
   billing_policy: "inherit",
+  cycle_anchor_date: "",
 };
 
 // ─── Section Card ─────────────────────────────────────────────────────────────
@@ -301,7 +310,7 @@ export default function CustomerFormPage({
   ]);
   const [monthlyBillingEnabled, setMonthlyBillingEnabled] = useState(false);
   const [kitchenDefaultVariant, setKitchenDefaultVariant] = useState<
-    "monthly_adjustable" | "monthly_fixed"
+    "monthly_adjustable" | "monthly_fixed" | "cycle_fixed"
   >("monthly_adjustable");
   const [monthlyPlans, setMonthlyPlans] = useState<
     { id: string; name: string; monthly_fee_cad?: number }[]
@@ -326,9 +335,10 @@ export default function CustomerFormPage({
         ]);
         setStaff(data || []);
         setMonthlyBillingEnabled(!!prov?.settings?.monthly_billing?.enabled);
+        const variant = prov?.settings?.monthly_billing?.policy_variant;
         setKitchenDefaultVariant(
-          prov?.settings?.monthly_billing?.policy_variant === "monthly_fixed"
-            ? "monthly_fixed"
+          variant === "monthly_fixed" || variant === "cycle_fixed"
+            ? variant
             : "monthly_adjustable",
         );
         const plans = Array.isArray(prov?.settings?.monthly_billing?.plans)
@@ -468,6 +478,7 @@ export default function CustomerFormPage({
         c.payment_collection_day != null ? String(c.payment_collection_day) : "",
       monthly_plan_id: c.monthly_plan_id || "",
       billing_policy: c.billing_policy || "inherit",
+      cycle_anchor_date: String(c.cycle_anchor_date || "").slice(0, 10),
     });
     setScheduleMode(detectLinesScheduleMode(linesMap, slots));
     setRoutePreview(
@@ -838,8 +849,21 @@ export default function CustomerFormPage({
       const effectiveMonthly =
         form.billing_policy === "monthly_adjustable" ||
         form.billing_policy === "monthly_fixed" ||
+        form.billing_policy === "cycle_fixed" ||
         ((form.billing_policy === "inherit" || !form.billing_policy) && monthlyBillingEnabled);
-      if (
+      const isCycle =
+        form.billing_policy === "cycle_fixed" ||
+        ((form.billing_policy === "inherit" || !form.billing_policy) &&
+          monthlyBillingEnabled &&
+          kitchenDefaultVariant === "cycle_fixed");
+      if (isCycle) {
+        if (!form.cycle_anchor_date) {
+          toast.error("Next payment collection date is required for a day-cycle customer");
+          setSaving(false);
+          return;
+        }
+        payload.cycle_anchor_date = form.cycle_anchor_date;
+      } else if (
         effectiveMonthly &&
         form.payment_collection_day !== "" &&
         form.payment_collection_day != null
@@ -902,10 +926,15 @@ export default function CustomerFormPage({
   }
 
   // ── Effective monthly billing ──────────────────────────────────────────────
+  const inheritsKitchen = form.billing_policy === "inherit" || !form.billing_policy;
   const effectiveMonthly =
     form.billing_policy === "monthly_adjustable" ||
     form.billing_policy === "monthly_fixed" ||
-    ((form.billing_policy === "inherit" || !form.billing_policy) && monthlyBillingEnabled);
+    form.billing_policy === "cycle_fixed" ||
+    (inheritsKitchen && monthlyBillingEnabled);
+  const effectiveCycle =
+    form.billing_policy === "cycle_fixed" ||
+    (inheritsKitchen && monthlyBillingEnabled && kitchenDefaultVariant === "cycle_fixed");
 
   // ── Loading skeleton ───────────────────────────────────────────────────────
   if (fetchLoading) {
@@ -1210,15 +1239,14 @@ export default function CustomerFormPage({
                             value: "inherit",
                             label: `Inherit from settings (${
                               monthlyBillingEnabled
-                                ? kitchenDefaultVariant === "monthly_fixed"
-                                  ? "Fixed Monthly"
-                                  : "Adjustable Monthly"
+                                ? BILLING_POLICY_LABELS[kitchenDefaultVariant]
                                 : "Per-meal"
                             })`,
                           },
                           { value: "per_meal", label: "Per-meal" },
                           { value: "monthly_adjustable", label: "Adjustable Monthly" },
                           { value: "monthly_fixed", label: "Fixed Monthly" },
+                          { value: "cycle_fixed", label: BILLING_POLICY_LABELS.cycle_fixed },
                         ]}
                         placeholder="Search billing policy…"
                       />
@@ -1246,23 +1274,40 @@ export default function CustomerFormPage({
                         />
                       </FieldLabel>
 
-                      <FieldLabel
-                        label="Collection day override (1–31)"
-                        hint="Uses kitchen default if empty"
-                      >
-                        <input
-                          type="number"
-                          min={1}
-                          max={31}
-                          data-testid="cf-collection-day"
-                          value={form.payment_collection_day}
-                          onChange={(e) =>
-                            setForm({ ...form, payment_collection_day: e.target.value })
-                          }
-                          className={inp()}
-                          placeholder="e.g. 15"
-                        />
-                      </FieldLabel>
+                      {effectiveCycle ? (
+                        <FieldLabel
+                          label="Next payment collection date"
+                          hint="Every later renewal is counted forward from this date, so pauses never move it."
+                        >
+                          <input
+                            type="date"
+                            data-testid="cf-cycle-anchor-date"
+                            value={form.cycle_anchor_date}
+                            onChange={(e) =>
+                              setForm({ ...form, cycle_anchor_date: e.target.value })
+                            }
+                            className={inp()}
+                          />
+                        </FieldLabel>
+                      ) : (
+                        <FieldLabel
+                          label="Collection day override (1–31)"
+                          hint="Uses kitchen default if empty"
+                        >
+                          <input
+                            type="number"
+                            min={1}
+                            max={31}
+                            data-testid="cf-collection-day"
+                            value={form.payment_collection_day}
+                            onChange={(e) =>
+                              setForm({ ...form, payment_collection_day: e.target.value })
+                            }
+                            className={inp()}
+                            placeholder="e.g. 15"
+                          />
+                        </FieldLabel>
+                      )}
                     </>
                   )}
                 </>
@@ -1624,7 +1669,15 @@ export default function CustomerFormPage({
                    </div>
                    <div className="flex flex-col gap-0.5">
                      <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Billing Policy</span>
-                     <span className="text-sm text-foreground font-medium">{form.billing_policy.replace("_", " ")}</span>
+                     <span className="text-sm text-foreground font-medium">
+                       {BILLING_POLICY_LABELS[form.billing_policy] ||
+                         form.billing_policy.replace(/_/g, " ")}
+                     </span>
+                     {effectiveCycle && form.cycle_anchor_date ? (
+                       <span className="text-[10px] text-muted-foreground">
+                         Next collection {form.cycle_anchor_date}
+                       </span>
+                     ) : null}
                    </div>
                    <div className="flex flex-col gap-0.5 col-span-2">
                      <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Delivery Schedule</span>

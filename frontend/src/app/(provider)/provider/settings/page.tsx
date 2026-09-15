@@ -31,6 +31,24 @@ import SearchableSelect from "@/components/SearchableSelect";
 
 type TabId = "general" | "operations" | "billing" | "notifications" | "team";
 
+const BILLING_VARIANTS = [
+  {
+    value: "monthly_adjustable",
+    label: "Adjustable Monthly",
+    hint: "Flat fee with extra days included and skip recalculation rules.",
+  },
+  {
+    value: "monthly_fixed",
+    label: "Fixed Monthly",
+    hint: "Fixed monthly rate regardless of meal skips or extra delivery days.",
+  },
+  {
+    value: "cycle_fixed",
+    label: "Day-cycle subscription",
+    hint: "Renews every N plan days from each customer's next payment date, skipping weekends off the plan and kitchen closed dates.",
+  },
+] as const;
+
 export default function Settings() {
   const { session, ready } = useAuth();
   const router = useRouter();
@@ -97,6 +115,9 @@ export default function Settings() {
     cancellation: { free_cancellations: 2, recalc_daily_rate_cad: 12 },
   };
 
+  const effectiveVariant = mb.policy_variant || "monthly_adjustable";
+  const isCycleVariant = effectiveVariant === "cycle_fixed";
+
   function updMonthlyBilling(patch: Record<string, unknown>) {
     setProv((p: any) => ({
       ...p,
@@ -107,7 +128,7 @@ export default function Settings() {
     }));
   }
 
-  function updMonthlyPlan(idx: number, field: string, value: string | number | number[]) {
+  function updMonthlyPlan(idx: number, field: string, value: string | number | number[] | null) {
     const plans = [...(mb.plans || [])];
     plans[idx] = { ...plans[idx], [field]: value };
     updMonthlyBilling({ plans });
@@ -218,14 +239,27 @@ export default function Settings() {
         monthly_billing: {
           ...mb,
           enabled: !!mb.enabled,
-          policy_variant: mb.policy_variant || "monthly_adjustable",
+          policy_variant: effectiveVariant,
           extra_days_included: mb.extra_days_included !== false,
-          default_collection_day: mb.enabled ? Number(mb.default_collection_day || 1) : mb.default_collection_day,
+          // Day-cycle collects on each customer's anchor date, so it has no
+          // kitchen-wide day of month.
+          default_collection_day: isCycleVariant
+            ? null
+            : mb.enabled
+              ? Number(mb.default_collection_day || 1)
+              : mb.default_collection_day,
+          default_cycle_days: isCycleVariant
+            ? Number(mb.default_cycle_days || 20)
+            : (mb.default_cycle_days ?? null),
           plans: (mb.plans || []).map((p: any) => ({
             ...p,
             monthly_fee_cad: Number(p.monthly_fee_cad),
             standard_days: Number(p.standard_days),
             weekdays: p.weekdays || [],
+            cycle_days:
+              p.cycle_days === null || p.cycle_days === undefined || p.cycle_days === ""
+                ? null
+                : Number(p.cycle_days),
           })),
           cancellation: {
             free_cancellations: Number(mb.cancellation?.free_cancellations ?? 2),
@@ -233,10 +267,28 @@ export default function Settings() {
           },
         },
       };
-      if (mb.enabled && (!mb.default_collection_day || Number(mb.default_collection_day) < 1)) {
+      if (
+        mb.enabled &&
+        !isCycleVariant &&
+        (!mb.default_collection_day || Number(mb.default_collection_day) < 1)
+      ) {
         toast.error("Default collection day (1–31) is required when the monthly subscription policy is enabled");
         setSaving(false);
         return;
+      }
+      if (mb.enabled && isCycleVariant) {
+        const badPlan = (mb.plans || []).find(
+          (p: any) =>
+            (p.cycle_days === null || p.cycle_days === undefined || p.cycle_days === "") &&
+            !(Number(mb.default_cycle_days) >= 1),
+        );
+        if (badPlan) {
+          toast.error(
+            `Set a cycle length for ${badPlan.name || badPlan.id}, or a default cycle length above`,
+          );
+          setSaving(false);
+          return;
+        }
       }
       const { data } = await api.patch("/providers/me", payload);
       setProv({
@@ -642,7 +694,7 @@ export default function Settings() {
                 <div>
                   <h2 className="font-display font-bold text-xl">Subscription Policy</h2>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Kitchen default for customers set to Inherit. Each customer can override to Per-meal, Adjustable Monthly, or Fixed Monthly in CRM.
+                    Kitchen default for customers set to Inherit. Each customer can override to Per-meal, Adjustable Monthly, Fixed Monthly, or Day-cycle in CRM.
                   </p>
                 </div>
 
@@ -653,6 +705,7 @@ export default function Settings() {
                     <li><strong className="text-foreground">Default (Inherit):</strong> New customers use this kitchen setting until you override them in CRM.</li>
                     <li><strong className="text-foreground">Adjustable monthly:</strong> Flat rate fee with skip recalculations & free skip allowances.</li>
                     <li><strong className="text-foreground">Fixed monthly:</strong> Constant fee each month regardless of skips or extra delivery days.</li>
+                    <li><strong className="text-foreground">Day-cycle:</strong> Renews every N plan days from each customer&apos;s next payment date instead of a day of the month.</li>
                     <li><strong className="text-foreground">Plan templates:</strong> Shared kitchen plans used by monthly customers (Inherit or override).</li>
                   </ul>
                 </div>
@@ -675,65 +728,65 @@ export default function Settings() {
                     {/* Policy Variant Selection */}
                     <div className="flex flex-col gap-2" data-testid="monthly-billing-variant">
                       <span className="label-overline">Default policy variant (for Inherit + monthly)</span>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <label
-                          className={`flex flex-col p-3.5 rounded-xl border cursor-pointer transition-all ${
-                            mb.policy_variant !== "monthly_fixed"
-                              ? "border-primary bg-primary/5 ring-1 ring-primary/30"
-                              : "border-brand-border bg-white hover:bg-brand-surface"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="radio"
-                              name="policy_variant"
-                              checked={mb.policy_variant !== "monthly_fixed"}
-                              onChange={() => updMonthlyBilling({ policy_variant: "monthly_adjustable" })}
-                              className="accent-primary"
-                            />
-                            <span className="font-bold text-sm">Adjustable Monthly</span>
-                          </div>
-                          <span className="text-xs text-muted-foreground mt-1 pl-5">
-                            Flat fee with extra days included and skip recalculation rules.
-                          </span>
-                        </label>
-
-                        <label
-                          className={`flex flex-col p-3.5 rounded-xl border cursor-pointer transition-all ${
-                            mb.policy_variant === "monthly_fixed"
-                              ? "border-primary bg-primary/5 ring-1 ring-primary/30"
-                              : "border-brand-border bg-white hover:bg-brand-surface"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="radio"
-                              name="policy_variant"
-                              checked={mb.policy_variant === "monthly_fixed"}
-                              onChange={() => updMonthlyBilling({ policy_variant: "monthly_fixed" })}
-                              className="accent-primary"
-                            />
-                            <span className="font-bold text-sm">Fixed Monthly</span>
-                          </div>
-                          <span className="text-xs text-muted-foreground mt-1 pl-5">
-                            Fixed monthly rate regardless of meal skips or extra delivery days.
-                          </span>
-                        </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {BILLING_VARIANTS.map((variant) => (
+                          <label
+                            key={variant.value}
+                            data-testid={`policy-variant-${variant.value}`}
+                            className={`flex flex-col p-3.5 rounded-xl border cursor-pointer transition-all ${
+                              effectiveVariant === variant.value
+                                ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+                                : "border-brand-border bg-white hover:bg-brand-surface"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="radio"
+                                name="policy_variant"
+                                checked={effectiveVariant === variant.value}
+                                onChange={() => updMonthlyBilling({ policy_variant: variant.value })}
+                                className="accent-primary"
+                              />
+                              <span className="font-bold text-sm">{variant.label}</span>
+                            </div>
+                            <span className="text-xs text-muted-foreground mt-1 pl-5">
+                              {variant.hint}
+                            </span>
+                          </label>
+                        ))}
                       </div>
                     </div>
 
-                    <label className="flex flex-col gap-1.5 max-w-xs">
-                      <span className="label-overline">Default Collection Day (1–31)</span>
-                      <input
-                        data-testid="monthly-default-collection-day"
-                        type="number"
-                        min={1}
-                        max={31}
-                        className={inputClass}
-                        value={mb.default_collection_day ?? 1}
-                        onChange={(e) => updMonthlyBilling({ default_collection_day: Number(e.target.value) })}
-                      />
-                    </label>
+                    {isCycleVariant ? (
+                      <label className="flex flex-col gap-1.5 max-w-xs">
+                        <span className="label-overline">Default cycle length (plan days)</span>
+                        <input
+                          data-testid="monthly-default-cycle-days"
+                          type="number"
+                          min={1}
+                          className={inputClass}
+                          value={mb.default_cycle_days ?? 20}
+                          onChange={(e) => updMonthlyBilling({ default_cycle_days: Number(e.target.value) })}
+                        />
+                        <span className="text-xs text-muted-foreground">
+                          Used when a plan below leaves its cycle length blank. Collection dates
+                          come from each customer&apos;s next payment date, not a day of the month.
+                        </span>
+                      </label>
+                    ) : (
+                      <label className="flex flex-col gap-1.5 max-w-xs">
+                        <span className="label-overline">Default Collection Day (1–31)</span>
+                        <input
+                          data-testid="monthly-default-collection-day"
+                          type="number"
+                          min={1}
+                          max={31}
+                          className={inputClass}
+                          value={mb.default_collection_day ?? 1}
+                          onChange={(e) => updMonthlyBilling({ default_collection_day: Number(e.target.value) })}
+                        />
+                      </label>
+                    )}
 
                     {/* Plan Templates */}
                     <div className="flex flex-col gap-3" data-testid="monthly-billing-plans">
@@ -745,7 +798,9 @@ export default function Settings() {
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <label className="flex flex-col gap-1 text-xs">
-                              <span className="font-medium text-muted-foreground">Monthly Fee (CAD)</span>
+                              <span className="font-medium text-muted-foreground">
+                                {isCycleVariant ? "Fee per cycle (CAD)" : "Monthly Fee (CAD)"}
+                              </span>
                               <input
                                 type="number"
                                 min={0.01}
@@ -765,12 +820,36 @@ export default function Settings() {
                                 onChange={(e) => updMonthlyPlan(idx, "standard_days", Number(e.target.value))}
                               />
                             </label>
+                            {isCycleVariant && (
+                              <label className="flex flex-col gap-1 text-xs">
+                                <span className="font-medium text-muted-foreground">Cycle length (plan days)</span>
+                                <input
+                                  data-testid={`monthly-plan-cycle-days-${plan.id || idx}`}
+                                  type="number"
+                                  min={1}
+                                  placeholder={String(mb.default_cycle_days ?? 20)}
+                                  className={inputClass}
+                                  value={plan.cycle_days ?? ""}
+                                  onChange={(e) =>
+                                    updMonthlyPlan(
+                                      idx,
+                                      "cycle_days",
+                                      e.target.value === "" ? null : Number(e.target.value),
+                                    )
+                                  }
+                                />
+                                <span className="text-muted-foreground">
+                                  Renews every N days ticked below, skipping kitchen closed dates.
+                                </span>
+                              </label>
+                            )}
                           </div>
                           <div className="flex flex-wrap gap-2 pt-1">
                             {weekdayLabels.map((label, wi) => (
                               <label key={label} className="inline-flex items-center gap-1.5 text-xs bg-brand-surface px-2.5 py-1.5 rounded-lg cursor-pointer">
                                 <input
                                   type="checkbox"
+                                  aria-label={`${plan.name || plan.id} ${label}`}
                                   checked={(plan.weekdays || []).includes(wi)}
                                   onChange={(e) => {
                                     const set = new Set<number>(
@@ -793,7 +872,7 @@ export default function Settings() {
                     </div>
 
                     {/* Cancellation Rules */}
-                    {mb.policy_variant !== "monthly_fixed" && (
+                    {effectiveVariant === "monthly_adjustable" && (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 border-t border-brand-border pt-3">
                         <label className="flex flex-col gap-1.5">
                           <span className="label-overline">Free Cancellations / Month</span>

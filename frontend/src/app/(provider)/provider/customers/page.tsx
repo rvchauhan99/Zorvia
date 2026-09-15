@@ -64,6 +64,14 @@ const empty = {
   payment_collection_day: "",
   monthly_plan_id: "",
   billing_policy: "inherit",
+  cycle_anchor_date: "",
+};
+
+const BILLING_POLICY_LABELS: Record<string, string> = {
+  monthly_adjustable: "Adjustable Monthly",
+  monthly_fixed: "Fixed Monthly",
+  cycle_fixed: "Day-cycle subscription",
+  per_meal: "Per-meal",
 };
 
 type Filter = "all" | "pending" | "paused" | "inactive" | "high_balance";
@@ -344,12 +352,22 @@ export default function Customers() {
     all: 0, pending: 0, paused: 0, inactive: 0, high_balance: 0,
   });
   const [monthlyBillingEnabled, setMonthlyBillingEnabled] = useState(false);
-  const [kitchenDefaultVariant, setKitchenDefaultVariant] = useState<"monthly_adjustable" | "monthly_fixed">("monthly_adjustable");
+  const [kitchenDefaultVariant, setKitchenDefaultVariant] = useState<"monthly_adjustable" | "monthly_fixed" | "cycle_fixed">("monthly_adjustable");
   const [monthlyPlans, setMonthlyPlans] = useState<{ id: string; name: string; monthly_fee_cad?: number }[]>([]);
   const [routePreview, setRoutePreview] = useState<any>(null);
   const [routePreviewLoading, setRoutePreviewLoading] = useState(false);
   const [formStep, setFormStep] = useState<1 | 2>(1);
   const paging = useCursorPagination({ initialPageSize: DEFAULT_PAGE_SIZE });
+
+  const formInheritsKitchen = form.billing_policy === "inherit" || !form.billing_policy;
+  const formEffectiveMonthly =
+    form.billing_policy === "monthly_adjustable" ||
+    form.billing_policy === "monthly_fixed" ||
+    form.billing_policy === "cycle_fixed" ||
+    (formInheritsKitchen && monthlyBillingEnabled);
+  const formEffectiveCycle =
+    form.billing_policy === "cycle_fixed" ||
+    (formInheritsKitchen && monthlyBillingEnabled && kitchenDefaultVariant === "cycle_fixed");
 
   const input = "h-11 w-full px-4 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all";
   const drivers = useMemo(() => staff.filter((s) => (s.role || "admin") === "driver"), [staff]);
@@ -507,9 +525,10 @@ export default function Customers() {
       ]);
       setStaff(data || []);
       setMonthlyBillingEnabled(!!prov?.settings?.monthly_billing?.enabled);
+      const variant = prov?.settings?.monthly_billing?.policy_variant;
       setKitchenDefaultVariant(
-        prov?.settings?.monthly_billing?.policy_variant === "monthly_fixed"
-          ? "monthly_fixed"
+        variant === "monthly_fixed" || variant === "cycle_fixed"
+          ? variant
           : "monthly_adjustable",
       );
       const plans = Array.isArray(prov?.settings?.monthly_billing?.plans)
@@ -671,6 +690,7 @@ export default function Customers() {
       payment_collection_day: c.payment_collection_day != null ? String(c.payment_collection_day) : "",
       monthly_plan_id: c.monthly_plan_id || "",
       billing_policy: c.billing_policy || "inherit",
+      cycle_anchor_date: String(c.cycle_anchor_date || "").slice(0, 10),
     });
     setScheduleMode(detectLinesScheduleMode(linesMap, slots));
     setShowForm(true);
@@ -888,14 +908,21 @@ export default function Customers() {
       }
       if (form.joining_date) payload.joining_date = form.joining_date;
       payload.billing_policy = form.billing_policy || "inherit";
-      const effectiveMonthly =
-        form.billing_policy === "monthly_adjustable" ||
-        form.billing_policy === "monthly_fixed" ||
-        ((form.billing_policy === "inherit" || !form.billing_policy) && monthlyBillingEnabled);
-      if (effectiveMonthly && form.payment_collection_day !== "" && form.payment_collection_day != null) {
+      if (formEffectiveCycle) {
+        if (!form.cycle_anchor_date) {
+          toast.error("Next payment collection date is required for a day-cycle customer");
+          setSaving(false);
+          return;
+        }
+        payload.cycle_anchor_date = form.cycle_anchor_date;
+      } else if (
+        formEffectiveMonthly &&
+        form.payment_collection_day !== "" &&
+        form.payment_collection_day != null
+      ) {
         payload.payment_collection_day = Number(form.payment_collection_day);
       }
-      if (effectiveMonthly) {
+      if (formEffectiveMonthly) {
         payload.monthly_plan_id = form.monthly_plan_id || null;
       }
 
@@ -1441,15 +1468,14 @@ export default function Customers() {
                     value: "inherit",
                     label: `Inherit from settings (${
                       monthlyBillingEnabled
-                        ? kitchenDefaultVariant === "monthly_fixed"
-                          ? "Fixed Monthly"
-                          : "Adjustable Monthly"
+                        ? BILLING_POLICY_LABELS[kitchenDefaultVariant]
                         : "Per-meal"
                     })`,
                   },
                   { value: "per_meal", label: "Per-meal" },
                   { value: "monthly_adjustable", label: "Adjustable Monthly" },
                   { value: "monthly_fixed", label: "Fixed Monthly" },
+                  { value: "cycle_fixed", label: BILLING_POLICY_LABELS.cycle_fixed },
                 ]}
                 placeholder="Search policy…"
               />
@@ -1458,11 +1484,7 @@ export default function Customers() {
               </span>
             </label>
           ) : null}
-          {(
-            form.billing_policy === "monthly_adjustable" ||
-            form.billing_policy === "monthly_fixed" ||
-            ((form.billing_policy === "inherit" || !form.billing_policy) && monthlyBillingEnabled)
-          ) ? (
+          {formEffectiveMonthly ? (
             <>
               <label className="flex flex-col gap-1.5">
                 <span className="label-overline">Monthly plan</span>
@@ -1483,19 +1505,35 @@ export default function Customers() {
                   placeholder="Search plan…"
                 />
               </label>
-              <label className="flex flex-col gap-1.5">
-                <span className="label-overline">Collection day override (1–31)</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={31}
-                  data-testid="cf-collection-day"
-                  value={form.payment_collection_day}
-                  onChange={(e) => setForm({ ...form, payment_collection_day: e.target.value })}
-                  className={input}
-                  placeholder="Uses kitchen default if empty"
-                />
-              </label>
+              {formEffectiveCycle ? (
+                <label className="flex flex-col gap-1.5">
+                  <span className="label-overline">Next payment collection date</span>
+                  <input
+                    type="date"
+                    data-testid="cf-cycle-anchor-date"
+                    value={form.cycle_anchor_date}
+                    onChange={(e) => setForm({ ...form, cycle_anchor_date: e.target.value })}
+                    className={input}
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    Later renewals are counted forward from this date.
+                  </span>
+                </label>
+              ) : (
+                <label className="flex flex-col gap-1.5">
+                  <span className="label-overline">Collection day override (1–31)</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={31}
+                    data-testid="cf-collection-day"
+                    value={form.payment_collection_day}
+                    onChange={(e) => setForm({ ...form, payment_collection_day: e.target.value })}
+                    className={input}
+                    placeholder="Uses kitchen default if empty"
+                  />
+                </label>
+              )}
             </>
           ) : null}
           <CaAddressFields
@@ -1718,13 +1756,7 @@ export default function Customers() {
       <ImportCustomersSheet
         open={showImport}
         onClose={() => setShowImport(false)}
-        defaultPolicy={
-          monthlyBillingEnabled
-            ? kitchenDefaultVariant === "monthly_fixed"
-              ? "monthly_fixed"
-              : "monthly_adjustable"
-            : "per_meal"
-        }
+        defaultPolicy={monthlyBillingEnabled ? kitchenDefaultVariant : "per_meal"}
         onFinished={() => {
           reloadAll();
         }}

@@ -25,6 +25,7 @@ Public Next.js monorepo for **MealHQ** UIs. Brand: **MealHQ**. Infra IDs may sti
 - Prefer TypeScript in `frontend/`.
 - Never commit secrets (`.env`, Firebase private keys).
 - Do not invent Phase 2 features (notification inbox UI, WhatsApp chat inbox) unless asked. WhatsApp product UI is gated by backend `WHATSAPP_FEATURES_ENABLED`.
+- Billing variants in the UI: `per_meal`, `monthly_adjustable`, `monthly_fixed`, `cycle_fixed`. Day-cycle uses `billing_mode = cycle_flat` and a per-customer `cycle_anchor_date` instead of a day-of-month, so gate flat-billing UI on both `monthly_flat` and `cycle_flat` rather than on `monthly_flat` alone. See `docs/FUNCTIONAL.md` §4.5b.
 - Admin UI calls the same Cloud Run API under `/api/platform/*`.
 
 ## Local dev

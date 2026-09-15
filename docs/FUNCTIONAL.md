@@ -131,20 +131,25 @@ Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliv
 
 ### 4.5b Monthly flat billing (kitchen default + per-customer override)
 
+**Day-cycle provider guide:** [DAY_CYCLE_ONBOARDING.md](./DAY_CYCLE_ONBOARDING.md) — settings, CRM, Adjust cycle, and sample CSV [`samples/mealhq-customers-cycle-fixed-sample.csv`](./samples/mealhq-customers-cycle-fixed-sample.csv).
+
 **Kitchen default:** `settings.monthly_billing.enabled = false` — Inherit customers use per-meal outstanding until an admin enables the monthly default in Settings.
 
-**Per-customer:** CRM field `billing_policy` = `inherit` (default) \| `per_meal` \| `monthly_adjustable` \| `monthly_fixed`. Effective policy drives outstanding, payments, and reports. Mixed policies on one kitchen are supported. See [`MONTHLY_BILLING.md`](MONTHLY_BILLING.md).
+**Per-customer:** CRM field `billing_policy` = `inherit` (default) \| `per_meal` \| `monthly_adjustable` \| `monthly_fixed` \| `cycle_fixed`. Effective policy drives outstanding, payments, and reports. Mixed policies on one kitchen are supported. See [`MONTHLY_BILLING.md`](MONTHLY_BILLING.md).
 
 | Setting | Behavior |
 |---------|----------|
-| Policy variant | Kitchen default for Inherit. **`monthly_adjustable`**: flat fee, extra days free, 2-tier cancellation. **`monthly_fixed`**: always charge flat monthly plan fee. CRM may override per customer. |
-| Plan templates | Editable Mon–Fri / Mon–Sat defaults (fee, standard days, weekdays); auto-matched from customer schedule; optional `monthly_plan_id` override. Available for overrides even when kitchen default is per-meal. |
-| Collection day | Provider `default_collection_day` (1–31, required when kitchen default monthly); per-customer `payment_collection_day` when effective policy is monthly. |
-| Outstanding | Per-meal cohort: delivered×tax − payments. Monthly cohort: Σ month charges − payments. Batch splits by effective policy. **Listing:** per-meal and Adjustable = balances `> 0`; Fixed = overdue only. Report `billing_mode` may be `mixed`. |
-| Reports | `GET /reports/payment-due` / `monthly-dues` include monthly-effective customers (default or override). |
-| Monthly dues UI | `/provider/monthly-dues` — monthly-effective customers; expand **How this month was calculated** (tier, cancelled/delivered units, rates, explainer); History / Quick Renew; Adjustable settlement blurb when any row is `monthly_adjustable` (works when report mode is `mixed`). |
-| Settlement | Adjustable only, when plan fee ≠ pre-tax month charge: choose **Plan** or **Adjustable** on Quick Renew, Record payment, and Approve/Verify. Persists `settlement_basis` on the payment; Verify also supports Keep submitted. Tier + cancel/delivered shown in the settle UI. |
-| Statement | Per-row billing mode; monthly rows include plan, tier, collection due date |
+| Policy variant | Kitchen default for Inherit. **`monthly_adjustable`**: flat fee, extra days free, 2-tier cancellation. **`monthly_fixed`**: always charge flat monthly plan fee. **`cycle_fixed`**: always charge the plan fee, renewing every N plan days from a per-customer anchor instead of a calendar month. CRM may override per customer. |
+| Plan templates | Editable Mon–Fri / Mon–Sat defaults (fee, standard days, weekdays); auto-matched from customer schedule; optional `monthly_plan_id` override. Available for overrides even when kitchen default is per-meal. Day-cycle adds per-plan **Cycle length (plan days)** and reads the weekday ticks as the counting basis. |
+| Collection day | Provider `default_collection_day` (1–31, required when kitchen default monthly); per-customer `payment_collection_day` when effective policy is monthly. Day-cycle uses neither — it collects on each customer's **next payment collection date** (`cycle_anchor_date`, required), and Settings hides the collection-day field. |
+| Outstanding | Per-meal cohort: delivered×tax − payments. Monthly cohort: Σ month charges − payments. Day-cycle: accrued cycles × cycle fee − payments. Batch splits by effective policy. **Listing:** per-meal and Adjustable = balances `> 0`; Fixed and day-cycle = overdue only. Report `billing_mode` may be `mixed` (`cycle_flat` for a pure cycle kitchen). |
+| Reports | `GET /reports/payment-due` / `monthly-dues` include monthly-effective customers (default or override), day-cycle included. |
+| Monthly dues UI | `/provider/monthly-dues` — monthly-effective customers; expand **How this month was calculated** (tier, cancelled/delivered units, rates, explainer); History / Quick Renew; Adjustable settlement blurb when any row is `monthly_adjustable` (works when report mode is `mixed`). Day-cycle rows add a **Cycle** column (`#index · Nd`) with the cycle period, and an **Adjust cycle** action. |
+| Adjust cycle | Day-cycle only. Sheet picks the collection (upcoming, or one already due to grant grace), the move (postpone N plan days, or set an exact date), and an optional reason. Cycles already collected are preserved. |
+| Settlement | Adjustable only, when plan fee ≠ pre-tax month charge: choose **Plan** or **Adjustable** on Quick Renew, Record payment, and Approve/Verify. Persists `settlement_basis` on the payment; Verify also supports Keep submitted. Tier + cancel/delivered shown in the settle UI. Fixed and day-cycle always settle at plan fee. |
+| Statement | Per-row billing mode; monthly rows include plan, tier, collection due date; day-cycle rows show **Cycle charge** and `cycle #N · Nd` |
+| Cycle CSV import | Policy **Day-cycle subscription** requires `monthly_plan` + `next_payment_date`; `payment_collection_day` and `last_collection_status` are rejected. A future date means nothing is owed yet; a past date means that cycle is already due. Use `opening_balance` for older debt. Sample: [`samples/mealhq-customers-cycle-fixed-sample.csv`](./samples/mealhq-customers-cycle-fixed-sample.csv). Full walkthrough: [DAY_CYCLE_ONBOARDING.md](./DAY_CYCLE_ONBOARDING.md). |
+| Consumer view | Day-cycle customers see a **Subscription plan** card with the fee per N plan days and the next renewal, plus "regardless of skips" copy on the cancel sheet. |
 
 ### 4.6 Reports (provider)
 

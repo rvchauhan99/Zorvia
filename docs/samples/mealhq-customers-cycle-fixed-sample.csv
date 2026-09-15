@@ -1,0 +1,4 @@
+name,phone,email,address,apartment,city,province,postal_code,monthly_plan,lunch_qty,dinner_qty,driver_name,joining_date,next_payment_date,opening_balance,notes,meal_type
+Aarav Sharma,4165551212,aarav@example.com,45 Bloor St W,Unit 302,Toronto,ON,M5S 1M2,Mon-Fri,0,2,Alex Driver,2026-01-15,2026-10-01,0,Gate code 12,regular
+Priya Patel,6475559898,priya@example.com,100 King St E,,Mississauga,ON,L5B 3Y4,Mon-Fri,1,1,Alex Driver,2025-11-01,2026-10-08,150,Carried-over balance,Jain
+Neha Gupta,9055553344,neha@example.com,12 Queen St W,Suite 5,Brampton,ON,L6Y 1N2,Mon-Sat,1,0,Alex Driver,2026-03-01,2026-10-20,0,Leave at concierge,FASTING

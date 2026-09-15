@@ -430,6 +430,29 @@ export default function ImportCustomersSheet({
                   <code className="text-[11px]">delivery_days</code> — 0=Mon … 6=Sun, e.g.{" "}
                   <code className="text-[11px]">0,1,2,3,4</code>.
                 </p>
+              ) : policy === "cycle_fixed" ? (
+                <>
+                  <p className="font-medium text-foreground text-sm pt-1">How to fill collection fields</p>
+                  <p>
+                    <code className="text-[11px]">monthly_plan</code> — required:{" "}
+                    <code className="text-[11px]">Mon-Fri</code> or{" "}
+                    <code className="text-[11px]">Mon-Sat</code>. It sets the fee per cycle and the
+                    weekdays the cycle counts. Cycle length comes from Settings.
+                  </p>
+                  <p>
+                    <code className="text-[11px]">next_payment_date</code> — required: the upcoming
+                    collection date. A future date means nothing is owed yet; today or a past date
+                    means that cycle is already due (overdue if the date has passed). Every later
+                    renewal is counted forward from it, so pauses never move it.
+                  </p>
+                  <p>
+                    <code className="text-[11px]">opening_balance</code> — use this for debt carried
+                    over from your old system.{" "}
+                    <code className="text-[11px]">payment_collection_day</code> and{" "}
+                    <code className="text-[11px]">last_collection_status</code> are not accepted for
+                    day-cycle imports.
+                  </p>
+                </>
               ) : (
                 <>
                   <p className="font-medium text-foreground text-sm pt-1">How to fill collection fields</p>

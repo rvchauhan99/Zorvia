@@ -3,7 +3,11 @@
 import { CA_PROVINCES } from "@/lib/ca-provinces";
 import { CA_CITIES_BY_PROVINCE } from "@/lib/ca-cities";
 
-export type ImportBillingPolicy = "per_meal" | "monthly_adjustable" | "monthly_fixed";
+export type ImportBillingPolicy =
+  | "per_meal"
+  | "monthly_adjustable"
+  | "monthly_fixed"
+  | "cycle_fixed";
 
 function csvEscape(value: string): string {
   if (/[",\n\r]/.test(value)) {
@@ -27,6 +31,11 @@ export const IMPORT_POLICY_OPTIONS: { value: ImportBillingPolicy; label: string;
     value: "monthly_fixed",
     label: "Fixed Monthly",
     hint: "last_collection_status: collected = last collection taken (balance ~$0); pending = last collection still open (due that date).",
+  },
+  {
+    value: "cycle_fixed",
+    label: "Day-cycle subscription",
+    hint: "next_payment_date is the upcoming collection date: a future date means nothing is owed yet, a past date means that cycle is already due. Use opening_balance for older debt.",
   },
 ];
 
@@ -54,9 +63,21 @@ Priya Patel,6475559898,priya@example.com,100 King St E,,Mississauga,ON,L5B 3Y4,M
 Neha Gupta,9055553344,neha@example.com,12 Queen St W,Suite 5,Brampton,ON,L6Y 1N2,Mon-Sat,2,2,Alex Driver,2026-03-01,15,collected,Buzzer 305,FASTING
 `;
 
+// Day-cycle has no collection day and no collected/pending flag — the uploaded
+// next_payment_date carries both meanings, so those columns are rejected.
+const CYCLE_HEADER =
+  "name,phone,email,address,apartment,city,province,postal_code,monthly_plan,lunch_qty,dinner_qty,driver_name,joining_date,next_payment_date,opening_balance,notes,meal_type";
+
+const SAMPLE_CYCLE = `${CYCLE_HEADER}
+Aarav Sharma,4165551212,aarav@example.com,45 Bloor St W,Unit 302,Toronto,ON,M5S 1M2,Mon-Fri,0,2,Alex Driver,2026-01-15,2026-10-01,0,Gate code 12,regular
+Priya Patel,6475559898,priya@example.com,100 King St E,,Mississauga,ON,L5B 3Y4,Mon-Fri,1,1,Alex Driver,2025-11-01,2026-10-08,150,Carried-over balance,Jain
+Neha Gupta,9055553344,neha@example.com,12 Queen St W,Suite 5,Brampton,ON,L6Y 1N2,Mon-Sat,1,0,Alex Driver,2026-03-01,2026-10-20,0,Leave at concierge,FASTING
+`;
+
 export function sampleCsvForPolicy(policy: ImportBillingPolicy): string {
   if (policy === "monthly_adjustable") return SAMPLE_MONTHLY_ADJ;
   if (policy === "monthly_fixed") return SAMPLE_MONTHLY_FIXED;
+  if (policy === "cycle_fixed") return SAMPLE_CYCLE;
   return SAMPLE_PER_MEAL;
 }
 
