@@ -3,6 +3,11 @@
 **Last updated:** 2026-09-20  
 Skill: [`.cursor/skills/mealhq-ui-screen/SKILL.md`](../.cursor/skills/mealhq-ui-screen/SKILL.md).
 
+## Hard rules
+
+1. **Local-only testing (strict, from 2026-09-20):** Browser and API verification use **localhost only** (`http://localhost:3000` / `:3001` + local API `:8000`). Do **not** open `https://www.mealhq.ca`, `admin.mealhq.ca`, or `api2.mealhq.ca` for QA unless the user **explicitly** asks in that message.
+2. Build + browser gates below still apply for UI work.
+
 ## Gates before Done (UI work)
 
 | Gate | Requirement |
