@@ -56,8 +56,9 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [newClosed, setNewClosed] = useState(todayISO());
   const [staff, setStaff] = useState<any[]>([]);
-  const [staffForm, setStaffForm] = useState({ name: "", email: "", password: "", role: "driver" });
+  const [staffForm, setStaffForm] = useState({ name: "", email: "", password: "", role: "driver", phone: "" });
   const [staffBusy, setStaffBusy] = useState(false);
+  const [staffPhoneBusy, setStaffPhoneBusy] = useState<string | null>(null);
   const [logoBusy, setLogoBusy] = useState(false);
   const [pwForm, setPwForm] = useState({ current_password: "", new_password: "", confirm_password: "" });
   const [pwBusy, setPwBusy] = useState(false);
@@ -310,13 +311,26 @@ export default function Settings() {
     try {
       await api.post("/providers/me/staff", staffForm);
       toast.success("Staff member created");
-      setStaffForm({ name: "", email: "", password: "", role: "driver" });
+      setStaffForm({ name: "", email: "", password: "", role: "driver", phone: "" });
       const { data } = await api.get("/providers/me/staff");
       setStaff(data);
     } catch (err: any) {
       toast.error(err?.response?.data?.detail || "Failed to create staff");
     } finally {
       setStaffBusy(false);
+    }
+  }
+
+  async function saveStaffPhone(staffId: string, phone: string) {
+    setStaffPhoneBusy(staffId);
+    try {
+      const { data } = await api.patch(`/providers/me/staff/${staffId}`, { phone });
+      setStaff((prev) => prev.map((s) => (s.id === staffId ? { ...s, ...data } : s)));
+      toast.success("Phone saved");
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || "Failed to save phone");
+    } finally {
+      setStaffPhoneBusy(null);
     }
   }
 
@@ -971,12 +985,34 @@ export default function Settings() {
 
                 <div className="flex flex-col gap-2">
                   {staff.map((s) => (
-                    <div key={s.id} data-testid={`staff-row-${s.id}`} className="flex items-center justify-between p-3.5 bg-white border border-brand-border rounded-xl gap-3">
+                    <div key={s.id} data-testid={`staff-row-${s.id}`} className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 bg-white border border-brand-border rounded-xl gap-3">
                       <div className="min-w-0">
                         <div className="font-bold text-sm truncate">{s.name || s.email}</div>
                         <div className="text-xs text-muted-foreground truncate">{s.email}</div>
+                        {(s.role || "admin") === "driver" ? (
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <input
+                              data-testid={`staff-phone-${s.id}`}
+                              type="tel"
+                              placeholder="Driver phone (WhatsApp)"
+                              className="h-9 px-3 rounded-lg bg-brand-surface border border-brand-border text-xs w-full sm:w-48"
+                              defaultValue={s.phone || ""}
+                              onBlur={(e) => {
+                                const next = e.target.value.trim();
+                                if (next !== (s.phone || "").trim()) {
+                                  void saveStaffPhone(s.id, next);
+                                }
+                              }}
+                            />
+                            {staffPhoneBusy === s.id ? (
+                              <span className="text-[10px] text-muted-foreground">Saving…</span>
+                            ) : null}
+                          </div>
+                        ) : s.phone ? (
+                          <div className="text-xs text-muted-foreground mt-1">{s.phone}</div>
+                        ) : null}
                       </div>
-                      <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-full bg-brand-surface text-primary border border-brand-border">
+                      <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-full bg-brand-surface text-primary border border-brand-border self-start">
                         {s.role || "admin"}
                       </span>
                     </div>
@@ -989,6 +1025,14 @@ export default function Settings() {
                     <input data-testid="staff-name" required placeholder="Full Name" className={inputClass} value={staffForm.name} onChange={(e) => setStaffForm({ ...staffForm, name: e.target.value })} />
                     <input data-testid="staff-email" required type="email" placeholder="Email Address" className={inputClass} value={staffForm.email} onChange={(e) => setStaffForm({ ...staffForm, email: e.target.value })} />
                     <input data-testid="staff-password" required type="password" minLength={6} placeholder="Password" className={inputClass} value={staffForm.password} onChange={(e) => setStaffForm({ ...staffForm, password: e.target.value })} />
+                    <input
+                      data-testid="staff-phone"
+                      type="tel"
+                      placeholder="Phone (WhatsApp — for drivers)"
+                      className={inputClass}
+                      value={staffForm.phone}
+                      onChange={(e) => setStaffForm({ ...staffForm, phone: e.target.value })}
+                    />
                     <SearchableSelect
                       testid="staff-role"
                       inputClassName={inputClass}

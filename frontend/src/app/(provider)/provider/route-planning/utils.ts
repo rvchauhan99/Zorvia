@@ -36,6 +36,33 @@ export function mapsUrlForStops(originAddress: string, stops: Stop[]) {
   return url;
 }
 
+/** Format OSRM meters as km for UI (e.g. "12.4 km"). */
+export function formatDistanceKm(distanceM: number | null | undefined): string {
+  if (distanceM == null || !Number.isFinite(distanceM)) return "—";
+  return `${(distanceM / 1000).toFixed(1)} km`;
+}
+
+/** Format OSRM seconds as minutes for UI (e.g. "34 min"). */
+export function formatDurationMin(durationS: number | null | undefined): string {
+  if (durationS == null || !Number.isFinite(durationS)) return "—";
+  return `${Math.round(durationS / 60)} min`;
+}
+
+export function driverDetailHref(args: {
+  driverId: string | null;
+  mealSlot: string;
+  planningDate: string;
+  city?: string;
+}): string {
+  const id = args.driverId || "unassigned";
+  const q = new URLSearchParams({
+    meal_slot: args.mealSlot,
+    planning_date: args.planningDate,
+  });
+  if (args.city && args.city !== "all") q.set("city", args.city);
+  return `/provider/route-planning/driver/${encodeURIComponent(id)}?${q.toString()}`;
+}
+
 export function sortPool(stops: Stop[]) {
   return [...stops].sort((a, b) => {
     const as = a.delivery_sequence ?? 1e9;

@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
   CaretDown,
+  DownloadSimple,
   ListNumbers,
   MagnifyingGlass,
   MapPin,
@@ -26,7 +27,7 @@ import type {
   PoolSection,
   Stop,
 } from "./types";
-import { mapsUrlForStops, sortPool } from "./utils";
+import { driverDetailHref, mapsUrlForStops, sortPool } from "./utils";
 import { mealSlotBadgeLabel } from "@/lib/mealSlots";
 
 const RouteMap = dynamic(() => import("./RouteMap"), {
@@ -70,6 +71,7 @@ type Props = {
   onOpenRange: () => void;
   onGeocode: () => void;
   onOptimize: () => void;
+  onExportCsv: () => void;
   onReorder: (section: PoolSection, orderedIds: string[]) => void;
   onReassign: (customerIds: string[], driverId: string | null) => void;
   onOpenStart: (stop: Stop) => void;
@@ -112,6 +114,7 @@ export default function PlanMode({
   onOpenRange,
   onGeocode,
   onOptimize,
+  onExportCsv,
   onReorder,
   onReassign,
   onOpenStart,
@@ -309,6 +312,14 @@ export default function PlanMode({
             onBestFit={onBestFit}
             onBestFitAllUnassigned={onBestFitAllUnassigned}
             onMoveDriver={onMoveDriver}
+            viewHrefForSection={(section) =>
+              driverDetailHref({
+                driverId: section.driverId,
+                mealSlot: slot,
+                planningDate,
+                city: selectedCity,
+              })
+            }
           />
         )}
       </div>
@@ -395,6 +406,16 @@ export default function PlanMode({
           >
             <MapPin size={14} /> Maps
           </a>
+          <button
+            type="button"
+            className="h-8 px-2.5 rounded-lg text-[12px] font-medium text-[#0B1220] hover:bg-[#F4F6F8] inline-flex items-center gap-1 disabled:opacity-50"
+            onClick={onExportCsv}
+            disabled={busy || loading}
+            data-testid="route-export-csv"
+            title="Export all stops as CSV"
+          >
+            <DownloadSimple size={14} /> Export
+          </button>
           <button
             type="button"
             className="h-8 px-3 rounded-lg bg-[#0B1220] text-white text-[12px] font-semibold hover:bg-[#1A2332] disabled:opacity-50"

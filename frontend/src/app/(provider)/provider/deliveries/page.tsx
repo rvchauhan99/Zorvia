@@ -18,6 +18,7 @@ import { DeliveryProofThumbButton, DeliveryProofSheet, type DeliveryProofTarget 
 import CursorPaginationBar from "@/components/CursorPaginationBar";
 import SearchableSelect from "@/components/SearchableSelect";
 import CityFilterSelect from "@/components/CityFilterSelect";
+import { CustomerWhatsAppContact } from "@/components/CustomerWhatsAppContact";
 import { markDeliveryWithProof } from "@/lib/deliveries";
 import { asPageEnvelope, OPS_DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
@@ -441,7 +442,15 @@ export default function Deliveries() {
       {nextPending && canMarkStatuses ? (
         <div data-testid="next-stop" className="sm:hidden card-tinted p-3 border-primary/30 ring-1 ring-primary/20 bg-white">
           <div className="label-overline">Next stop</div>
-          <div className="font-display font-bold text-lg mt-0.5 truncate">{nextPending.customer_name}</div>
+          <CustomerWhatsAppContact
+            customerName={nextPending.customer_name}
+            phone={nextPending.phone}
+            nameAsLink
+            className="mt-0.5"
+            testId={`next-name-${nextPending.id}`}
+            phoneTestId={`next-phone-${nextPending.id}`}
+            phoneClassName="text-xs text-muted-foreground underline-offset-2 hover:underline"
+          />
           <div className="text-xs text-muted-foreground truncate">{nextPending.address}{nextPending.postal_code ? ` · ${nextPending.postal_code}` : ""}</div>
           <div className="text-xs font-semibold text-primary mt-1" data-testid={`next-meals-${nextPending.id}`}>{fmtMealCount(nextPending)}</div>
           <div className="mt-2 flex items-center gap-2">
@@ -559,7 +568,15 @@ export default function Deliveries() {
                     <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium shrink-0">
                       {d.route_order != null ? `#${d.route_order + 1}` : "—"} · {fsa(d.postal_code)}
                     </span>
-                    <span className="font-medium truncate">{d.customer_name}</span>
+                    <CustomerWhatsAppContact
+                      customerName={d.customer_name}
+                      phone={d.phone}
+                      nameAsLink
+                      className="min-w-0 truncate"
+                      testId={`del-name-${d.id}`}
+                      phoneTestId={`del-phone-${d.id}`}
+                      phoneClassName="text-xs text-muted-foreground underline-offset-2 hover:underline"
+                    />
                     {d.meal_slot === "lunch" || d.meal_slot === "dinner" ? (
                       <span
                         className="text-[10px] uppercase tracking-wide font-semibold shrink-0 px-1.5 py-0.5 rounded bg-brand-surface text-muted-foreground"

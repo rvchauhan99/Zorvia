@@ -20,6 +20,9 @@ export type RoutePolyline = {
   driver_id: string | null;
   coordinates: [number, number][];
   method?: string;
+  distance_m?: number | null;
+  duration_s?: number | null;
+  stop_count?: number;
 };
 
 type Props = {
