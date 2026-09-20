@@ -1,0 +1,15 @@
+---
+description: Never commit or image local ops / client seeds / one-off QA — gitignore + dockerignore same change
+alwaysApply: true
+---
+
+# No local ops on GitHub / production images
+
+When creating **client seeds**, **import CSVs**, **kitchen handbooks**, or **one-off QA**:
+
+1. Update **`.gitignore` and `.dockerignore` in the same change**
+2. Verify with `git check-ignore -v <path>`
+3. If already tracked: `git rm --cached -- <path>` (commit only if asked)
+4. **Do not mark Done** until ignore is verified
+
+Default deny for local-only files. If unsure → ignore both places, then ask.

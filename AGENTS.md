@@ -25,6 +25,7 @@ When this file and docs disagree, **docs win**. On product/API behavior, **mealh
 - No Vercel deploy / git commit / PR unless the user explicitly asks
 - Preserve `data-testid`; prefer TypeScript in `frontend/`
 - Never commit secrets
+- Local ops only (client seeds, import CSVs, kitchen handbooks, one-off QA): **`.gitignore` + `.dockerignore` same change** — see `.cursor/rules/no-local-ops-to-github.mdc`
 - Do not invent Phase 2 (notification inbox UI, WhatsApp chat inbox)
 - Billing UI: gate flat billing on both `monthly_flat` and `cycle_flat` (see docs/FUNCTIONAL.md)
 - Production API: **`https://api2.mealhq.ca`** (set on Vercel by operator)
