@@ -43,7 +43,17 @@ Detail: API `CYCLE_SUBSCRIPTION.md` / `MONTHLY_BILLING.md`.
 
 ## 5. Route planning UI
 
-Screen under provider route-planning. API/routing contract: mealhq-api `docs/ROUTE_PLANNING.md`. Prod API for hard-tests: `https://api2.mealhq.ca`.
+Screen: `/provider/route-planning` — **full-bleed Routes workspace** (Leaflet map + side rail). Visual system: [Figma — MealHQ Route planning workspace](https://www.figma.com/design/hPOhVI0bcgtWUSaxnbz14a) (not legacy `design_guidelines.json`).
+
+- Top bar: meal slot · date · city · Optimize · Open in Maps  
+- Left rail (only scroll): Unassigned first → driver pools; compact stop rows with ⋯ menu  
+- Map: OSRM road polylines via `POST /route-planning/route-geometry` (straight-leg fallback)  
+- Selection dock: Assign / **To Unassigned** / By sequence (empty SearchableSelect shows “Unassigned pool”)  
+- **Assign by sequence** sheet: defaults source to the largest non-empty pool; range rows are stacked cards (From/To + full-width driver) so the picker is not clipped  
+- **Optimize sheet** (Figma): scope = This city / All cities / Unassigned pool / **Full rebalance (auto-assign)** / Selected drivers; every run requires a confirm step; Full rebalance needs an ack checkbox; Unassigned gets a VROOM tour (`1..N`) then Bulk-split by sequence; Full rebalance unassigns all → tour → even-split to every active driver → per-driver reopt  
+- **Best fit**: Unassigned ⋯ **Best fit** (one stop) or header **Best fit all** → confirm → `POST /route-planning/auto-place` (cheapest driver gap, sequential)  
+- Day-build: Unassign all → Optimize Unassigned → Bulk ranges → Optimize drivers **or** one-click **Full rebalance**  
+- API/routing contract: mealhq-api `docs/ROUTE_PLANNING.md`
 
 New-customer **Route** step (`/provider/customers/new`): after a confirmed address, shows up to **3 suggested driver+stop** cards from `POST /route-planning/suggest-placements` (cheapest haversine insert). Tapping a card fills Assigned driver + sequence; manual SearchableSelect remains the override. Assignments stay manual — suggestions are assistive only.
 

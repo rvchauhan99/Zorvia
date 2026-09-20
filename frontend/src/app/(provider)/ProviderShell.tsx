@@ -64,6 +64,7 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
   const role = staffRole(session);
   const isDriver = roleIsDriver(session);
   const canMutate = canMutateAdmin(session);
+  const isRoutePlanningWorkspace = pathname.startsWith("/provider/route-planning");
 
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 1024px)");
@@ -208,9 +209,17 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
           : null;
 
   return (
-    <div className="min-h-dvh bg-brand-cream text-foreground overflow-x-hidden">
-      {/* Desktop sidebar: header / scrollable nav / pinned footer */}
-      <aside className="hidden lg:flex fixed inset-y-0 left-0 z-30 w-64 border-r border-brand-border bg-white flex-col overflow-hidden px-4 py-5 gap-2">
+    <div
+      className={`min-h-dvh text-foreground overflow-x-hidden ${
+        isRoutePlanningWorkspace ? "bg-[#F4F6F8] h-dvh overflow-hidden" : "bg-brand-cream"
+      }`}
+    >
+      {/* Desktop sidebar — hidden on route-planning full-bleed workspace */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-30 w-64 border-r border-brand-border bg-white flex-col overflow-hidden px-4 py-5 gap-2 ${
+          isRoutePlanningWorkspace ? "hidden" : "hidden lg:flex"
+        }`}
+      >
         <div className="shrink-0 mb-4 flex items-start justify-between gap-2">
           <div>
             <img
@@ -337,20 +346,34 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
         </div>
       </aside>
 
-      <main className="lg:pl-64 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] lg:pb-6">
-        <div className="lg:hidden sticky top-0 z-30 backdrop-blur-xl bg-white/85 border-b border-brand-border pt-[env(safe-area-inset-top,0px)] px-3 py-2 flex items-center justify-between">
-          <img
-            src="/brand/mealhq-logo-horizontal.png"
-            alt="MealHQ"
-            className="h-8 w-auto"
-            data-testid="provider-brand-logo-mobile"
-          />
-          <div className="lg:hidden">
-            {!isDesktop ? <NotificationBell testid="provider-notification-bell-mobile" /> : null}
+      <main
+        className={
+          isRoutePlanningWorkspace
+            ? "h-dvh overflow-hidden flex flex-col pb-0"
+            : "lg:pl-64 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] lg:pb-6"
+        }
+      >
+        {!isRoutePlanningWorkspace ? (
+          <div className="lg:hidden sticky top-0 z-30 backdrop-blur-xl bg-white/85 border-b border-brand-border pt-[env(safe-area-inset-top,0px)] px-3 py-2 flex items-center justify-between">
+            <img
+              src="/brand/mealhq-logo-horizontal.png"
+              alt="MealHQ"
+              className="h-8 w-auto"
+              data-testid="provider-brand-logo-mobile"
+            />
+            <div className="lg:hidden">
+              {!isDesktop ? <NotificationBell testid="provider-notification-bell-mobile" /> : null}
+            </div>
           </div>
-        </div>
-        <div className="max-w-6xl mx-auto px-3 py-3 sm:px-4 sm:py-4 lg:px-6 lg:py-6">
-          {banner ? (
+        ) : null}
+        <div
+          className={
+            isRoutePlanningWorkspace
+              ? "flex-1 min-h-0 flex flex-col overflow-hidden"
+              : "max-w-6xl mx-auto px-3 py-3 sm:px-4 sm:py-4 lg:px-6 lg:py-6"
+          }
+        >
+          {!isRoutePlanningWorkspace && banner ? (
             <div
               data-testid={`trial-banner-${banner.tone}`}
               className={`mb-3 rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 ${
@@ -389,10 +412,12 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
         </div>
       </main>
 
-      {/* Mobile bottom nav */}
+      {/* Mobile bottom nav — hidden on route-planning workspace */}
       <nav
         data-testid="provider-bottom-nav"
-        className="glass-nav fixed bottom-0 inset-x-0 z-40 lg:hidden flex justify-around items-stretch min-h-16 pt-1 pb-[env(safe-area-inset-bottom,0px)]"
+        className={`glass-nav fixed bottom-0 inset-x-0 z-40 lg:hidden flex justify-around items-stretch min-h-16 pt-1 pb-[env(safe-area-inset-bottom,0px)] ${
+          isRoutePlanningWorkspace ? "hidden" : ""
+        }`}
       >
         {items.map((it) => (
           <NavItem

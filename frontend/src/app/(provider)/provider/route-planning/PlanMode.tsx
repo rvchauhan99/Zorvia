@@ -1,33 +1,38 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
-  ArrowLeft,
+  CaretDown,
   ListNumbers,
   MagnifyingGlass,
   MapPin,
+  Path,
+  SignOut,
+  X,
 } from "@phosphor-icons/react";
 import { InlineLoader } from "@/components/loaders";
 import SearchableSelect from "@/components/SearchableSelect";
-import SetupPanel from "./SetupPanel";
-import StopListPane from "./StopListPane";
 import SelectionToolbar from "./SelectionToolbar";
+import StopListPane from "./StopListPane";
+import type { RoutePolyline } from "./RouteMap";
 import type {
   CityChip,
   Driver,
   EffectiveStart,
   Kitchen,
+  MealSlot,
   PoolSection,
   Stop,
 } from "./types";
 import { mapsUrlForStops, sortPool } from "./utils";
+import { mealSlotBadgeLabel } from "@/lib/mealSlots";
 
 const RouteMap = dynamic(() => import("./RouteMap"), {
   ssr: false,
   loading: () => (
-    <div className="min-h-[240px] rounded-2xl border border-brand-border bg-brand-surface/40 flex items-center justify-center">
+    <div className="h-full w-full bg-[#1A2332] flex items-center justify-center">
       <InlineLoader label="Loading map…" />
     </div>
   ),
@@ -36,6 +41,8 @@ const RouteMap = dynamic(() => import("./RouteMap"), {
 type Props = {
   loading: boolean;
   busy: boolean;
+  slot: MealSlot;
+  planningDate: string;
   cities: CityChip[];
   selectedCity: string;
   stops: Stop[];
@@ -49,6 +56,9 @@ type Props = {
   selected: Set<string>;
   assignDriverId: string;
   listFilter: string;
+  roadPolylines: RoutePolyline[];
+  onSlotChange: (slot: MealSlot) => void;
+  onPlanningDateChange: (date: string) => void;
   onSelectedCityChange: (city: string) => void;
   onListFilterChange: (f: string) => void;
   onToggleStop: (id: string) => void;
@@ -56,22 +66,25 @@ type Props = {
   onClearSelection: () => void;
   onAssignDriverIdChange: (id: string) => void;
   onAssign: () => void;
+  onAssignUnassigned: () => void;
   onOpenRange: () => void;
-  onUseKitchen: () => void;
-  onClearTemporary: () => void;
   onGeocode: () => void;
   onOptimize: () => void;
   onReorder: (section: PoolSection, orderedIds: string[]) => void;
   onReassign: (customerIds: string[], driverId: string | null) => void;
   onOpenStart: (stop: Stop) => void;
   onPlace: (stop: Stop) => void;
+  onBestFit: (stop: Stop) => void;
+  onBestFitAllUnassigned: () => void;
   onMoveDriver: (stop: Stop, driverId: string | null) => void;
-  onBack: () => void;
+  onExit: () => void;
 };
 
 export default function PlanMode({
   loading,
   busy,
+  slot,
+  planningDate,
   cities,
   selectedCity,
   stops,
@@ -85,6 +98,9 @@ export default function PlanMode({
   selected,
   assignDriverId,
   listFilter,
+  roadPolylines,
+  onSlotChange,
+  onPlanningDateChange,
   onSelectedCityChange,
   onListFilterChange,
   onToggleStop,
@@ -92,29 +108,29 @@ export default function PlanMode({
   onClearSelection,
   onAssignDriverIdChange,
   onAssign,
+  onAssignUnassigned,
   onOpenRange,
-  onUseKitchen,
-  onClearTemporary,
   onGeocode,
   onOptimize,
   onReorder,
   onReassign,
   onOpenStart,
   onPlace,
+  onBestFit,
+  onBestFitAllUnassigned,
   onMoveDriver,
-  onBack,
+  onExit,
 }: Props) {
-  const [mobilePane, setMobilePane] = useState<"list" | "map">("list");
   const [highlightedStopId, setHighlightedStopId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [mobileRailOpen, setMobileRailOpen] = useState(false);
+  const [hiddenDriverKeys, setHiddenDriverKeys] = useState<Set<string>>(new Set());
 
   const totalStops = stops.length;
-  const assignedStops = stops.filter((s) => !!s.driver_id).length;
-  const unassignedStops = totalStops - assignedStops;
+  const unassignedStops = stops.filter((s) => !s.driver_id).length;
   const issueCount = stops.filter(
     (s) => s.delivery_sequence == null || s.geocode_status !== "ok"
   ).length;
-  const assignedPct = totalStops ? Math.round((assignedStops / totalStops) * 100) : 0;
 
   const driverIds = useMemo(() => drivers.map((d) => d.id), [drivers]);
 
@@ -139,7 +155,6 @@ export default function PlanMode({
     [cities, totalStops]
   );
 
-  /* ── Filter chips ── */
   const filters: { key: string; label: string; count?: number; testid: string }[] = [
     { key: "all", label: "All", count: totalStops, testid: "route-stat-total" },
     { key: "unassigned", label: "Unassigned", count: unassignedStops, testid: "route-stat-unassigned" },
@@ -152,219 +167,299 @@ export default function PlanMode({
     })),
   ];
 
+  const toggleDriverVisibility = (sectionKey: string) => {
+    setHiddenDriverKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(sectionKey)) next.delete(sectionKey);
+      else next.add(sectionKey);
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (highlightedStopId) setMobileRailOpen(true);
+  }, [highlightedStopId]);
+
+  const rail = (
+    <div className="flex flex-col h-full min-h-0 bg-white" data-testid="route-side-rail">
+      <div className="shrink-0 px-3 pt-3 pb-2 border-b border-[#E5E9EF] space-y-2">
+        <div className="flex items-center gap-2">
+          <Path size={18} className="text-[#00BFA5]" weight="bold" />
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-[#5C6570]">Routes</p>
+            <p className="text-sm font-bold text-[#0B1220] truncate" data-testid="route-stats">
+              {totalStops} stops · {unassignedStops} open
+              {issueCount > 0 ? ` · ${issueCount} issues` : ""}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="lg:hidden h-9 w-9 rounded-lg hover:bg-[#F4F6F8] inline-flex items-center justify-center text-[#5C6570]"
+            aria-label="Close stops"
+            onClick={() => setMobileRailOpen(false)}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="relative">
+          <MagnifyingGlass
+            size={15}
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#5C6570] pointer-events-none"
+          />
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search stops…"
+            className="h-9 w-full pl-8 pr-3 rounded-lg border border-[#E5E9EF] bg-[#F4F6F8] text-sm text-[#0B1220] outline-none focus:ring-2 focus:ring-[#00BFA5]/35 focus:border-[#00BFA5]"
+            data-testid="route-stop-search"
+          />
+        </div>
+
+        <div className="flex flex-wrap gap-1" data-testid="route-filter-row">
+          {filters.map((f) => {
+            const isActive = listFilter === f.key;
+            return (
+              <button
+                key={f.key}
+                type="button"
+                className={`h-7 px-2.5 rounded-full text-[11px] font-medium transition-colors ${
+                  isActive
+                    ? "bg-[#0B1220] text-white"
+                    : "bg-[#F4F6F8] text-[#5C6570] hover:text-[#0B1220]"
+                }`}
+                onClick={() => onListFilterChange(f.key)}
+                data-testid={f.testid}
+              >
+                {f.label}
+                {f.count != null && <span className="ml-1 opacity-70">{f.count}</span>}
+              </button>
+            );
+          })}
+        </div>
+
+        {!drivers.length && (
+          <div
+            className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] text-amber-900"
+            data-testid="route-no-drivers"
+          >
+            No drivers — add staff in{" "}
+            <Link href="/provider/settings" className="underline font-medium">
+              Settings
+            </Link>
+            .
+          </div>
+        )}
+
+        {!routingConfigured && (
+          <div
+            className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] text-amber-900"
+            data-testid="route-ors-warning"
+          >
+            Local routing not configured — optimize may be limited.
+          </div>
+        )}
+
+        <div className="flex gap-1.5">
+          <button
+            type="button"
+            className="flex-1 h-9 rounded-lg border border-[#E5E9EF] text-[12px] font-medium text-[#0B1220] hover:bg-[#F4F6F8] disabled:opacity-50"
+            onClick={onGeocode}
+            disabled={busy}
+            data-testid="route-geocode"
+          >
+            Fix addresses
+          </button>
+          <button
+            type="button"
+            className="flex-1 h-9 rounded-lg border border-[#E5E9EF] text-[12px] font-medium text-[#0B1220] hover:bg-[#F4F6F8] inline-flex items-center justify-center gap-1 disabled:opacity-50"
+            onClick={onOpenRange}
+            disabled={busy}
+            data-testid="route-open-range-sheet-header"
+          >
+            <ListNumbers size={13} /> Bulk
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-2 py-2">
+        {loading ? (
+          <InlineLoader label="Loading plan…" testid="route-plan-loading" />
+        ) : (
+          <StopListPane
+            sections={sections}
+            drivers={drivers}
+            selected={selected}
+            highlightedStopId={highlightedStopId}
+            listFilter={listFilter}
+            searchQuery={searchQuery}
+            originLine={originLine}
+            busy={busy}
+            routingConfigured={routingConfigured}
+            hiddenDriverKeys={hiddenDriverKeys}
+            onToggleDriverVisibility={toggleDriverVisibility}
+            onToggleStop={onToggleStop}
+            onToggleSection={onToggleSection}
+            onHighlight={setHighlightedStopId}
+            onReorder={onReorder}
+            onReassign={onReassign}
+            onOpenStart={onOpenStart}
+            onPlace={onPlace}
+            onBestFit={onBestFit}
+            onBestFitAllUnassigned={onBestFitAllUnassigned}
+            onMoveDriver={onMoveDriver}
+          />
+        )}
+      </div>
+
+      {(effectiveStart || activeOverride) && (
+        <div className="shrink-0 px-3 py-2 border-t border-[#E5E9EF] text-[10px] text-[#5C6570]">
+          Start: {effectiveStart?.label || "Kitchen"}
+          {activeOverride?.ends_on ? ` · temp until ${activeOverride.ends_on}` : ""}
+        </div>
+      )}
+    </div>
+  );
+
   return (
-    <div className="flex flex-col gap-3" data-testid="route-plan-mode">
-      {/* ── Header: Back + City select ── */}
-      <div className="flex flex-wrap items-center gap-2">
+    <div
+      className="h-dvh w-full flex flex-col bg-[#F4F6F8] overflow-hidden"
+      data-testid="route-plan-mode"
+    >
+      {/* Top bar */}
+      <header
+        className="shrink-0 z-20 h-14 px-3 sm:px-4 flex items-center gap-2 sm:gap-3 border-b border-[#E5E9EF] bg-white"
+        data-testid="route-top-bar"
+      >
         <button
           type="button"
-          onClick={onBack}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:text-primary/80 transition-colors duration-200 min-h-[44px] px-1"
+          onClick={onExit}
+          className="h-9 w-9 rounded-lg hover:bg-[#F4F6F8] inline-flex items-center justify-center text-[#5C6570]"
+          aria-label="Exit route planning"
           data-testid="route-back-to-cities"
         >
-          <ArrowLeft size={18} weight="bold" />
-          All cities
+          <SignOut size={18} className="rotate-180" />
         </button>
 
-        <div className="flex-1 min-w-[160px] max-w-[280px]" data-testid="route-city-chips">
+        <div className="hidden sm:flex items-center gap-1.5 min-w-0">
+          <span className="text-sm font-bold text-[#0B1220] truncate">Route planning</span>
+        </div>
+
+        <div className="flex gap-1" data-testid="route-slot-pills">
+          {(["lunch", "dinner"] as MealSlot[]).map((s) => (
+            <button
+              key={s}
+              type="button"
+              className={`h-8 px-2.5 rounded-lg text-[12px] font-medium ${
+                slot === s
+                  ? "bg-[#00BFA5] text-white"
+                  : "bg-[#F4F6F8] text-[#5C6570] hover:text-[#0B1220]"
+              }`}
+              onClick={() => onSlotChange(s)}
+              data-testid={`route-slot-${s}`}
+            >
+              {mealSlotBadgeLabel(s)}
+            </button>
+          ))}
+        </div>
+
+        <label className="hidden md:flex items-center gap-1.5 text-[11px] text-[#5C6570]">
+          <input
+            type="date"
+            value={planningDate}
+            onChange={(e) => onPlanningDateChange(e.target.value)}
+            className="h-8 px-2 rounded-lg border border-[#E5E9EF] text-[12px] text-[#0B1220]"
+            data-testid="route-planning-date"
+          />
+        </label>
+
+        <div className="flex-1 min-w-[120px] max-w-[240px]" data-testid="route-city-chips">
           <SearchableSelect
             value={selectedCity}
             onChange={onSelectedCityChange}
             options={cityOptions}
-            placeholder="Select city…"
+            placeholder="City…"
             testid="route-city-select"
-            inputClassName="h-10 px-3 rounded-xl border border-brand-border bg-white text-sm w-full"
+            inputClassName="h-8 px-2.5 rounded-lg border border-[#E5E9EF] bg-[#F4F6F8] text-[12px] w-full"
           />
         </div>
-      </div>
 
-      {/* ── Compact stats bar ── */}
-      <div className="rounded-2xl border border-brand-border bg-white p-3" data-testid="route-stats">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-          <span className="font-display font-bold">{totalStops} stops</span>
-          <span className="text-secondary font-medium">
-            {assignedStops} assigned
-            <span className="text-muted-foreground font-normal ml-1">({assignedPct}%)</span>
-          </span>
-          <span className="text-muted-foreground">{unassignedStops} unassigned</span>
-          {issueCount > 0 && (
-            <span className="text-amber-700 font-medium text-xs">
-              {issueCount} issue{issueCount === 1 ? "" : "s"}
-            </span>
-          )}
+        <div className="ml-auto flex items-center gap-1.5">
+          <a
+            href={fullMapUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hidden sm:inline-flex h-8 px-2.5 rounded-lg text-[12px] font-medium text-[#0B1220] hover:bg-[#F4F6F8] items-center gap-1"
+            data-testid="route-open-full-map"
+          >
+            <MapPin size={14} /> Maps
+          </a>
+          <button
+            type="button"
+            className="h-8 px-3 rounded-lg bg-[#0B1220] text-white text-[12px] font-semibold hover:bg-[#1A2332] disabled:opacity-50"
+            onClick={onOptimize}
+            disabled={busy}
+            data-testid="route-optimize"
+          >
+            {busy ? "Working…" : "Optimize"}
+          </button>
         </div>
-        <div className="mt-2 h-1.5 rounded-full bg-brand-surface overflow-hidden">
-          <div
-            className="h-full rounded-full bg-secondary transition-all duration-300 ease-out"
-            style={{ width: `${assignedPct}%` }}
+      </header>
+
+      {/* Workspace body */}
+      <div className="flex-1 min-h-0 flex relative">
+        {/* Desktop rail */}
+        <aside className="hidden lg:flex w-[360px] shrink-0 flex-col border-r border-[#E5E9EF] bg-white min-h-0">
+          {rail}
+        </aside>
+
+        {/* Map canvas */}
+        <div className="flex-1 min-w-0 min-h-0 relative" data-testid="route-map-canvas">
+          <RouteMap
+            stops={stops}
+            kitchen={kitchen}
+            effectiveStart={effectiveStart}
+            driverIds={driverIds}
+            highlightedStopId={highlightedStopId}
+            roadPolylines={roadPolylines}
+            hiddenDriverKeys={hiddenDriverKeys}
+            fullBleed
+            onStopClick={(id) => {
+              setHighlightedStopId(id);
+              setMobileRailOpen(true);
+            }}
           />
-        </div>
-      </div>
 
-      {!drivers.length && (
-        <div
-          className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"
-          data-testid="route-no-drivers"
-        >
-          No drivers — add staff with role Driver in{" "}
-          <Link href="/provider/settings" className="underline underline-offset-2 font-medium">
-            Settings
-          </Link>
-          .
-        </div>
-      )}
-
-      <SetupPanel
-        selectedCity={selectedCity}
-        kitchen={kitchen}
-        effectiveStart={effectiveStart}
-        activeOverride={activeOverride}
-        routingConfigured={routingConfigured}
-        issueCount={issueCount}
-        busy={busy}
-        onUseKitchen={onUseKitchen}
-        onClearTemporary={onClearTemporary}
-        onGeocode={onGeocode}
-        onOptimize={onOptimize}
-        onChangeStartHint={() => undefined}
-      />
-
-      {/* ── Filter row ── */}
-      <div className="flex flex-wrap gap-1.5" data-testid="route-filter-row">
-        {filters.map((f) => {
-          const isActive = listFilter === f.key;
-          return (
-            <button
-              key={f.key}
-              type="button"
-              className={`pill-btn h-8 text-[11px] px-3 ${
-                isActive ? "btn-primary" : "btn-outline"
-              }`}
-              onClick={() => onListFilterChange(f.key)}
-              data-testid={f.testid}
-            >
-              {f.label}
-              {f.count != null && (
-                <span className={`ml-1 ${isActive ? "opacity-80" : "opacity-60"}`}>{f.count}</span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* ── Mobile pane toggle ── */}
-      <div className="flex gap-0 sm:hidden rounded-xl border border-brand-border overflow-hidden" data-testid="route-mobile-pane-toggle">
-        <button
-          type="button"
-          className={`flex-1 h-10 text-xs gap-1 inline-flex items-center justify-center font-medium transition-colors duration-200 ${
-            mobilePane === "list"
-              ? "bg-primary text-white"
-              : "bg-white text-foreground hover:bg-brand-surface"
-          }`}
-          onClick={() => setMobilePane("list")}
-        >
-          <ListNumbers size={14} /> List
-        </button>
-        <button
-          type="button"
-          className={`flex-1 h-10 text-xs gap-1 inline-flex items-center justify-center font-medium transition-colors duration-200 ${
-            mobilePane === "map"
-              ? "bg-primary text-white"
-              : "bg-white text-foreground hover:bg-brand-surface"
-          }`}
-          onClick={() => setMobilePane("map")}
-        >
-          <MapPin size={14} /> Map
-        </button>
-      </div>
-
-      {loading ? (
-        <InlineLoader label="Loading plan…" testid="route-plan-loading" />
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] gap-3 items-start">
-          <div className={mobilePane === "list" ? "block" : "hidden lg:block"}>
-            <div className="flex items-center gap-2 mb-2 flex-wrap">
-              <ListNumbers size={16} className="text-primary" />
-              <p className="label-overline mb-0">Stops by driver</p>
-              <p className="text-[11px] text-muted-foreground flex-1">
-                Search a customer → Start · drag grip to reorder
-              </p>
+          {/* Mobile rail peek / sheet */}
+          <div className="lg:hidden absolute inset-x-0 bottom-0 z-[450] pointer-events-none">
+            {!mobileRailOpen && (
               <button
                 type="button"
-                className="pill-btn btn-outline h-8 text-[11px] px-3 gap-1"
-                onClick={onOpenRange}
-                disabled={busy}
-                data-testid="route-open-range-sheet-header"
+                className="pointer-events-auto mx-auto mb-3 flex items-center gap-2 h-11 px-4 rounded-full bg-white shadow-lg border border-[#E5E9EF] text-sm font-semibold text-[#0B1220]"
+                onClick={() => setMobileRailOpen(true)}
+                data-testid="route-mobile-pane-toggle"
               >
-                <ListNumbers size={12} /> Bulk assign…
+                <ListNumbers size={16} />
+                Stops ({totalStops})
+                <CaretDown size={14} className="rotate-180" />
               </button>
-            </div>
-
-            <div className="relative mb-2">
-              <MagnifyingGlass
-                size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
-              />
-              <input
-                type="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search stops by name, address…"
-                className="h-11 w-full pl-9 pr-3 rounded-xl border border-brand-border bg-white text-sm outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-                data-testid="route-stop-search"
-              />
-            </div>
-
-            <StopListPane
-              sections={sections}
-              drivers={drivers}
-              selected={selected}
-              highlightedStopId={highlightedStopId}
-              listFilter={listFilter}
-              searchQuery={searchQuery}
-              originLine={originLine}
-              busy={busy}
-              routingConfigured={routingConfigured}
-              onToggleStop={onToggleStop}
-              onToggleSection={onToggleSection}
-              onHighlight={setHighlightedStopId}
-              onReorder={onReorder}
-              onReassign={onReassign}
-              onOpenStart={onOpenStart}
-              onPlace={onPlace}
-              onMoveDriver={onMoveDriver}
-            />
-          </div>
-          <div className={`lg:sticky lg:top-3 ${mobilePane === "map" ? "block" : "hidden lg:block"}`}>
-            <div className="flex items-center gap-2 mb-2 flex-wrap">
-              <MapPin size={16} className="text-primary" />
-              <p className="label-overline mb-0 flex-1">Map</p>
-              <a
-                href={fullMapUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="pill-btn btn-primary h-9 text-[11px] px-3 gap-1"
-                data-testid="route-open-full-map"
+            )}
+            {mobileRailOpen && (
+              <div
+                className="pointer-events-auto h-[min(70vh,560px)] rounded-t-2xl border-t border-[#E5E9EF] shadow-2xl overflow-hidden"
+                data-testid="route-mobile-rail-sheet"
               >
-                <MapPin size={14} /> Open full map
-              </a>
-            </div>
-            <div className="h-[min(70vh,560px)]">
-              <RouteMap
-                stops={stops}
-                kitchen={kitchen}
-                effectiveStart={effectiveStart}
-                driverIds={driverIds}
-                highlightedStopId={highlightedStopId}
-                onStopClick={(id) => {
-                  setHighlightedStopId(id);
-                  setMobilePane("list");
-                }}
-              />
-            </div>
+                {rail}
+              </div>
+            )}
           </div>
         </div>
-      )}
+      </div>
+
+      <p className="sr-only" data-testid="route-planning-page-attribution">
+        Geocoding powered by Geoapify. Map data © OpenStreetMap contributors.
+      </p>
 
       <SelectionToolbar
         selectedCount={selected.size}
@@ -373,6 +468,7 @@ export default function PlanMode({
         busy={busy}
         onAssignDriverIdChange={onAssignDriverIdChange}
         onAssign={onAssign}
+        onAssignUnassigned={onAssignUnassigned}
         onClear={onClearSelection}
         onOpenRange={onOpenRange}
       />

@@ -25,7 +25,9 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   CaretDown,
   CaretRight,
-  CaretUp,
+  DotsThree,
+  Eye,
+  EyeSlash,
   MapPin,
   NavigationArrow,
   WarningCircle,
@@ -36,6 +38,7 @@ import { useCursorPagination } from "@/hooks/useCursorPagination";
 import MoveStopSheet from "./MoveStopSheet";
 import type { Driver, PoolSection, Stop } from "./types";
 import {
+  driverColor,
   isIssueStop,
   mapsUrlForStops,
   seqSpan,
@@ -53,6 +56,8 @@ type Props = {
   originLine: string;
   busy: boolean;
   routingConfigured: boolean;
+  hiddenDriverKeys?: Set<string>;
+  onToggleDriverVisibility?: (sectionKey: string) => void;
   onToggleStop: (id: string) => void;
   onToggleSection: (stops: Stop[]) => void;
   onHighlight: (id: string | null) => void;
@@ -60,6 +65,8 @@ type Props = {
   onReassign: (customerIds: string[], driverId: string | null) => void;
   onOpenStart: (stop: Stop) => void;
   onPlace: (stop: Stop) => void;
+  onBestFit?: (stop: Stop) => void;
+  onBestFitAllUnassigned?: () => void;
   onMoveDriver: (stop: Stop, driverId: string | null) => void;
 };
 
@@ -108,10 +115,7 @@ function SortableStopRow({
   onOpenStart,
   onPlace,
   onOpenMove,
-  onMoveUp,
-  onMoveDown,
-  canUp,
-  canDown,
+  onBestFit,
 }: {
   stop: Stop;
   selected: boolean;
@@ -124,15 +128,13 @@ function SortableStopRow({
   onOpenStart: () => void;
   onPlace: () => void;
   onOpenMove: () => void;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
-  canUp: boolean;
-  canDown: boolean;
+  onBestFit?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: stop.id,
     disabled: dragDisabled,
   });
+  const [menuOpen, setMenuOpen] = useState(false);
   const issue = isIssueStop(stop);
 
   const style = {
@@ -148,108 +150,126 @@ function SortableStopRow({
     <li
       ref={setNodeRef}
       style={style}
-      className={`px-2 py-2 flex flex-col gap-2 text-xs border-b border-brand-border/60 last:border-0 ${
-        highlighted ? "bg-primary/8" : "bg-white"
-      } ${selected ? "ring-1 ring-inset ring-primary/25" : ""}`}
+      className={`relative px-2 py-1.5 flex items-center gap-1.5 text-xs border-b border-[#E5E9EF] last:border-0 ${
+        highlighted ? "bg-[#00BFA5]/10" : "bg-white"
+      } ${selected ? "ring-1 ring-inset ring-[#00BFA5]/30" : ""}`}
       data-testid={`route-stop-row-${stop.id}`}
       onClick={onHighlight}
       id={`route-stop-${stop.id}`}
     >
-      <div className="flex items-start gap-2">
-        <button
-          type="button"
-          className="mt-0.5 min-h-[44px] min-w-[44px] touch-none cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground hover:bg-brand-surface rounded-xl inline-flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed"
-          aria-label="Drag to reorder"
-          title={dragDisabled ? "Clear search to drag-reorder" : "Drag up or down"}
-          data-testid={`route-stop-drag-${stop.id}`}
-          disabled={dragDisabled || busy}
-          {...(dragDisabled ? {} : { ...attributes, ...listeners })}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <DragHandleIcon />
-        </button>
-
-        <label className="mt-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-          <input
-            type="checkbox"
-            checked={selected}
-            onChange={onToggle}
-            className="h-4 w-4 rounded border-brand-border"
-            data-testid={`route-stop-check-${stop.id}`}
-          />
-        </label>
-
-        <span className="font-mono text-muted-foreground shrink-0 w-8 mt-1.5">
-          {stop.delivery_sequence != null ? `#${stop.delivery_sequence}` : "—"}
-        </span>
-
-        <div className="min-w-0 flex-1">
-          <p className="font-medium truncate text-sm">{stop.name || stop.id}</p>
-          <p className="text-muted-foreground truncate">{stopAddress(stop) || "No address"}</p>
-          {issue && (
-            <span className="inline-flex items-center gap-1 mt-1 text-[10px] uppercase tracking-wide font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
-              <WarningCircle size={12} />
-              {stop.geocode_status !== "ok" ? "Geocode" : "Unplaced"}
-            </span>
-          )}
-        </div>
-
-        <div className="shrink-0 flex flex-col gap-0.5" onClick={(e) => e.stopPropagation()}>
-          <button
-            type="button"
-            disabled={busy || !canUp}
-            onClick={onMoveUp}
-            className="min-h-[28px] min-w-[28px] rounded-lg text-muted-foreground hover:bg-brand-surface disabled:opacity-30 inline-flex items-center justify-center"
-            aria-label="Move up"
-            data-testid={`route-stop-up-${stop.id}`}
-          >
-            <CaretUp size={14} />
-          </button>
-          <button
-            type="button"
-            disabled={busy || !canDown}
-            onClick={onMoveDown}
-            className="min-h-[28px] min-w-[28px] rounded-lg text-muted-foreground hover:bg-brand-surface disabled:opacity-30 inline-flex items-center justify-center"
-            aria-label="Move down"
-            data-testid={`route-stop-down-${stop.id}`}
-          >
-            <CaretDown size={14} />
-          </button>
-        </div>
-      </div>
-
-      <div
-        className="flex flex-wrap gap-1.5 pl-[52px] sm:pl-[60px]"
+      <button
+        type="button"
+        className="shrink-0 h-9 w-8 touch-none cursor-grab active:cursor-grabbing text-[#5C6570] hover:text-[#0B1220] hover:bg-[#F4F6F8] rounded-lg inline-flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed"
+        aria-label="Drag to reorder"
+        title={dragDisabled ? "Clear search to drag-reorder" : "Drag up or down"}
+        data-testid={`route-stop-drag-${stop.id}`}
+        disabled={dragDisabled || busy}
+        {...(dragDisabled ? {} : { ...attributes, ...listeners })}
         onClick={(e) => e.stopPropagation()}
       >
+        <DragHandleIcon />
+      </button>
+
+      <label className="shrink-0" onClick={(e) => e.stopPropagation()}>
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={onToggle}
+          className="h-3.5 w-3.5 rounded border-[#E5E9EF]"
+          data-testid={`route-stop-check-${stop.id}`}
+        />
+      </label>
+
+      <span className="font-mono text-[#5C6570] shrink-0 w-7 text-[11px]">
+        {stop.delivery_sequence != null ? `#${stop.delivery_sequence}` : "—"}
+      </span>
+
+      <div className="min-w-0 flex-1">
+        <p className="font-medium truncate text-[13px] text-[#0B1220] leading-tight">
+          {stop.name || stop.id}
+        </p>
+        <p className="text-[#5C6570] truncate text-[11px] leading-tight">
+          {stopAddress(stop) || "No address"}
+        </p>
+        {issue && (
+          <span className="inline-flex items-center gap-1 mt-0.5 text-[10px] font-medium text-amber-700">
+            <WarningCircle size={11} />
+            {stop.geocode_status !== "ok" ? "Geocode" : "Unplaced"}
+          </span>
+        )}
+      </div>
+
+      <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
         <button
           type="button"
-          className="pill-btn btn-outline h-9 text-[11px] px-3"
+          className="h-9 w-9 rounded-lg text-[#5C6570] hover:bg-[#F4F6F8] inline-flex items-center justify-center"
+          aria-label="Stop actions"
+          aria-expanded={menuOpen}
+          data-testid={`route-stop-menu-${stop.id}`}
           disabled={busy}
-          data-testid={`route-stop-start-${stop.id}`}
-          onClick={onOpenStart}
+          onClick={() => setMenuOpen((v) => !v)}
         >
-          Start
+          <DotsThree size={18} weight="bold" />
         </button>
-        <button
-          type="button"
-          className="pill-btn btn-outline h-9 text-[11px] px-3"
-          disabled={busy}
-          data-testid={`route-stop-move-${stop.id}`}
-          onClick={onOpenMove}
-        >
-          Move
-        </button>
-        {needsPlace && (
-          <button
-            type="button"
-            className="pill-btn btn-outline h-9 text-[11px] px-3"
-            disabled={busy}
-            data-testid={`route-stop-place-${stop.id}`}
-            onClick={onPlace}
-          >
-            Place
-          </button>
+        {menuOpen && (
+          <>
+            <button
+              type="button"
+              className="fixed inset-0 z-40 cursor-default"
+              aria-label="Close menu"
+              onClick={() => setMenuOpen(false)}
+            />
+            <div className="absolute right-0 top-full mt-1 z-50 min-w-[140px] rounded-xl border border-[#E5E9EF] bg-white shadow-lg py-1 text-[12px]">
+              <button
+                type="button"
+                className="w-full text-left px-3 py-2 hover:bg-[#F4F6F8] text-[#0B1220]"
+                data-testid={`route-stop-start-${stop.id}`}
+                onClick={() => {
+                  setMenuOpen(false);
+                  onOpenStart();
+                }}
+              >
+                Set as start
+              </button>
+              <button
+                type="button"
+                className="w-full text-left px-3 py-2 hover:bg-[#F4F6F8] text-[#0B1220]"
+                data-testid={`route-stop-move-${stop.id}`}
+                onClick={() => {
+                  setMenuOpen(false);
+                  onOpenMove();
+                }}
+              >
+                Move…
+              </button>
+              {needsPlace && (
+                <button
+                  type="button"
+                  className="w-full text-left px-3 py-2 hover:bg-[#F4F6F8] text-[#0B1220]"
+                  data-testid={`route-stop-place-${stop.id}`}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onPlace();
+                  }}
+                >
+                  Place in route
+                </button>
+              )}
+              {!stop.driver_id && onBestFit ? (
+                <button
+                  type="button"
+                  className="w-full text-left px-3 py-2 hover:bg-[#F4F6F8] text-[#0B1220]"
+                  data-testid={`route-stop-best-fit-${stop.id}`}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onBestFit();
+                  }}
+                >
+                  Best fit
+                </button>
+              ) : null}
+            </div>
+          </>
         )}
       </div>
     </li>
@@ -266,6 +286,8 @@ export default function StopListPane({
   originLine,
   busy,
   routingConfigured,
+  hiddenDriverKeys,
+  onToggleDriverVisibility,
   onToggleStop,
   onToggleSection,
   onHighlight,
@@ -273,6 +295,8 @@ export default function StopListPane({
   onReassign,
   onOpenStart,
   onPlace,
+  onBestFit,
+  onBestFitAllUnassigned,
   onMoveDriver,
 }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -296,12 +320,13 @@ export default function StopListPane({
     }
 
     if (!searchQuery.trim()) return base;
+    // Keep Unassigned header visible as a drop target even when empty/no matches.
     return base
       .map((s) => ({
         ...s,
         stops: s.stops.filter((st) => stopMatchesQuery(st, searchQuery)),
       }))
-      .filter((s) => s.stops.length > 0);
+      .filter((s) => s.stops.length > 0 || s.key === "unassigned");
   }, [sections, listFilter, searchQuery]);
 
   useEffect(() => {
@@ -429,7 +454,7 @@ export default function StopListPane({
 
   if (!visibleSections.length) {
     return (
-      <div className="card-tinted p-4 text-sm text-muted-foreground" data-testid="route-list-empty">
+      <div className="rounded-xl bg-[#F4F6F8] p-4 text-sm text-[#5C6570]" data-testid="route-list-empty">
         {searchQuery.trim()
           ? "No stops match this search."
           : "No stops match this filter."}
@@ -437,17 +462,16 @@ export default function StopListPane({
     );
   }
 
+  const driverIds = drivers.map((d) => d.id);
+  const hidden = hiddenDriverKeys || new Set<string>();
+
   return (
     <div className="flex flex-col gap-2" data-testid="route-stop-list">
       {dragDisabled ? (
         <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-          Search is active — drag to reorder is paused. Clear search to drag, or use ▲/▼.
+          Search is active — drag to reorder is paused. Clear search to drag.
         </p>
-      ) : (
-        <p className="text-[11px] text-muted-foreground">
-          Drag the grip handle to move a stop up or down. Drop on another driver header to reassign.
-        </p>
-      )}
+      ) : null}
 
       <DndContext
         sensors={sensors}
@@ -465,53 +489,61 @@ export default function StopListPane({
               : `#${span.min}–#${span.max}`
             : "No sequence";
           const mapsStops = section.stops.filter((s) => s.delivery_sequence != null);
-          // Select-all / reorder indices use full pool from original sections when possible
           const fullSection = sections.find((s) => s.key === section.key) || section;
           const sectionIds = section.stops.map((s) => s.id);
           const allSelected =
             sectionIds.length > 0 && sectionIds.every((id) => selected.has(id));
           const paged = sliceFor(section);
           const dropTarget = overSectionKey === section.key;
+          const poolColor = driverColor(section.driverId, driverIds);
+          const isHidden = hidden.has(section.key);
 
           return (
             <div
               key={section.key}
-              className={`card-tinted overflow-visible ${
-                dropTarget ? "ring-2 ring-primary/40" : ""
-              }`}
+              className={`rounded-xl border border-[#E5E9EF] bg-white overflow-visible ${
+                dropTarget ? "ring-2 ring-[#00BFA5]/40" : ""
+              } ${isHidden ? "opacity-60" : ""}`}
               data-testid={`route-pool-${section.key}`}
             >
               <SectionDropHeader
                 sectionKey={section.key}
-                className="p-3 flex flex-wrap items-center gap-2 border-b border-brand-border/60"
+                className="px-2 py-1.5 flex flex-wrap items-center gap-1 border-b border-[#E5E9EF]"
               >
                 <button
                   type="button"
-                  className="min-h-[44px] min-w-[44px] rounded-full hover:bg-brand-surface inline-flex items-center justify-center"
+                  className="h-8 w-8 rounded-lg hover:bg-[#F4F6F8] inline-flex items-center justify-center text-[#5C6570]"
                   onClick={() => toggleCollapsed(section.key)}
                   aria-label={isCollapsed ? "Expand" : "Collapse"}
                   data-testid={`route-pool-toggle-${section.key}`}
                 >
-                  {isCollapsed ? <CaretRight size={16} /> : <CaretDown size={16} />}
+                  {isCollapsed ? <CaretRight size={14} /> : <CaretDown size={14} />}
                 </button>
+                <span
+                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                  style={{ background: poolColor }}
+                  aria-hidden
+                />
                 <div className="min-w-0 flex-1">
-                  <p className="font-display font-bold text-sm truncate">{section.title}</p>
-                  <p className="text-[11px] text-muted-foreground">
-                    {section.stops.length} stop{section.stops.length === 1 ? "" : "s"}
-                    <span className="mx-1">·</span>
-                    {spanLabel}
+                  <p className="font-semibold text-[13px] text-[#0B1220] truncate leading-tight">
+                    {section.title}
+                  </p>
+                  <p className="text-[10px] text-[#5C6570] leading-tight">
+                    {section.stops.length} · {spanLabel}
                   </p>
                 </div>
-                {!section.driverId ? (
-                  <span className="text-[10px] uppercase tracking-wide font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
-                    Pool
-                  </span>
-                ) : (
-                  <span className="text-[10px] uppercase tracking-wide font-medium text-secondary bg-secondary/10 border border-secondary/20 rounded-full px-2 py-0.5">
-                    Driver
-                  </span>
-                )}
-                <label className="text-xs text-muted-foreground inline-flex items-center gap-1.5 min-h-[44px] px-1">
+                {onToggleDriverVisibility ? (
+                  <button
+                    type="button"
+                    className="h-8 w-8 rounded-lg hover:bg-[#F4F6F8] inline-flex items-center justify-center text-[#5C6570]"
+                    aria-label={isHidden ? "Show on map" : "Hide on map"}
+                    data-testid={`route-pool-eye-${section.key}`}
+                    onClick={() => onToggleDriverVisibility(section.key)}
+                  >
+                    {isHidden ? <EyeSlash size={14} /> : <Eye size={14} />}
+                  </button>
+                ) : null}
+                <label className="text-[11px] text-[#5C6570] inline-flex items-center gap-1 h-8 px-1">
                   <input
                     type="checkbox"
                     checked={allSelected}
@@ -525,15 +557,29 @@ export default function StopListPane({
                   href={mapsUrlForStops(originLine, mapsStops)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="pill-btn btn-outline h-9 text-[11px] px-3 gap-1"
+                  className="h-8 px-2 rounded-lg text-[11px] font-medium text-[#0B1220] hover:bg-[#F4F6F8] inline-flex items-center gap-1"
                   data-testid={`route-pool-maps-${section.key}`}
                 >
-                  <MapPin size={14} /> Maps
+                  <MapPin size={12} /> Maps
                 </a>
+                {section.key === "unassigned" &&
+                section.stops.length > 0 &&
+                onBestFitAllUnassigned ? (
+                  <button
+                    type="button"
+                    className="h-8 px-2 rounded-lg text-[11px] font-medium text-[#0B1220] hover:bg-[#F4F6F8] disabled:opacity-50"
+                    disabled={busy || !routingConfigured}
+                    onClick={onBestFitAllUnassigned}
+                    data-testid="route-best-fit-all"
+                    title="Place each unassigned stop into the lowest-cost driver gap"
+                  >
+                    Best fit all
+                  </button>
+                ) : null}
                 {section.stops.length > paging.pageSize && (
                   <button
                     type="button"
-                    className="pill-btn btn-outline h-9 text-[11px] px-3"
+                    className="h-8 px-2 rounded-lg text-[11px] font-medium text-[#5C6570] hover:bg-[#F4F6F8]"
                     onClick={() => setPagingSectionKey(section.key)}
                     data-testid={`route-pool-page-focus-${section.key}`}
                   >
@@ -549,53 +595,29 @@ export default function StopListPane({
                 >
                   <ul data-testid={`route-pool-stops-${section.key}`}>
                     {paged.length === 0 ? (
-                      <li className="px-3 py-4 text-xs text-muted-foreground">
-                        No stops in this pool.
-                      </li>
+                      <li className="px-3 py-3 text-xs text-[#5C6570]">No stops in this pool.</li>
                     ) : (
-                      paged.map((stop) => {
-                        const fullIdx = fullSection.stops.findIndex((s) => s.id === stop.id);
-                        return (
-                          <SortableStopRow
-                            key={stop.id}
-                            stop={stop}
-                            selected={selected.has(stop.id)}
-                            highlighted={highlightedStopId === stop.id}
-                            busy={busy}
-                            routingConfigured={routingConfigured}
-                            dragDisabled={dragDisabled}
-                            onToggle={() => onToggleStop(stop.id)}
-                            onHighlight={() => onHighlight(stop.id)}
-                            onOpenStart={() => onOpenStart(stop)}
-                            onPlace={() => onPlace(stop)}
-                            onOpenMove={() => setMoveStop(stop)}
-                            onMoveUp={() => {
-                              if (fullIdx <= 0) return;
-                              const next = [...fullSection.stops];
-                              const tmp = next[fullIdx - 1];
-                              next[fullIdx - 1] = next[fullIdx];
-                              next[fullIdx] = tmp;
-                              onReorder(
-                                fullSection,
-                                next.map((s) => s.id)
-                              );
-                            }}
-                            onMoveDown={() => {
-                              if (fullIdx < 0 || fullIdx >= fullSection.stops.length - 1) return;
-                              const next = [...fullSection.stops];
-                              const tmp = next[fullIdx + 1];
-                              next[fullIdx + 1] = next[fullIdx];
-                              next[fullIdx] = tmp;
-                              onReorder(
-                                fullSection,
-                                next.map((s) => s.id)
-                              );
-                            }}
-                            canUp={fullIdx > 0}
-                            canDown={fullIdx >= 0 && fullIdx < fullSection.stops.length - 1}
-                          />
-                        );
-                      })
+                      paged.map((stop) => (
+                        <SortableStopRow
+                          key={stop.id}
+                          stop={stop}
+                          selected={selected.has(stop.id)}
+                          highlighted={highlightedStopId === stop.id}
+                          busy={busy}
+                          routingConfigured={routingConfigured}
+                          dragDisabled={dragDisabled}
+                          onToggle={() => onToggleStop(stop.id)}
+                          onHighlight={() => onHighlight(stop.id)}
+                          onOpenStart={() => onOpenStart(stop)}
+                          onPlace={() => onPlace(stop)}
+                          onBestFit={
+                            section.key === "unassigned" && onBestFit
+                              ? () => onBestFit(stop)
+                              : undefined
+                          }
+                          onOpenMove={() => setMoveStop(stop)}
+                        />
+                      ))
                     )}
                   </ul>
                 </SortableContext>
@@ -613,7 +635,7 @@ export default function StopListPane({
 
         <DragOverlay>
           {activeStop ? (
-            <div className="rounded-xl border border-primary bg-white shadow-lg px-3 py-2 text-xs font-medium">
+            <div className="rounded-xl border border-[#00BFA5] bg-white shadow-lg px-3 py-2 text-xs font-medium text-[#0B1220]">
               <NavigationArrow size={12} className="inline mr-1" />
               {activeStop.name || activeStop.id}
             </div>
