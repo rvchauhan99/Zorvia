@@ -139,10 +139,15 @@ export default function RoutePlanningPage() {
       if (!admin) return false;
       setBusy(true);
       try {
-        const { data } = await api.post("/route-planning/optimize", {
-          meal_slot: slot,
-          planning_date: planningDate,
-        });
+        const { data } = await api.post(
+          "/route-planning/optimize",
+          {
+            meal_slot: slot,
+            planning_date: planningDate,
+            city: selectedCity && selectedCity !== "all" ? selectedCity : undefined,
+          },
+          { timeout: 0 }
+        );
         const n = data?.ordered_ids?.length ?? 0;
         const skip = data?.skipped?.length ? ` (${data.skipped.length} skipped)` : "";
         toast.success(
@@ -159,7 +164,7 @@ export default function RoutePlanningPage() {
         setBusy(false);
       }
     },
-    [admin, slot, planningDate, load]
+    [admin, slot, planningDate, selectedCity, load]
   );
 
   const runGeocode = async () => {
@@ -168,6 +173,7 @@ export default function RoutePlanningPage() {
     try {
       const { data } = await api.post("/route-planning/geocode-missing", null, {
         params: { meal_slot: slot, city: (selectedCity && selectedCity !== "all") ? selectedCity : undefined, limit: 40 },
+        timeout: 0,
       });
       const n = data?.customers?.length ?? 0;
       toast.success(n ? `Geocoded ${n} address(es)` : "Nothing to geocode");
@@ -501,8 +507,10 @@ export default function RoutePlanningPage() {
         busy={busy}
         onClose={() => setShowOptimizeSheet(false)}
         onConfirm={() => {
-          setShowOptimizeSheet(false);
-          void runOptimize();
+          void (async () => {
+            await runOptimize();
+            setShowOptimizeSheet(false);
+          })();
         }}
       />
 

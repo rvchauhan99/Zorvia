@@ -1,0 +1,15 @@
+---
+description: Production browser testing — only ravatrajsinh kitchen; never other providers
+alwaysApply: true
+---
+
+# Production web-testing account
+
+For **production** browser sessions (`https://www.mealhq.ca`):
+
+- Log in **only** as `ravatrajsinh@gmail.com` (provider kitchen).
+- Password: read sibling `mealhq-api/memory/test_credentials.md` (gitignored). Never invent other accounts.
+- **Never** open, switch to, edit, or inspect any **other** provider/tenant (customers, deliveries, payments, settings, data).
+- Platform admin (`admin.mealhq.ca`) is separate — do not use other operators’ accounts unless the user explicitly provides them in this chat.
+
+Local/dev Mongo seeds are fine for non-prod testing. This rule applies to production UI.

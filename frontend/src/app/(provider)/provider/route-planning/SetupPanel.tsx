@@ -127,9 +127,19 @@ export default function SetupPanel({
           onClick={onOptimize}
           data-testid="route-optimize"
         >
-          <Path size={14} /> Optimize route
+          <Path size={14} /> {busy ? "Optimizing…" : "Optimize route"}
         </button>
       </div>
+      {busy && (
+        <div
+          className="rounded-xl border border-brand-border bg-brand-surface/80 px-3 py-2"
+          data-testid="route-optimize-busy-banner"
+        >
+          <p className="text-xs text-muted-foreground">
+            Optimizing route — please wait until processing finishes.
+          </p>
+        </div>
+      )}
 
       {/* Kitchen info */}
       {kitchenLine && (

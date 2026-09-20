@@ -12,6 +12,10 @@ Skill: [`.cursor/skills/mealhq-ui-screen/SKILL.md`](../.cursor/skills/mealhq-ui-
 | **data-testid** | Preserve existing test ids |
 | **API Critical** | If contract/billing/tenancy: sibling API running + mealhq-api `docs/TESTING.md` Critical |
 
+## Production browser account
+
+Prod UI (`https://www.mealhq.ca`): use **only** `ravatrajsinh@gmail.com`. Password in sibling gitignored `mealhq-api/memory/test_credentials.md`. Rule: [`.cursor/rules/prod-web-test-account.mdc`](../.cursor/rules/prod-web-test-account.mdc). **Never** touch any other provider/tenant.
+
 ## How to build
 
 ```bash
