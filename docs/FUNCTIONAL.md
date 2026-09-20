@@ -50,7 +50,7 @@ Screen: `/provider/route-planning` — **full-bleed Routes workspace** (Leaflet 
 - Driver **Print**: downloads route PDF + opens **driver** WhatsApp (Settings → Team phone) to attach the PDF; customer phones in the PDF/list open **customer** chat  
 - **Deliveries** (`/provider/deliveries`, admin + driver): customer phone on each stop / next card → `wa.me`  
 - **Kitchen** pack list + Print PDF: name, phone (`wa.me` in UI), CRM notes  
-- Settings → Team: optional staff **phone** (create + blur-save on drivers) for Print→driver WhatsApp  
+- Settings → Team: optional staff **phone** (create + blur-save on drivers) for Print→driver WhatsApp; **Remove** soft-deletes staff — drivers pick Unassigned / transfer to existing / create new driver & transfer before removal
 - Map: OSRM road polylines via `POST /route-planning/route-geometry` (distance/duration when available; straight-leg fallback); origin = each pool’s effective start  
 - Selection dock: Assign / **To Unassigned** / By sequence (empty SearchableSelect shows “Unassigned pool”)  
 - **Assign by sequence** sheet: defaults source to the largest non-empty pool; range rows are stacked cards (From/To + full-width driver) so the picker is not clipped  

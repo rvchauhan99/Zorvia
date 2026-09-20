@@ -28,8 +28,11 @@ import { formatCaPostal, isValidCaPostal } from "@/lib/ca-provinces";
 import { CA_TIMEZONE_OPTIONS_LONG } from "@/lib/ca-timezones";
 import CaAddressFields from "@/components/CaAddressFields";
 import SearchableSelect from "@/components/SearchableSelect";
+import AppSheet from "@/components/AppSheet";
 
 type TabId = "general" | "operations" | "billing" | "notifications" | "team";
+
+type StaffRemoveDisposition = "unassigned" | "transfer" | "create_and_transfer";
 
 const BILLING_VARIANTS = [
   {
@@ -59,6 +62,16 @@ export default function Settings() {
   const [staffForm, setStaffForm] = useState({ name: "", email: "", password: "", role: "driver", phone: "" });
   const [staffBusy, setStaffBusy] = useState(false);
   const [staffPhoneBusy, setStaffPhoneBusy] = useState<string | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<any | null>(null);
+  const [removeDisposition, setRemoveDisposition] = useState<StaffRemoveDisposition>("unassigned");
+  const [removeTransferId, setRemoveTransferId] = useState("");
+  const [removeNewDriver, setRemoveNewDriver] = useState({
+    name: "",
+    email: "",
+    password: "",
+    phone: "",
+  });
+  const [removeBusy, setRemoveBusy] = useState(false);
   const [logoBusy, setLogoBusy] = useState(false);
   const [pwForm, setPwForm] = useState({ current_password: "", new_password: "", confirm_password: "" });
   const [pwBusy, setPwBusy] = useState(false);
@@ -331,6 +344,67 @@ export default function Settings() {
       toast.error(err?.response?.data?.detail || "Failed to save phone");
     } finally {
       setStaffPhoneBusy(null);
+    }
+  }
+
+  const handleOpenRemoveStaff = (member: any) => {
+    if (session?.user_id && member.id === session.user_id) {
+      toast.error("You cannot remove your own account");
+      return;
+    }
+    setRemoveTarget(member);
+    setRemoveDisposition("unassigned");
+    setRemoveTransferId("");
+    setRemoveNewDriver({ name: "", email: "", password: "", phone: "" });
+  };
+
+  const handleCloseRemoveStaff = () => {
+    if (removeBusy) return;
+    setRemoveTarget(null);
+  };
+
+  async function handleConfirmRemoveStaff() {
+    if (!removeTarget) return;
+    const role = removeTarget.role || "admin";
+    const body: Record<string, unknown> = {};
+    if (role === "driver") {
+      body.disposition = removeDisposition;
+      if (removeDisposition === "transfer") {
+        if (!removeTransferId) {
+          toast.error("Select a driver to transfer routes to");
+          return;
+        }
+        body.target_driver_id = removeTransferId;
+      }
+      if (removeDisposition === "create_and_transfer") {
+        if (!removeNewDriver.name.trim() || !removeNewDriver.email.trim() || removeNewDriver.password.length < 6) {
+          toast.error("Enter name, email, and password (6+) for the new driver");
+          return;
+        }
+        body.new_driver = {
+          name: removeNewDriver.name.trim(),
+          email: removeNewDriver.email.trim(),
+          password: removeNewDriver.password,
+          phone: removeNewDriver.phone.trim(),
+        };
+      }
+    }
+    setRemoveBusy(true);
+    try {
+      const { data } = await api.post(`/providers/me/staff/${removeTarget.id}/remove`, body);
+      const moved = Number(data?.moved || 0);
+      toast.success(
+        moved > 0
+          ? `Removed ${removeTarget.name || removeTarget.email}. Moved ${moved} stop(s).`
+          : `Removed ${removeTarget.name || removeTarget.email}.`
+      );
+      setRemoveTarget(null);
+      const { data: next } = await api.get("/providers/me/staff");
+      setStaff(next);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || "Failed to remove staff");
+    } finally {
+      setRemoveBusy(false);
     }
   }
 
@@ -1012,9 +1086,22 @@ export default function Settings() {
                           <div className="text-xs text-muted-foreground mt-1">{s.phone}</div>
                         ) : null}
                       </div>
-                      <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-full bg-brand-surface text-primary border border-brand-border self-start">
-                        {s.role || "admin"}
-                      </span>
+                      <div className="flex items-center gap-2 self-start shrink-0">
+                        <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-full bg-brand-surface text-primary border border-brand-border">
+                          {s.role || "admin"}
+                        </span>
+                        {session?.user_id !== s.id ? (
+                          <button
+                            type="button"
+                            data-testid={`staff-delete-${s.id}`}
+                            aria-label={`Remove ${s.name || s.email}`}
+                            onClick={() => handleOpenRemoveStaff(s)}
+                            className="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-brand-border text-muted-foreground hover:text-destructive hover:border-destructive/40 cursor-pointer"
+                          >
+                            <Trash size={16} />
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1099,6 +1186,146 @@ export default function Settings() {
           {saving ? "Saving Changes…" : "Save Settings"}
         </button>
       </div>
+
+      <AppSheet
+        open={!!removeTarget}
+        onClose={handleCloseRemoveStaff}
+        title={
+          (removeTarget?.role || "admin") === "driver"
+            ? "Remove driver"
+            : "Remove staff"
+        }
+        size="lg"
+        closeTestId="staff-remove-close"
+        footer={
+          <div className="flex flex-wrap gap-2 justify-end">
+            <button
+              type="button"
+              data-testid="staff-remove-cancel"
+              disabled={removeBusy}
+              onClick={handleCloseRemoveStaff}
+              className="pill-btn btn-outline h-10 text-xs cursor-pointer disabled:opacity-60"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              data-testid="staff-remove-confirm"
+              disabled={removeBusy}
+              onClick={() => void handleConfirmRemoveStaff()}
+              className="pill-btn btn-primary h-10 text-xs cursor-pointer disabled:opacity-60"
+            >
+              {removeBusy ? "Removing…" : "Remove"}
+            </button>
+          </div>
+        }
+      >
+        {removeTarget ? (
+          <div className="flex flex-col gap-4" data-testid="staff-remove-sheet">
+            <p className="text-sm text-muted-foreground">
+              Remove <span className="font-semibold text-foreground">{removeTarget.name || removeTarget.email}</span>
+              {(removeTarget.role || "admin") === "driver"
+                ? ". Choose where their delivery stops go."
+                : ". They will no longer be able to sign in."}
+            </p>
+
+            {(removeTarget.role || "admin") === "driver" ? (
+              <div className="flex flex-col gap-3">
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="staff-remove-disposition"
+                    data-testid="staff-remove-unassigned"
+                    checked={removeDisposition === "unassigned"}
+                    onChange={() => setRemoveDisposition("unassigned")}
+                    className="mt-1 accent-primary"
+                  />
+                  <span className="text-sm">
+                    <span className="font-semibold">Move to Unassigned</span>
+                    <span className="block text-xs text-muted-foreground">Stops go to the Unassigned route pool.</span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="staff-remove-disposition"
+                    data-testid="staff-remove-transfer"
+                    checked={removeDisposition === "transfer"}
+                    onChange={() => setRemoveDisposition("transfer")}
+                    className="mt-1 accent-primary"
+                  />
+                  <span className="text-sm">
+                    <span className="font-semibold">Transfer to existing driver</span>
+                    <span className="block text-xs text-muted-foreground">Move all routes and deliveries to another driver.</span>
+                  </span>
+                </label>
+                {removeDisposition === "transfer" ? (
+                  <SearchableSelect
+                    testid="staff-remove-transfer-driver"
+                    inputClassName={inputClass}
+                    value={removeTransferId}
+                    onChange={setRemoveTransferId}
+                    options={staff
+                      .filter((x) => (x.role || "") === "driver" && x.id !== removeTarget.id)
+                      .map((x) => ({ value: x.id, label: x.name || x.email }))}
+                    placeholder="Select driver…"
+                  />
+                ) : null}
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="staff-remove-disposition"
+                    data-testid="staff-remove-create"
+                    checked={removeDisposition === "create_and_transfer"}
+                    onChange={() => setRemoveDisposition("create_and_transfer")}
+                    className="mt-1 accent-primary"
+                  />
+                  <span className="text-sm">
+                    <span className="font-semibold">Create new driver &amp; transfer</span>
+                    <span className="block text-xs text-muted-foreground">Add a driver first, then move all stops to them.</span>
+                  </span>
+                </label>
+                {removeDisposition === "create_and_transfer" ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-6">
+                    <input
+                      data-testid="staff-remove-new-name"
+                      placeholder="Full Name"
+                      className={inputClass}
+                      value={removeNewDriver.name}
+                      onChange={(e) => setRemoveNewDriver({ ...removeNewDriver, name: e.target.value })}
+                    />
+                    <input
+                      data-testid="staff-remove-new-email"
+                      type="email"
+                      placeholder="Email"
+                      className={inputClass}
+                      value={removeNewDriver.email}
+                      onChange={(e) => setRemoveNewDriver({ ...removeNewDriver, email: e.target.value })}
+                    />
+                    <input
+                      data-testid="staff-remove-new-password"
+                      type="password"
+                      minLength={6}
+                      placeholder="Password"
+                      className={inputClass}
+                      value={removeNewDriver.password}
+                      onChange={(e) => setRemoveNewDriver({ ...removeNewDriver, password: e.target.value })}
+                    />
+                    <input
+                      data-testid="staff-remove-new-phone"
+                      type="tel"
+                      placeholder="Phone (WhatsApp)"
+                      className={inputClass}
+                      value={removeNewDriver.phone}
+                      onChange={(e) => setRemoveNewDriver({ ...removeNewDriver, phone: e.target.value })}
+                    />
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </AppSheet>
     </div>
   );
 }
