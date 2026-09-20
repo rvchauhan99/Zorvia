@@ -33,6 +33,7 @@ import {
   WarningCircle,
 } from "@phosphor-icons/react";
 import CursorPaginationBar from "@/components/CursorPaginationBar";
+import { CustomerWhatsAppContact } from "@/components/CustomerWhatsAppContact";
 import { OPS_DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
 import MoveStopSheet from "./MoveStopSheet";
@@ -68,6 +69,7 @@ type Props = {
   onBestFit?: (stop: Stop) => void;
   onBestFitAllUnassigned?: () => void;
   onMoveDriver: (stop: Stop, driverId: string | null) => void;
+  viewHrefForSection?: (section: PoolSection) => string;
 };
 
 function SectionDropHeader({
@@ -185,9 +187,14 @@ function SortableStopRow({
       </span>
 
       <div className="min-w-0 flex-1">
-        <p className="font-medium truncate text-[13px] text-[#0B1220] leading-tight">
-          {stop.name || stop.id}
-        </p>
+        <CustomerWhatsAppContact
+          customerName={stop.name || stop.id}
+          phone={stop.phone}
+          nameAsLink
+          testId={`route-stop-name-${stop.id}`}
+          phoneTestId={`route-stop-phone-${stop.id}`}
+          phoneClassName="text-[#5C6570] text-[11px] underline-offset-2 hover:underline truncate"
+        />
         <p className="text-[#5C6570] truncate text-[11px] leading-tight">
           {stopAddress(stop) || "No address"}
         </p>
@@ -298,6 +305,7 @@ export default function StopListPane({
   onBestFit,
   onBestFitAllUnassigned,
   onMoveDriver,
+  viewHrefForSection,
 }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -562,6 +570,15 @@ export default function StopListPane({
                 >
                   <MapPin size={12} /> Maps
                 </a>
+                {viewHrefForSection ? (
+                  <a
+                    href={viewHrefForSection(section)}
+                    className="h-8 px-2 rounded-lg text-[11px] font-medium text-[#0B1220] hover:bg-[#F4F6F8] inline-flex items-center gap-1"
+                    data-testid={`route-pool-view-${section.key}`}
+                  >
+                    <NavigationArrow size={12} /> View
+                  </a>
+                ) : null}
                 {section.key === "unassigned" &&
                 section.stops.length > 0 &&
                 onBestFitAllUnassigned ? (

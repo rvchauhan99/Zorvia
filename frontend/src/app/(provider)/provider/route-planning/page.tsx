@@ -83,6 +83,9 @@ export default function RoutePlanningPage() {
           driver_id: string | null;
           coordinates: [number, number][];
           method?: string;
+          distance_m?: number | null;
+          duration_s?: number | null;
+          stop_count?: number;
         }[];
       }>("/route-planning/route-geometry", {
         meal_slot: slot,
@@ -92,12 +95,46 @@ export default function RoutePlanningPage() {
         driver_id: p.driver_id ?? null,
         coordinates: (p.coordinates || []) as [number, number][],
         method: p.method,
+        distance_m: p.distance_m ?? null,
+        duration_s: p.duration_s ?? null,
+        stop_count: p.stop_count,
       }));
       setRoadPolylines(lines);
     } catch {
       setRoadPolylines([]);
     }
   }, [slot, selectedCity]);
+
+  const exportPlanCsv = useCallback(async () => {
+    if (!admin) return;
+    setBusy(true);
+    try {
+      const params: Record<string, string> = {
+        meal_slot: slot,
+        planning_date: planningDate,
+      };
+      if (selectedCity && selectedCity !== "all") params.city = selectedCity;
+      const { data } = await api.get("/route-planning/export.csv", {
+        params,
+        responseType: "blob",
+      });
+      const blob =
+        data instanceof Blob
+          ? data
+          : new Blob([data], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `mealhq-routes-${slot}-${planningDate}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Exported all route stops");
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || "Export failed");
+    } finally {
+      setBusy(false);
+    }
+  }, [admin, slot, planningDate, selectedCity]);
 
   useEffect(() => {
     void load();
@@ -118,7 +155,11 @@ export default function RoutePlanningPage() {
         setDrivers(
           (Array.isArray(staff) ? staff : [])
             .filter((s: any) => (s.role || "admin") === "driver")
-            .map((s: any) => ({ id: s.id, name: s.name || s.email || s.id }))
+            .map((s: any) => ({
+              id: s.id,
+              name: s.name || s.email || s.id,
+              phone: s.phone || "",
+            }))
         );
       } catch {
         /* ignore */
@@ -307,6 +348,7 @@ export default function RoutePlanningPage() {
         customer_id: customerId,
         meal_slot: slot,
         driver_id: driverId || null,
+        planning_date: planningDate,
       });
       toast.success("Placed and fitted into route");
       await load();
@@ -529,6 +571,7 @@ export default function RoutePlanningPage() {
         onOpenRange={openRangeSheet}
         onGeocode={() => void runGeocode()}
         onOptimize={() => setShowOptimizeSheet(true)}
+        onExportCsv={() => void exportPlanCsv()}
         onReorder={(section, ids) => void reorderPool(section, ids)}
         onReassign={(ids, driverId) => void assignDriver(ids, driverId)}
         onOpenStart={openStartSheet}

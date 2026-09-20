@@ -98,6 +98,7 @@ export type RoutePlan = {
 export type Driver = {
   id: string;
   name: string;
+  phone?: string;
 };
 
 export type PoolSection = {

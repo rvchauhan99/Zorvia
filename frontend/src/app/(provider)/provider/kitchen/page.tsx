@@ -23,6 +23,7 @@ import { InlineLoader } from "@/components/loaders";
 import CursorPaginationBar from "@/components/CursorPaginationBar";
 import SearchableSelect from "@/components/SearchableSelect";
 import CityFilterSelect from "@/components/CityFilterSelect";
+import { CustomerWhatsAppContact } from "@/components/CustomerWhatsAppContact";
 import { OPS_DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
 
@@ -705,7 +706,14 @@ export default function KitchenPage() {
                   >
                     <AvatarChip name={row.customer_name || "?"} />
                     <div className="flex-1 min-w-0">
-                      <div className="font-semibold truncate leading-snug">{row.customer_name}</div>
+                      <CustomerWhatsAppContact
+                        customerName={row.customer_name}
+                        phone={row.phone}
+                        nameAsLink
+                        testId={`kitchen-pack-name-${row.delivery_id}`}
+                        phoneTestId={`kitchen-pack-phone-${row.delivery_id}`}
+                        phoneClassName="text-xs text-muted-foreground underline-offset-2 hover:underline"
+                      />
                       {row.items?.length ? (
                         <div
                           className="text-xs text-muted-foreground mt-0.5"
