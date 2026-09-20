@@ -1,14 +1,15 @@
 # Frontend documentation
 
-Product and marketing docs for the public MealHQ UI repo.
-
 | Doc | Purpose |
 |-----|---------|
-| [FUNCTIONAL.md](./FUNCTIONAL.md) | Product behavior and journeys |
-| [DAY_CYCLE_ONBOARDING.md](./DAY_CYCLE_ONBOARDING.md) | Day-cycle billing setup + customer import (shareable with kitchens) |
-| [CONSUMER_ACCOUNT.md](./CONSUMER_ACCOUNT.md) | Consumer create account & sign-in (shareable with kitchens / BA) |
-| [SEO.md](./SEO.md) | SEO / apex domain / GA |
-| [SOCIAL_MEDIA_SETUP.md](./SOCIAL_MEDIA_SETUP.md) | Social / share setup |
-| [DEPLOY_VERCEL.md](./DEPLOY_VERCEL.md) | Vercel Root Directory + env |
+| [INDEX.md](./INDEX.md) | Read order / map |
+| [DEVELOPMENT.md](./DEVELOPMENT.md) | Local run |
+| [TESTING.md](./TESTING.md) | Build + browser gates |
+| [FUNCTIONAL.md](./FUNCTIONAL.md) | FE journeys (API SoT for product) |
+| [DAY_CYCLE_ONBOARDING.md](./DAY_CYCLE_ONBOARDING.md) | Day-cycle setup (shareable) |
+| [CONSUMER_ACCOUNT.md](./CONSUMER_ACCOUNT.md) | Consumer account guide |
+| [SEO.md](./SEO.md) | SEO / apex / GA |
+| [SOCIAL_MEDIA_SETUP.md](./SOCIAL_MEDIA_SETUP.md) | Social / share |
+| [DEPLOY_VERCEL.md](./DEPLOY_VERCEL.md) | Vercel roots + env |
 
-API, Cloud Run, schema, WhatsApp billing, and platform blueprint docs live in the private backend repo: **rvchauhan99/mealhq-api**.
+API, schema, Vultr (`api2.mealhq.ca`), and platform blueprint: sibling **mealhq-api** → `docs/INDEX.md`.

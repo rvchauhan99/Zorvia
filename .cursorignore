@@ -1,0 +1,17 @@
+# Cursor indexing — exclude noise, keep docs
+
+node_modules/
+frontend/node_modules/
+admin-frontend/node_modules/
+.next/
+frontend/.next/
+admin-frontend/.next/
+.git/
+.env
+.env.*
+!.env.example
+.DS_Store
+docs/social-content/
+docs/samples/
+
+# Do NOT ignore docs/ — agents need FE documentation

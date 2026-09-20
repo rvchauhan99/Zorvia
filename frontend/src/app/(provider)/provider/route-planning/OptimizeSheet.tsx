@@ -50,8 +50,20 @@ export default function OptimizeSheet({ open, city, busy, onClose, onConfirm }: 
           </div>
         </div>
         <p className="text-xs text-muted-foreground">
-          OpenRouteService drives the road-smart sequencing. MealHQ keeps the kitchen as the
-          depot for global optimization.
+          Local VROOM + OSRM (Ontario) drives road-smart sequencing. MealHQ keeps the kitchen as
+          the depot for global optimization.
+        </p>
+        <p className="text-[11px] text-muted-foreground" data-testid="route-planning-attribution">
+          Geocoding powered by{" "}
+          <a
+            href="https://www.geoapify.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2"
+          >
+            Geoapify
+          </a>
+          . Map data © OpenStreetMap contributors.
         </p>
       </div>
     </AppSheet>

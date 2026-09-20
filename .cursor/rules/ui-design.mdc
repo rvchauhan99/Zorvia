@@ -1,0 +1,12 @@
+---
+description: UI design constitution — design_guidelines.json; no invent Phase 2 chrome
+globs: "frontend/**/*.{tsx,ts,css}","admin-frontend/**/*.{tsx,ts,css}"
+alwaysApply: false
+---
+
+# UI design
+
+- Follow [design_guidelines.json](design_guidelines.json) for visual work.
+- Prefer existing components and patterns; preserve `data-testid`.
+- Do not invent Phase 2 notification inbox or WhatsApp chat inbox UI.
+- Route-planning UX: keep API contract in mealhq-api `docs/ROUTE_PLANNING.md`.

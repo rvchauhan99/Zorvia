@@ -7,7 +7,7 @@
 | GitHub repo | `rvchauhan99/Zorvia` (public) |
 | Root Directory | `frontend` |
 | Framework | Next.js |
-| API | Private `mealhq-api` on Cloud Run — set `NEXT_PUBLIC_BACKEND_URL` / `BACKEND_URL` |
+| API | Private `mealhq-api` — set `NEXT_PUBLIC_BACKEND_URL` / `BACKEND_URL` to **`https://api2.mealhq.ca`** (or local `http://127.0.0.1:8000` for preview against local API) |
 
 ## Vercel — platform admin
 
@@ -15,6 +15,6 @@
 |---------|--------|
 | GitHub repo | `rvchauhan99/Zorvia` (public) |
 | Root Directory | `admin-frontend` |
-| API | Same Cloud Run URL |
+| API | Same as above (`https://api2.mealhq.ca`) |
 
-Backend deploys: see private repo `rvchauhan99/mealhq-api` → `docs/DEPLOY_CLOUD_RUN.md`.
+Backend deploys: sibling `mealhq-api` → [DEPLOY_VULTR.md](../../mealhq-api/docs/DEPLOY_VULTR.md). Cloud Run docs are rollback-only.

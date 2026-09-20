@@ -15,7 +15,7 @@ npm run dev
 
 - Connect GitHub repo **`rvchauhan99/Zorvia`** (public)
 - **Root Directory:** `frontend`
-- Env: `NEXT_PUBLIC_BACKEND_URL` / `BACKEND_URL` → Cloud Run URL (`https://zorvia-api-….run.app`)
-- Keep `NEXT_PUBLIC_FIREBASE_*` for Google Sign-In
+- Env: `NEXT_PUBLIC_BACKEND_URL` / `BACKEND_URL` → **`https://api2.mealhq.ca`** (or `http://127.0.0.1:8000` for local)
+- Keep `NEXT_PUBLIC_FIREBASE_*` for Google Sign-In (`mealhq-ca`)
 
 After `next build` on Vercel, `scripts/vercel-link-monorepo-root.js` still links `.next` / `node_modules` to the repo root when a parent `package.json` exists.
