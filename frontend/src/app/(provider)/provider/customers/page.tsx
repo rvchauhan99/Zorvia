@@ -356,6 +356,8 @@ export default function Customers() {
   const [monthlyPlans, setMonthlyPlans] = useState<{ id: string; name: string; monthly_fee_cad?: number }[]>([]);
   const [routePreview, setRoutePreview] = useState<any>(null);
   const [routePreviewLoading, setRoutePreviewLoading] = useState(false);
+  const [routeSuggestions, setRouteSuggestions] = useState<any[]>([]);
+  const [routeSuggestionsLoading, setRouteSuggestionsLoading] = useState(false);
   const [formStep, setFormStep] = useState<1 | 2>(1);
   const paging = useCursorPagination({ initialPageSize: DEFAULT_PAGE_SIZE });
 
@@ -426,7 +428,12 @@ export default function Customers() {
       if (data?.geocode_status === "ok") {
         toast.success("Location found");
       } else {
-        toast.error("Could not find that address — check city, province, and postal code");
+        const msgs = data?.address_match?.messages;
+        const first =
+          Array.isArray(msgs) && msgs.length > 0
+            ? msgs[0]
+            : "Could not confirm that address — check street, city, province, and postal code";
+        toast.error(first);
       }
     } catch (e: any) {
       setRoutePreview({ geocode_status: "failed" });
@@ -479,6 +486,89 @@ export default function Customers() {
       setRoutePreviewLoading(false);
     }
   }
+
+  async function loadRouteSuggestions(mealSlot: string) {
+    if (routePreview?.geocode_status !== "ok" || routePreview?.lat == null || routePreview?.lng == null) {
+      setRouteSuggestions([]);
+      return;
+    }
+    if (drivers.length < 1) {
+      setRouteSuggestions([]);
+      return;
+    }
+    setRouteSuggestionsLoading(true);
+    try {
+      const { data } = await api.post("/route-planning/suggest-placements", {
+        address: form.address || "",
+        apartment: form.apartment || "",
+        city: form.city || "",
+        province: form.province || "",
+        postal_code: formatCaPostal(form.postal_code || ""),
+        meal_slot: mealSlot,
+        lat: routePreview.lat,
+        lng: routePreview.lng,
+        limit: 3,
+      });
+      setRouteSuggestions(Array.isArray(data?.suggestions) ? data.suggestions : []);
+    } catch {
+      setRouteSuggestions([]);
+    } finally {
+      setRouteSuggestionsLoading(false);
+    }
+  }
+
+  function handlePickSuggestion(s: any, mealSlot: string) {
+    if (!s?.driver_id) return;
+    const seq = s.delivery_sequence != null ? String(s.delivery_sequence) : "";
+    const dual = isCategorized(form.meal_slots) && isDualSlots(form.meal_slots);
+    setForm((f: any) => {
+      if (dual && (mealSlot === "lunch" || mealSlot === "dinner")) {
+        return {
+          ...f,
+          slot_assignments: {
+            ...f.slot_assignments,
+            [mealSlot]: {
+              ...f.slot_assignments?.[mealSlot],
+              driver_id: s.driver_id,
+              delivery_sequence: seq,
+            },
+          },
+        };
+      }
+      if (mealSlot === "lunch" || mealSlot === "dinner") {
+        return {
+          ...f,
+          driver_id: s.driver_id,
+          delivery_sequence: seq,
+          slot_assignments: {
+            ...f.slot_assignments,
+            [mealSlot]: {
+              ...f.slot_assignments?.[mealSlot],
+              driver_id: s.driver_id,
+              delivery_sequence: seq,
+            },
+          },
+        };
+      }
+      return { ...f, driver_id: s.driver_id, delivery_sequence: seq };
+    });
+    setRoutePreview((prev: any) => ({
+      ...(prev || {}),
+      delivery_sequence: s.delivery_sequence,
+      insert_index: s.insert_index,
+      before: s.before,
+      after: s.after,
+      driver_id: s.driver_id,
+    }));
+    toast.success(`Assigned to ${s.driver_name || "driver"} · stop #${s.delivery_sequence}`);
+  }
+
+  useEffect(() => {
+    if (formStep !== 2) return;
+    const dual = isCategorized(form.meal_slots) && isDualSlots(form.meal_slots);
+    const slot = dual ? "dinner" : previewMealSlot();
+    void loadRouteSuggestions(slot);
+  }, [formStep, routePreview?.lat, routePreview?.lng, routePreview?.geocode_status, drivers.length]);
 
   async function loadCounts() {
     try {
@@ -845,7 +935,12 @@ export default function Customers() {
       return;
     }
     if (routePreview?.geocode_status !== "ok") {
-      toast.error("Tap Find location to confirm the address before continuing");
+      const msgs = routePreview?.address_match?.messages;
+      toast.error(
+        Array.isArray(msgs) && msgs[0]
+          ? msgs[0]
+          : "Tap Find location to confirm the address before continuing",
+      );
       return;
     }
     setFormStep(2);
@@ -1561,6 +1656,21 @@ export default function Customers() {
             >
               {routePreviewLoading ? "Finding…" : "Find location"}
             </button>
+            {Array.isArray(routePreview?.address_match?.messages) &&
+            routePreview.address_match.messages.length > 0 ? (
+              <div
+                data-testid="cf-address-mismatch"
+                role="alert"
+                className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-3 text-sm text-amber-950"
+              >
+                <p className="font-medium mb-1">Address does not match</p>
+                <ul className="list-disc pl-5 space-y-1">
+                  {routePreview.address_match.messages.map((msg: string) => (
+                    <li key={msg}>{msg}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             <div
               className="rounded-xl border border-brand-border bg-brand-surface/50 px-3 py-3 flex flex-col gap-1.5"
               data-testid="cf-route-preview"
@@ -1603,6 +1713,70 @@ export default function Customers() {
           <p className="sm:col-span-2 text-sm text-muted-foreground">
             Assign a driver for each meal slot — required before saving. Stop sequence is suggested automatically; you can edit it before save.
           </p>
+          {drivers.length > 0 ? (
+            <div className="sm:col-span-2 space-y-2" data-testid="cf-route-suggestions">
+              <span className="label-overline">Suggested routes</span>
+              {routeSuggestionsLoading ? (
+                <p className="text-xs text-muted-foreground">Finding best driver routes…</p>
+              ) : routeSuggestions.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Confirm the address with Find location to see top route suggestions.
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-2">
+                  {routeSuggestions.map((s, idx) => {
+                    const dual =
+                      isCategorized(form.meal_slots) && isDualSlots(form.meal_slots);
+                    const slot = dual ? "dinner" : previewMealSlot();
+                    const selected = dual
+                      ? form.slot_assignments?.[slot as "lunch" | "dinner"]?.driver_id ===
+                        s.driver_id
+                      : form.driver_id === s.driver_id;
+                    const extraKm =
+                      s.extra_distance_m != null
+                        ? (Number(s.extra_distance_m) / 1000).toFixed(1)
+                        : null;
+                    return (
+                      <li key={`${s.driver_id}-${idx}`}>
+                        <button
+                          type="button"
+                          data-testid={`cf-route-suggestion-${idx}`}
+                          onClick={() => handlePickSuggestion(s, slot)}
+                          className={`w-full text-left rounded-xl border px-4 py-3 transition-colors cursor-pointer ${
+                            selected
+                              ? "border-primary bg-primary/5"
+                              : "border-brand-border bg-white hover:border-primary/40"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-medium text-foreground">
+                                {idx === 0 ? (
+                                  <span className="text-primary mr-2 text-xs font-semibold uppercase tracking-wide">
+                                    Recommended
+                                  </span>
+                                ) : null}
+                                {s.driver_name || "Driver"}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                Stop <strong>#{s.delivery_sequence}</strong>
+                                {s.stop_count != null ? <> · {s.stop_count} stops on route</> : null}
+                              </p>
+                            </div>
+                            {extraKm != null ? (
+                              <span className="text-xs font-medium text-muted-foreground shrink-0">
+                                +{extraKm} km
+                              </span>
+                            ) : null}
+                          </div>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          ) : null}
           {isCategorized(form.meal_slots) && isDualSlots(form.meal_slots) ? (
             <>
               <label className="flex flex-col gap-1.5">

@@ -45,6 +45,8 @@ Detail: API `CYCLE_SUBSCRIPTION.md` / `MONTHLY_BILLING.md`.
 
 Screen under provider route-planning. API/routing contract: mealhq-api `docs/ROUTE_PLANNING.md`. Prod API for hard-tests: `https://api2.mealhq.ca`.
 
+New-customer **Route** step (`/provider/customers/new`): after a confirmed address, shows up to **3 suggested driver+stop** cards from `POST /route-planning/suggest-placements` (cheapest haversine insert). Tapping a card fills Assigned driver + sequence; manual SearchableSelect remains the override. Assignments stay manual — suggestions are assistive only.
+
 ## 6. Related FE docs
 
 - [CONSUMER_ACCOUNT.md](./CONSUMER_ACCOUNT.md)

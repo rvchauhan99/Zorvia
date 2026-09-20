@@ -259,13 +259,20 @@ function ProgressStepper({ activeStep, setActiveStep }: { activeStep: number; se
 
 // ─── Geocode status chip ──────────────────────────────────────────────────────
 
-function GeoChip({ status }: { status?: string }) {
+function GeoChip({ status, warning }: { status?: string; warning?: string | null }) {
   if (!status) return null;
   if (status === "ok")
     return (
       <span className="inline-flex items-center gap-1.5 text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-full">
         <CheckCircle size={13} weight="fill" />
         Location confirmed
+      </span>
+    );
+  if (status === "review" || warning === "address_mismatch")
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-1 rounded-full">
+        <Warning size={13} weight="fill" />
+        Address needs review
       </span>
     );
   if (status === "failed")
@@ -276,6 +283,29 @@ function GeoChip({ status }: { status?: string }) {
       </span>
     );
   return null;
+}
+
+function addressMatchMessages(preview: any): string[] {
+  const raw = preview?.address_match?.messages;
+  if (Array.isArray(raw) && raw.length > 0) {
+    return raw.filter((m: unknown) => typeof m === "string" && m.trim());
+  }
+  if (preview?.geocode_warning === "address_mismatch") {
+    return ["Address does not match the selected province, city, postal code, or street."];
+  }
+  if (preview?.geocode_warning === "near_kitchen") {
+    return ["This pin is too close to the kitchen — check the street address."];
+  }
+  if (preview?.geocode_warning === "business_address") {
+    return ["Enter a street number and name, not a business name alone."];
+  }
+  return [];
+}
+
+function firstMismatchToast(preview: any): string {
+  const msgs = addressMatchMessages(preview);
+  if (msgs.length > 0) return msgs[0];
+  return "Could not confirm that address — check street, city, province, and postal code";
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -319,6 +349,9 @@ export default function CustomerFormPage({
   // ── Route preview ───────────────────────────────────────────────────────────
   const [routePreview, setRoutePreview] = useState<any>(null);
   const [routePreviewLoading, setRoutePreviewLoading] = useState(false);
+  const [routeSuggestions, setRouteSuggestions] = useState<any[]>([]);
+  const [routeSuggestionsLoading, setRouteSuggestionsLoading] = useState(false);
+  const [routeSuggestionsSlot, setRouteSuggestionsSlot] = useState<string>("");
 
   // ── Active step (Pipeline) ──────────────────────────────────────────────────
   const [activeStep, setActiveStep] = useState(0);
@@ -554,7 +587,7 @@ export default function CustomerFormPage({
       if (data?.geocode_status === "ok") {
         toast.success("Location confirmed");
       } else {
-        toast.error("Could not find that address — check city, province, and postal code");
+        toast.error(firstMismatchToast(data));
       }
     } catch (e: any) {
       setRoutePreview({ geocode_status: "failed" });
@@ -603,6 +636,91 @@ export default function CustomerFormPage({
       setRoutePreviewLoading(false);
     }
   }
+
+  async function loadRouteSuggestions(mealSlot: string) {
+    if (routePreview?.geocode_status !== "ok" || routePreview?.lat == null || routePreview?.lng == null) {
+      setRouteSuggestions([]);
+      return;
+    }
+    if (drivers.length < 1) {
+      setRouteSuggestions([]);
+      return;
+    }
+    setRouteSuggestionsLoading(true);
+    setRouteSuggestionsSlot(mealSlot);
+    try {
+      const { data } = await api.post("/route-planning/suggest-placements", {
+        address: form.address || "",
+        apartment: form.apartment || "",
+        city: form.city || "",
+        province: form.province || "",
+        postal_code: formatCaPostal(form.postal_code || ""),
+        meal_slot: mealSlot,
+        lat: routePreview.lat,
+        lng: routePreview.lng,
+        limit: 3,
+      });
+      setRouteSuggestions(Array.isArray(data?.suggestions) ? data.suggestions : []);
+    } catch {
+      setRouteSuggestions([]);
+    } finally {
+      setRouteSuggestionsLoading(false);
+    }
+  }
+
+  function handlePickSuggestion(s: any, mealSlot: string) {
+    if (!s?.driver_id) return;
+    const seq = s.delivery_sequence != null ? String(s.delivery_sequence) : "";
+    const dual = isCategorized(form.meal_slots) && isDualSlots(form.meal_slots);
+    setForm((f) => {
+      if (dual && (mealSlot === "lunch" || mealSlot === "dinner")) {
+        return {
+          ...f,
+          slot_assignments: {
+            ...f.slot_assignments,
+            [mealSlot]: {
+              ...f.slot_assignments[mealSlot as "lunch" | "dinner"],
+              driver_id: s.driver_id,
+              delivery_sequence: seq,
+            },
+          },
+        };
+      }
+      // Single-slot UI binds Assigned driver to form.driver_id (same as manual select).
+      if (mealSlot === "lunch" || mealSlot === "dinner") {
+        return {
+          ...f,
+          driver_id: s.driver_id,
+          delivery_sequence: seq,
+          slot_assignments: {
+            ...f.slot_assignments,
+            [mealSlot]: {
+              ...f.slot_assignments[mealSlot as "lunch" | "dinner"],
+              driver_id: s.driver_id,
+              delivery_sequence: seq,
+            },
+          },
+        };
+      }
+      return { ...f, driver_id: s.driver_id, delivery_sequence: seq };
+    });
+    setRoutePreview((prev: any) => ({
+      ...(prev || {}),
+      delivery_sequence: s.delivery_sequence,
+      insert_index: s.insert_index,
+      before: s.before,
+      after: s.after,
+      driver_id: s.driver_id,
+    }));
+    toast.success(`Assigned to ${s.driver_name || "driver"} · stop #${s.delivery_sequence}`);
+  }
+
+  useEffect(() => {
+    if (activeStep !== 3) return;
+    const dual = isCategorized(form.meal_slots) && isDualSlots(form.meal_slots);
+    const slot = dual ? "dinner" : previewMealSlot();
+    void loadRouteSuggestions(slot);
+  }, [activeStep, routePreview?.lat, routePreview?.lng, routePreview?.geocode_status, drivers.length]);
 
   // ── Schedule helpers ───────────────────────────────────────────────────────
   function toggleDay(i: number) {
@@ -796,6 +914,16 @@ export default function CustomerFormPage({
 
   // ── Navigation ─────────────────────────────────────────────────────────────
   function handleNext() {
+    if (activeStep === 1) {
+      if (routePreview?.geocode_status !== "ok") {
+        const msgs = addressMatchMessages(routePreview);
+        toast.error(
+          msgs[0] ||
+            "Tap Find location to confirm the address matches province, city, postal, and street",
+        );
+        return;
+      }
+    }
     setActiveStep((prev) => Math.min(prev + 1, STEPS.length - 1));
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -1162,8 +1290,29 @@ export default function CustomerFormPage({
                       "Find location"
                     )}
                   </button>
-                  <GeoChip status={routePreview?.geocode_status} />
+                  <GeoChip
+                    status={routePreview?.geocode_status}
+                    warning={routePreview?.geocode_warning}
+                  />
                 </div>
+
+                {addressMatchMessages(routePreview).length > 0 ? (
+                  <div
+                    data-testid="cf-address-mismatch"
+                    role="alert"
+                    className="mt-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+                  >
+                    <p className="font-medium mb-1">Address does not match</p>
+                    <ul className="list-disc pl-5 space-y-1">
+                      {addressMatchMessages(routePreview).map((msg) => (
+                        <li key={msg}>{msg}</li>
+                      ))}
+                    </ul>
+                    <p className="mt-2 text-xs text-amber-900/80">
+                      Fix the fields above and tap Find location again before continuing.
+                    </p>
+                  </div>
+                ) : null}
 
                 {/* Coordinates panel */}
                 <div
@@ -1191,7 +1340,15 @@ export default function CustomerFormPage({
               <button type="button" onClick={handleBack} className="pill-btn btn-outline h-11 px-6 cursor-pointer text-muted-foreground">
                 Back
               </button>
-              <button type="button" onClick={handleNext} className="pill-btn btn-primary h-11 px-8 cursor-pointer">Continue to Schedule</button>
+              <button
+                type="button"
+                onClick={handleNext}
+                disabled={routePreview?.geocode_status !== "ok"}
+                aria-disabled={routePreview?.geocode_status !== "ok"}
+                className="pill-btn btn-primary h-11 px-8 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Continue to Schedule
+              </button>
             </div>
           </SectionCard>
         )}
@@ -1370,10 +1527,106 @@ export default function CustomerFormPage({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {!isReview && (
                   <p className="sm:col-span-2 text-sm text-muted-foreground mb-2">
-                    Assign a driver for each meal slot. The stop sequence is suggested automatically when
-                    you pick a driver — you can edit it before saving.
+                    Pick a recommended route below, or assign a driver manually. Stop sequence is
+                    suggested automatically — you can edit it before saving.
                   </p>
                 )}
+
+                {!isReview && drivers.length > 0 ? (
+                  <div className="sm:col-span-2 space-y-2" data-testid="cf-route-suggestions">
+                    <span className="label-overline">Suggested routes</span>
+                    {routeSuggestionsLoading ? (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                        <Spinner size={12} className="animate-spin" /> Finding best driver routes…
+                      </p>
+                    ) : routeSuggestions.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        Confirm the address on the Address step to see top route suggestions.
+                      </p>
+                    ) : (
+                      <ul className="flex flex-col gap-2">
+                        {routeSuggestions.map((s, idx) => {
+                          const dual =
+                            isCategorized(form.meal_slots) && isDualSlots(form.meal_slots);
+                          const slot = dual
+                            ? routeSuggestionsSlot || "dinner"
+                            : previewMealSlot();
+                          const selected =
+                            dual
+                              ? form.slot_assignments?.[slot as "lunch" | "dinner"]?.driver_id ===
+                                s.driver_id
+                              : form.driver_id === s.driver_id;
+                          const extraKm =
+                            s.extra_distance_m != null
+                              ? (Number(s.extra_distance_m) / 1000).toFixed(1)
+                              : null;
+                          return (
+                            <li key={`${s.driver_id}-${idx}`}>
+                              <button
+                                type="button"
+                                data-testid={`cf-route-suggestion-${idx}`}
+                                onClick={() => handlePickSuggestion(s, slot)}
+                                className={`w-full text-left rounded-xl border px-4 py-3 transition-colors cursor-pointer ${
+                                  selected
+                                    ? "border-primary bg-primary/5"
+                                    : "border-brand-border bg-white hover:border-primary/40"
+                                }`}
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <p className="text-sm font-medium text-foreground">
+                                      {idx === 0 ? (
+                                        <span className="text-primary mr-2 text-xs font-semibold uppercase tracking-wide">
+                                          Recommended
+                                        </span>
+                                      ) : null}
+                                      {s.driver_name || "Driver"}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      Stop <strong>#{s.delivery_sequence}</strong>
+                                      {s.before?.name ? (
+                                        <> · after {s.before.name}</>
+                                      ) : null}
+                                      {s.after?.name ? (
+                                        <> · before {s.after.name}</>
+                                      ) : null}
+                                      {s.stop_count != null ? (
+                                        <> · {s.stop_count} stops on route</>
+                                      ) : null}
+                                    </p>
+                                  </div>
+                                  {extraKm != null ? (
+                                    <span className="text-xs font-medium text-muted-foreground shrink-0">
+                                      +{extraKm} km
+                                    </span>
+                                  ) : null}
+                                </div>
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                    {isCategorized(form.meal_slots) && isDualSlots(form.meal_slots) ? (
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          type="button"
+                          className="text-xs text-primary underline-offset-2 hover:underline cursor-pointer"
+                          onClick={() => void loadRouteSuggestions("lunch")}
+                        >
+                          Suggest for lunch
+                        </button>
+                        <button
+                          type="button"
+                          className="text-xs text-primary underline-offset-2 hover:underline cursor-pointer"
+                          onClick={() => void loadRouteSuggestions("dinner")}
+                        >
+                          Suggest for dinner
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 {isCategorized(form.meal_slots) && isDualSlots(form.meal_slots) ? (
                   <>
