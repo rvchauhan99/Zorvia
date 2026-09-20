@@ -139,22 +139,23 @@ export function isIssueStop(s: Stop) {
   return s.delivery_sequence == null || s.geocode_status !== "ok";
 }
 
-/** Deterministic color palette for driver pools on the map. */
+/** Deterministic color palette for driver pools — Figma Routes system */
 const DRIVER_COLORS = [
-  "#0E8F8B",
-  "#2A9D7A",
-  "#F5A524",
   "#3B82F6",
-  "#8B5CF6",
-  "#EC4899",
+  "#F59E0B",
+  "#A855F7",
+  "#10B981",
   "#EF4444",
-  "#14B8A6",
+  "#06B6D4",
+  "#EC4899",
+  "#84CC16",
   "#F97316",
   "#6366F1",
 ];
 
 export const UNASSIGNED_COLOR = "#94A3B8";
-export const START_COLOR = "#0F172A";
+export const START_COLOR = "#0B1220";
+export const ROUTES_ACCENT = "#00BFA5";
 
 export function driverColor(driverId: string | null | undefined, driverIds: string[]): string {
   if (!driverId) return UNASSIGNED_COLOR;
@@ -190,4 +191,18 @@ export function stopMatchesQuery(s: Stop, query: string) {
     .join(" ")
     .toLowerCase();
   return hay.includes(q);
+}
+
+/** Prefer largest non-empty pool for bulk assign source; else unassigned. */
+export function largestPoolKey(sections: PoolSection[]): string {
+  let bestKey = "unassigned";
+  let bestCount = -1;
+  for (const s of sections) {
+    const n = s.stops.length;
+    if (n > bestCount) {
+      bestCount = n;
+      bestKey = s.key;
+    }
+  }
+  return bestKey;
 }

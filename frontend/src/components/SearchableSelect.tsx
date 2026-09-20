@@ -117,7 +117,11 @@ export default function SearchableSelect({
     setOpen(true);
   }
 
-  const showSelected = Boolean(value) && selected && !open;
+  // Empty string is a valid selection when allowEmpty (e.g. Unassigned pool).
+  const showSelected =
+    !open && (Boolean(value) ? !!selected : allowEmpty);
+
+  const selectedLabel = value && selected ? selected.label : emptyLabel;
 
   return (
     <div ref={rootRef} className="relative w-full">
@@ -134,7 +138,7 @@ export default function SearchableSelect({
             }}
             className={`${fieldClass} text-left flex-1 disabled:opacity-60 cursor-pointer`}
           >
-            <span className="font-medium truncate block">{selected.label}</span>
+            <span className="font-medium truncate block">{selectedLabel}</span>
           </button>
           {!disabled ? (
             <button

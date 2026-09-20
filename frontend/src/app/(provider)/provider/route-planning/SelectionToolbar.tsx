@@ -1,20 +1,21 @@
-"use client";
+"use client"
 
-import React from "react";
-import { ListNumbers, UserCircle } from "@phosphor-icons/react";
-import SearchableSelect from "@/components/SearchableSelect";
-import type { Driver } from "./types";
+import React from "react"
+import { ListNumbers, UserCircle } from "@phosphor-icons/react"
+import SearchableSelect from "@/components/SearchableSelect"
+import type { Driver } from "./types"
 
 type Props = {
-  selectedCount: number;
-  drivers: Driver[];
-  assignDriverId: string;
-  busy: boolean;
-  onAssignDriverIdChange: (id: string) => void;
-  onAssign: () => void;
-  onClear: () => void;
-  onOpenRange: () => void;
-};
+  selectedCount: number
+  drivers: Driver[]
+  assignDriverId: string
+  busy: boolean
+  onAssignDriverIdChange: (id: string) => void
+  onAssign: () => void
+  onAssignUnassigned: () => void
+  onClear: () => void
+  onOpenRange: () => void
+}
 
 export default function SelectionToolbar({
   selectedCount,
@@ -23,31 +24,33 @@ export default function SelectionToolbar({
   busy,
   onAssignDriverIdChange,
   onAssign,
+  onAssignUnassigned,
   onClear,
   onOpenRange,
 }: Props) {
-  if (selectedCount <= 0) return null;
+  if (selectedCount <= 0) return null
 
   return (
     <div
-      className="fixed bottom-20 sm:bottom-6 left-1/2 -translate-x-1/2 z-50 w-[min(96vw,40rem)] rounded-2xl border border-brand-border bg-white shadow-2xl p-3 flex flex-col sm:flex-row sm:items-center gap-2 overflow-visible"
+      className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[500] w-[min(96vw,28rem)] rounded-2xl border border-[#E5E9EF] bg-white shadow-2xl p-3 flex flex-col gap-2.5"
       data-testid="route-selection-toolbar"
     >
       <div className="flex items-center gap-2 min-w-0">
-        <UserCircle size={20} className="text-primary shrink-0" />
-        <p className="text-sm font-medium truncate">
+        <UserCircle size={20} className="text-[#00BFA5] shrink-0" aria-hidden />
+        <p className="text-sm font-medium truncate text-[#0B1220] flex-1 min-w-0">
           {selectedCount} stop{selectedCount === 1 ? "" : "s"} selected
         </p>
         <button
           type="button"
-          className="text-xs text-muted-foreground underline underline-offset-2"
+          className="text-xs text-[#5C6570] underline underline-offset-2 shrink-0"
           onClick={onClear}
           data-testid="route-selection-clear"
         >
           Clear
         </button>
       </div>
-      <div className="flex-1 min-w-0 relative z-[60]">
+
+      <div className="w-full min-w-0">
         <SearchableSelect
           value={assignDriverId}
           onChange={onAssignDriverIdChange}
@@ -57,22 +60,33 @@ export default function SelectionToolbar({
           placeholder="Search driver…"
           testid="route-assign-driver"
           dropdownPlacement="up"
-          inputClassName="h-10 px-3 rounded-xl bg-white border border-brand-border text-sm w-full"
+          inputClassName="h-10 px-3 rounded-xl bg-white border border-[#E5E9EF] text-sm w-full min-w-0"
         />
       </div>
-      <div className="flex flex-wrap gap-2 shrink-0">
+
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_1fr_auto]">
         <button
           type="button"
-          className="pill-btn btn-outline h-10 text-xs px-3 gap-1"
+          className="h-10 px-3 rounded-xl border border-[#E5E9EF] text-xs font-medium text-[#0B1220] hover:bg-[#F4F6F8] disabled:opacity-50 inline-flex items-center justify-center gap-1 col-span-2 sm:col-span-1"
           onClick={onOpenRange}
           data-testid="route-open-range-sheet"
           disabled={busy}
         >
-          <ListNumbers size={14} /> By sequence…
+          <ListNumbers size={14} aria-hidden />
+          By sequence…
         </button>
         <button
           type="button"
-          className="pill-btn btn-primary h-10 text-xs px-4"
+          className="h-10 px-3 rounded-xl border border-[#E5E9EF] text-xs font-medium text-[#0B1220] hover:bg-[#F4F6F8] disabled:opacity-50"
+          onClick={onAssignUnassigned}
+          disabled={busy}
+          data-testid="route-assign-unassigned"
+        >
+          To Unassigned
+        </button>
+        <button
+          type="button"
+          className="h-10 px-4 rounded-xl bg-[#00BFA5] text-white text-xs font-semibold hover:bg-[#00a892] disabled:opacity-50 sm:min-w-[5.5rem]"
           onClick={onAssign}
           disabled={busy}
           data-testid="route-assign-submit"
@@ -81,5 +95,5 @@ export default function SelectionToolbar({
         </button>
       </div>
     </div>
-  );
+  )
 }
