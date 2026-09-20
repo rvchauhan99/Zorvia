@@ -134,7 +134,7 @@ function SectionCard({
   return (
     <div
       id={id}
-      className="bg-white border border-brand-border rounded-2xl overflow-hidden shadow-sm animate-fade-in-up"
+      className="bg-white border border-brand-border rounded-2xl overflow-visible shadow-sm animate-fade-in-up"
     >
       {/* Card header */}
       <div className="flex items-center justify-between gap-3 px-4 py-2 border-b border-brand-border bg-brand-surface/40">
@@ -1223,7 +1223,7 @@ export default function CustomerFormPage({
               </div>
             </div>
             
-            <div className="mt-6 flex justify-end gap-3">
+            <div className="mt-6 hidden sm:flex justify-end gap-3">
               <button type="button" onClick={handleNext} className="pill-btn btn-primary h-11 px-8 cursor-pointer">Continue to Address</button>
             </div>
           </SectionCard>
@@ -1336,7 +1336,7 @@ export default function CustomerFormPage({
               </div>
             </div>
 
-            <div className="mt-6 flex justify-end gap-3">
+            <div className="mt-6 hidden sm:flex justify-end gap-3">
               <button type="button" onClick={handleBack} className="pill-btn btn-outline h-11 px-6 cursor-pointer text-muted-foreground">
                 Back
               </button>
@@ -1489,7 +1489,7 @@ export default function CustomerFormPage({
               </div>
             </div>
             
-            <div className="mt-6 flex justify-end gap-3">
+            <div className="mt-6 hidden sm:flex justify-end gap-3">
               <button type="button" onClick={handleBack} className="pill-btn btn-outline h-11 px-6 cursor-pointer text-muted-foreground">
                 Back
               </button>
@@ -1807,7 +1807,7 @@ export default function CustomerFormPage({
             )}
             
             {!isReview && (
-              <div className="mt-6 flex justify-end gap-3">
+              <div className="mt-6 hidden sm:flex justify-end gap-3">
                 <button type="button" onClick={handleBack} className="pill-btn btn-outline h-11 px-6 cursor-pointer text-muted-foreground">
                   Back
                 </button>
@@ -1829,7 +1829,7 @@ export default function CustomerFormPage({
                    </div>
                    <button type="button" onClick={() => setActiveStep(0)} className="text-xs font-medium text-primary hover:underline cursor-pointer">Edit</button>
                 </div>
-                <div className="px-4 py-3 grid grid-cols-2 md:grid-cols-4 gap-y-2 gap-x-4">
+                <div className="px-4 py-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-y-2 gap-x-4">
                    <div className="flex flex-col gap-0.5">
                      <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Name</span>
                      <span className="text-sm text-foreground font-medium truncate">{form.name || "—"}</span>
@@ -1847,7 +1847,7 @@ export default function CustomerFormPage({
                      <span className="text-sm text-foreground font-medium">{form.joining_date || "—"}</span>
                    </div>
                    {form.notes && (
-                     <div className="flex flex-col gap-0.5 col-span-2 md:col-span-4">
+                     <div className="flex flex-col gap-0.5 col-span-1 sm:col-span-2 md:col-span-4">
                        <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Notes</span>
                        <span className="text-sm text-foreground font-medium">{form.notes}</span>
                      </div>
@@ -1864,7 +1864,7 @@ export default function CustomerFormPage({
                    </div>
                    <button type="button" onClick={() => setActiveStep(1)} className="text-xs font-medium text-primary hover:underline cursor-pointer">Edit</button>
                 </div>
-                <div className="px-4 py-3 grid grid-cols-2 md:grid-cols-4 gap-y-2 gap-x-4">
+                <div className="px-4 py-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-y-2 gap-x-4">
                    <div className="flex flex-col gap-0.5">
                      <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Province</span>
                      <span className="text-sm text-foreground font-medium truncate">{form.province || "—"}</span>
@@ -1881,11 +1881,11 @@ export default function CustomerFormPage({
                      <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Apt/Unit</span>
                      <span className="text-sm text-foreground font-medium truncate">{form.apartment || "—"}</span>
                    </div>
-                   <div className="flex flex-col gap-0.5 col-span-2 md:col-span-4">
+                   <div className="flex flex-col gap-0.5 col-span-1 sm:col-span-2 md:col-span-4">
                      <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Street</span>
                      <span className="text-sm text-foreground font-medium truncate">{form.address || "—"}</span>
                    </div>
-                   <div className="flex flex-col gap-0.5 col-span-2 md:col-span-4">
+                   <div className="flex flex-col gap-0.5 col-span-1 sm:col-span-2 md:col-span-4">
                      <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Routing Coordinates</span>
                      {routePreview?.geocode_status === "ok" ? (
                        <span className="text-sm text-foreground font-medium">{Number(routePreview.lat).toFixed(5)}, {Number(routePreview.lng).toFixed(5)}</span>
@@ -1905,7 +1905,7 @@ export default function CustomerFormPage({
                    </div>
                    <button type="button" onClick={() => setActiveStep(2)} className="text-xs font-medium text-primary hover:underline cursor-pointer">Edit</button>
                 </div>
-                <div className="px-4 py-3 grid grid-cols-2 md:grid-cols-4 gap-y-2 gap-x-4">
+                <div className="px-4 py-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-y-2 gap-x-4">
                    <div className="flex flex-col gap-0.5">
                      <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Primary meal type</span>
                      <span className="text-sm text-foreground font-medium truncate">
@@ -1932,7 +1932,7 @@ export default function CustomerFormPage({
                        </span>
                      ) : null}
                    </div>
-                   <div className="flex flex-col gap-0.5 col-span-2">
+                   <div className="flex flex-col gap-0.5 col-span-1 sm:col-span-2 md:col-span-4">
                      <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Delivery Schedule</span>
                      <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
                         {form.delivery_days.length > 0 ? form.delivery_days.map(d => (
@@ -1955,7 +1955,7 @@ export default function CustomerFormPage({
                    </div>
                    <button type="button" onClick={() => setActiveStep(3)} className="text-xs font-medium text-primary hover:underline cursor-pointer">Edit</button>
                 </div>
-                <div className="px-4 py-3 grid grid-cols-2 md:grid-cols-4 gap-y-2 gap-x-4">
+                <div className="px-4 py-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-y-2 gap-x-4">
                    {isDualSlots(form.meal_slots) ? (
                      <>
                        <div className="flex flex-col gap-0.5">
@@ -2025,7 +2025,8 @@ export default function CustomerFormPage({
             <button
               type="button"
               onClick={handleNext}
-              className="pill-btn btn-primary h-12 flex-1 cursor-pointer"
+              disabled={activeStep === 1 && routePreview?.geocode_status !== "ok"}
+              className="pill-btn btn-primary h-12 flex-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Next step
             </button>

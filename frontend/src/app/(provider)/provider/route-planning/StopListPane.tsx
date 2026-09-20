@@ -156,7 +156,7 @@ function SortableStopRow({
     <li
       ref={setNodeRef}
       style={style}
-      className={`relative px-2 py-1.5 flex items-center gap-1.5 text-xs border-b border-[#E5E9EF] last:border-0 ${
+      className={`relative px-2 py-2.5 min-h-12 flex items-center gap-1.5 text-xs border-b border-[#E5E9EF] last:border-0 ${
         highlighted ? "bg-[#00BFA5]/10" : "bg-white"
       } ${selected ? "ring-1 ring-inset ring-[#00BFA5]/30" : ""}`}
       data-testid={`route-stop-row-${stop.id}`}
@@ -167,7 +167,7 @@ function SortableStopRow({
         type="button"
         className="shrink-0 h-9 w-8 touch-none cursor-grab active:cursor-grabbing text-[#5C6570] hover:text-[#0B1220] hover:bg-[#F4F6F8] rounded-lg inline-flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed"
         aria-label="Drag to reorder"
-        title={dragDisabled ? "Clear search to drag-reorder" : "Drag up or down"}
+        title={dragDisabled ? "Reorder unavailable" : "Drag up or down"}
         data-testid={`route-stop-drag-${stop.id}`}
         disabled={dragDisabled || busy}
         {...(dragDisabled ? {} : { ...attributes, ...listeners })}
@@ -317,10 +317,20 @@ export default function StopListPane({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overSectionKey, setOverSectionKey] = useState<string | null>(null);
   const [moveStop, setMoveStop] = useState<Stop | null>(null);
+  const [isNarrow, setIsNarrow] = useState(false);
   const paging = useCursorPagination({ initialPageSize: OPS_DEFAULT_PAGE_SIZE });
   const [pagingSectionKey, setPagingSectionKey] = useState<string | null>(null);
 
-  const dragDisabled = searchQuery.trim().length > 0;
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const sync = () => setIsNarrow(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  const dragDisabled = searchQuery.trim().length > 0 || isNarrow;
 
   const visibleSections = useMemo(() => {
     let base = sections;
@@ -481,8 +491,11 @@ export default function StopListPane({
 
   return (
     <div className="flex flex-col gap-2" data-testid="route-stop-list">
-      {dragDisabled ? (
-        <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+      {searchQuery.trim().length > 0 ? (
+        <p
+          className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2"
+          data-testid="route-drag-paused"
+        >
           Search is active — drag to reorder is paused. Clear search to drag.
         </p>
       ) : null}
@@ -582,7 +595,7 @@ export default function StopListPane({
                   href={mapsUrlForStops(poolOrigin, mapsStops)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="h-8 px-2 rounded-lg text-[11px] font-medium text-[#0B1220] hover:bg-[#F4F6F8] inline-flex items-center gap-1"
+                  className="hidden sm:inline-flex h-9 px-2 rounded-lg text-[11px] font-medium text-[#0B1220] hover:bg-[#F4F6F8] items-center gap-1"
                   data-testid={`route-pool-maps-${section.key}`}
                 >
                   <MapPin size={12} /> Maps
@@ -590,7 +603,7 @@ export default function StopListPane({
                 {viewHrefForSection ? (
                   <a
                     href={viewHrefForSection(section)}
-                    className="h-8 px-2 rounded-lg text-[11px] font-medium text-[#0B1220] hover:bg-[#F4F6F8] inline-flex items-center gap-1"
+                    className="h-9 px-2 rounded-lg text-[11px] font-medium text-[#0B1220] hover:bg-[#F4F6F8] inline-flex items-center gap-1"
                     data-testid={`route-pool-view-${section.key}`}
                   >
                     <NavigationArrow size={12} /> View

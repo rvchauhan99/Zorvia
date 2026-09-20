@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
   CaretDown,
+  DotsThree,
   DownloadSimple,
   ListNumbers,
   MagnifyingGlass,
@@ -15,6 +16,7 @@ import {
 } from "@phosphor-icons/react";
 import { InlineLoader } from "@/components/loaders";
 import SearchableSelect from "@/components/SearchableSelect";
+import AppSheet from "@/components/AppSheet";
 import SelectionToolbar from "./SelectionToolbar";
 import StopListPane from "./StopListPane";
 import type { RoutePolyline } from "./RouteMap";
@@ -38,6 +40,16 @@ const RouteMap = dynamic(() => import("./RouteMap"), {
     </div>
   ),
 });
+
+export type MobileSnap = "peek" | "half" | "expanded";
+
+const SNAP_HEIGHT: Record<MobileSnap, string> = {
+  peek: "min(28%, 160px)",
+  half: "50%",
+  expanded: "100%",
+};
+
+const SNAP_ORDER: MobileSnap[] = ["peek", "half", "expanded"];
 
 type Props = {
   loading: boolean;
@@ -128,14 +140,18 @@ export default function PlanMode({
 }: Props) {
   const [highlightedStopId, setHighlightedStopId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [mobileRailOpen, setMobileRailOpen] = useState(false);
+  const [mobileSnap, setMobileSnap] = useState<MobileSnap>("peek");
+  const [moreOpen, setMoreOpen] = useState(false);
   const [hiddenDriverKeys, setHiddenDriverKeys] = useState<Set<string>>(new Set());
+  const dragStartY = useRef<number | null>(null);
+  const dragStartSnap = useRef<MobileSnap>("peek");
 
   const totalStops = stops.length;
   const unassignedStops = stops.filter((s) => !s.driver_id).length;
   const issueCount = stops.filter(
     (s) => s.delivery_sequence == null || s.geocode_status !== "ok"
   ).length;
+  const hasSelection = selected.size > 0;
 
   const driverIds = useMemo(() => drivers.map((d) => d.id), [drivers]);
 
@@ -182,8 +198,33 @@ export default function PlanMode({
   };
 
   useEffect(() => {
-    if (highlightedStopId) setMobileRailOpen(true);
+    if (highlightedStopId) {
+      setMobileSnap((prev) => (prev === "peek" ? "half" : prev));
+    }
   }, [highlightedStopId]);
+
+  const handleSnapPointerDown = (e: React.PointerEvent) => {
+    dragStartY.current = e.clientY;
+    dragStartSnap.current = mobileSnap;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const handleSnapPointerUp = (e: React.PointerEvent) => {
+    if (dragStartY.current == null) return;
+    const dy = dragStartY.current - e.clientY;
+    dragStartY.current = null;
+    const idx = SNAP_ORDER.indexOf(dragStartSnap.current);
+    if (dy > 48) {
+      setMobileSnap(SNAP_ORDER[Math.min(idx + 1, SNAP_ORDER.length - 1)]);
+    } else if (dy < -48) {
+      setMobileSnap(SNAP_ORDER[Math.max(idx - 1, 0)]);
+    }
+  };
+
+  const cycleSnapUp = () => {
+    const idx = SNAP_ORDER.indexOf(mobileSnap);
+    setMobileSnap(SNAP_ORDER[Math.min(idx + 1, SNAP_ORDER.length - 1)]);
+  };
 
   const rail = (
     <div className="flex flex-col h-full min-h-0 bg-white" data-testid="route-side-rail">
@@ -200,8 +241,9 @@ export default function PlanMode({
           <button
             type="button"
             className="lg:hidden h-9 w-9 rounded-lg hover:bg-[#F4F6F8] inline-flex items-center justify-center text-[#5C6570]"
-            aria-label="Close stops"
-            onClick={() => setMobileRailOpen(false)}
+            aria-label="Collapse to peek"
+            onClick={() => setMobileSnap("peek")}
+            data-testid="route-mobile-sheet-collapse"
           >
             <X size={18} />
           </button>
@@ -222,14 +264,17 @@ export default function PlanMode({
           />
         </div>
 
-        <div className="flex flex-wrap gap-1" data-testid="route-filter-row">
+        <div
+          className="flex gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          data-testid="route-filter-row"
+        >
           {filters.map((f) => {
             const isActive = listFilter === f.key;
             return (
               <button
                 key={f.key}
                 type="button"
-                className={`h-7 px-2.5 rounded-full text-[11px] font-medium transition-colors ${
+                className={`h-9 shrink-0 px-2.5 rounded-full text-[11px] font-medium transition-colors ${
                   isActive
                     ? "bg-[#0B1220] text-white"
                     : "bg-[#F4F6F8] text-[#5C6570] hover:text-[#0B1220]"
@@ -278,7 +323,7 @@ export default function PlanMode({
           </button>
           <button
             type="button"
-            className="flex-1 h-9 rounded-lg border border-[#E5E9EF] text-[12px] font-medium text-[#0B1220] hover:bg-[#F4F6F8] inline-flex items-center justify-center gap-1 disabled:opacity-50"
+            className="hidden sm:inline-flex flex-1 h-9 rounded-lg border border-[#E5E9EF] text-[12px] font-medium text-[#0B1220] hover:bg-[#F4F6F8] items-center justify-center gap-1 disabled:opacity-50"
             onClick={onOpenRange}
             disabled={busy}
             data-testid="route-open-range-sheet-header"
@@ -343,105 +388,131 @@ export default function PlanMode({
     <div
       className="h-dvh w-full flex flex-col bg-[#F4F6F8] overflow-hidden"
       data-testid="route-plan-mode"
+      data-mobile-snap={mobileSnap}
     >
-      {/* Top bar */}
       <header
-        className="shrink-0 z-20 h-14 px-3 sm:px-4 flex items-center gap-2 sm:gap-3 border-b border-[#E5E9EF] bg-white"
+        className="shrink-0 z-20 border-b border-[#E5E9EF] bg-white pt-[env(safe-area-inset-top,0px)]"
         data-testid="route-top-bar"
       >
-        <button
-          type="button"
-          onClick={onExit}
-          className="h-9 w-9 rounded-lg hover:bg-[#F4F6F8] inline-flex items-center justify-center text-[#5C6570]"
-          aria-label="Exit route planning"
-          data-testid="route-back-to-cities"
-        >
-          <SignOut size={18} className="rotate-180" />
-        </button>
+        {/* Row 1: always-visible actions on mobile; full chrome on lg */}
+        <div className="h-12 lg:h-14 px-3 sm:px-4 flex items-center gap-1.5 sm:gap-3 min-w-0">
+          <button
+            type="button"
+            onClick={onExit}
+            className="shrink-0 h-9 w-9 rounded-lg hover:bg-[#F4F6F8] inline-flex items-center justify-center text-[#5C6570]"
+            aria-label="Exit route planning"
+            data-testid="route-back-to-cities"
+          >
+            <SignOut size={18} className="rotate-180" />
+          </button>
 
-        <div className="hidden sm:flex items-center gap-1.5 min-w-0">
-          <span className="text-sm font-bold text-[#0B1220] truncate">Route planning</span>
-        </div>
+          <div className="hidden lg:flex items-center gap-1.5 min-w-0">
+            <span className="text-sm font-bold text-[#0B1220] truncate">Route planning</span>
+          </div>
 
-        <div className="flex gap-1" data-testid="route-slot-pills">
-          {(["lunch", "dinner"] as MealSlot[]).map((s) => (
-            <button
-              key={s}
-              type="button"
-              className={`h-8 px-2.5 rounded-lg text-[12px] font-medium ${
-                slot === s
-                  ? "bg-[#00BFA5] text-white"
-                  : "bg-[#F4F6F8] text-[#5C6570] hover:text-[#0B1220]"
-              }`}
-              onClick={() => onSlotChange(s)}
-              data-testid={`route-slot-${s}`}
+          <div className="flex gap-1 shrink-0" data-testid="route-slot-pills">
+            {(["lunch", "dinner"] as MealSlot[]).map((s) => (
+              <button
+                key={s}
+                type="button"
+                className={`h-9 px-2 sm:px-2.5 rounded-lg text-[12px] font-medium shrink-0 ${
+                  slot === s
+                    ? "bg-[#00BFA5] text-white"
+                    : "bg-[#F4F6F8] text-[#5C6570] hover:text-[#0B1220]"
+                }`}
+                onClick={() => onSlotChange(s)}
+                data-testid={`route-slot-${s}`}
+                aria-label={mealSlotBadgeLabel(s)}
+              >
+                <span className="sm:hidden">{s === "lunch" ? "L" : "D"}</span>
+                <span className="hidden sm:inline">{mealSlotBadgeLabel(s)}</span>
+              </button>
+            ))}
+          </div>
+
+          <label className="hidden lg:flex items-center gap-1.5 text-[11px] text-[#5C6570] shrink-0">
+            <input
+              type="date"
+              value={planningDate}
+              onChange={(e) => onPlanningDateChange(e.target.value)}
+              className="h-9 px-2 rounded-lg border border-[#E5E9EF] text-[12px] text-[#0B1220]"
+              data-testid="route-planning-date"
+            />
+          </label>
+
+          <div
+            className="hidden lg:block flex-1 min-w-[120px] max-w-[240px]"
+            data-testid="route-city-chips"
+          >
+            <SearchableSelect
+              value={selectedCity}
+              onChange={onSelectedCityChange}
+              options={cityOptions}
+              placeholder="City…"
+              testid="route-city-select"
+              inputClassName="h-9 px-2.5 rounded-lg border border-[#E5E9EF] bg-[#F4F6F8] text-[12px] w-full"
+            />
+          </div>
+
+          <div className="ml-auto flex items-center gap-1.5 shrink-0">
+            <a
+              href={fullMapUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden lg:inline-flex h-9 px-2.5 rounded-lg text-[12px] font-medium text-[#0B1220] hover:bg-[#F4F6F8] items-center gap-1"
+              data-testid="route-open-full-map"
             >
-              {mealSlotBadgeLabel(s)}
+              <MapPin size={14} /> Maps
+            </a>
+            <button
+              type="button"
+              className="hidden lg:inline-flex h-9 px-2.5 rounded-lg text-[12px] font-medium text-[#0B1220] hover:bg-[#F4F6F8] items-center gap-1 disabled:opacity-50"
+              onClick={onExportCsv}
+              disabled={busy || loading}
+              data-testid="route-export-csv"
+              title="Export all stops as CSV"
+            >
+              <DownloadSimple size={14} /> Export
             </button>
-          ))}
+            <button
+              type="button"
+              className="lg:hidden shrink-0 h-9 w-9 rounded-lg hover:bg-[#F4F6F8] inline-flex items-center justify-center text-[#5C6570]"
+              aria-label="More actions"
+              onClick={() => setMoreOpen(true)}
+              data-testid="route-mobile-more"
+            >
+              <DotsThree size={20} weight="bold" />
+            </button>
+            <button
+              type="button"
+              className="shrink-0 h-9 px-2.5 sm:px-3 rounded-lg bg-[#0B1220] text-white text-[12px] font-semibold hover:bg-[#1A2332] disabled:opacity-50"
+              onClick={onOptimize}
+              disabled={busy}
+              data-testid="route-optimize"
+            >
+              {busy ? "…" : "Optimize"}
+            </button>
+          </div>
         </div>
 
-        <label className="hidden md:flex items-center gap-1.5 text-[11px] text-[#5C6570]">
-          <input
-            type="date"
-            value={planningDate}
-            onChange={(e) => onPlanningDateChange(e.target.value)}
-            className="h-8 px-2 rounded-lg border border-[#E5E9EF] text-[12px] text-[#0B1220]"
-            data-testid="route-planning-date"
-          />
-        </label>
-
-        <div className="flex-1 min-w-[120px] max-w-[240px]" data-testid="route-city-chips">
+        {/* Row 2 (mobile only): city full width */}
+        <div className="lg:hidden px-3 pb-2" data-testid="route-city-chips-mobile">
           <SearchableSelect
             value={selectedCity}
             onChange={onSelectedCityChange}
             options={cityOptions}
             placeholder="City…"
             testid="route-city-select"
-            inputClassName="h-8 px-2.5 rounded-lg border border-[#E5E9EF] bg-[#F4F6F8] text-[12px] w-full"
+            inputClassName="h-9 px-2.5 rounded-lg border border-[#E5E9EF] bg-[#F4F6F8] text-[12px] w-full"
           />
-        </div>
-
-        <div className="ml-auto flex items-center gap-1.5">
-          <a
-            href={fullMapUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hidden sm:inline-flex h-8 px-2.5 rounded-lg text-[12px] font-medium text-[#0B1220] hover:bg-[#F4F6F8] items-center gap-1"
-            data-testid="route-open-full-map"
-          >
-            <MapPin size={14} /> Maps
-          </a>
-          <button
-            type="button"
-            className="h-8 px-2.5 rounded-lg text-[12px] font-medium text-[#0B1220] hover:bg-[#F4F6F8] inline-flex items-center gap-1 disabled:opacity-50"
-            onClick={onExportCsv}
-            disabled={busy || loading}
-            data-testid="route-export-csv"
-            title="Export all stops as CSV"
-          >
-            <DownloadSimple size={14} /> Export
-          </button>
-          <button
-            type="button"
-            className="h-8 px-3 rounded-lg bg-[#0B1220] text-white text-[12px] font-semibold hover:bg-[#1A2332] disabled:opacity-50"
-            onClick={onOptimize}
-            disabled={busy}
-            data-testid="route-optimize"
-          >
-            {busy ? "Working…" : "Optimize"}
-          </button>
         </div>
       </header>
 
-      {/* Workspace body */}
       <div className="flex-1 min-h-0 flex relative">
-        {/* Desktop rail */}
         <aside className="hidden lg:flex w-[360px] shrink-0 flex-col border-r border-[#E5E9EF] bg-white min-h-0">
           {rail}
         </aside>
 
-        {/* Map canvas */}
         <div className="flex-1 min-w-0 min-h-0 relative" data-testid="route-map-canvas">
           <RouteMap
             stops={stops}
@@ -454,17 +525,39 @@ export default function PlanMode({
             fullBleed
             onStopClick={(id) => {
               setHighlightedStopId(id);
-              setMobileRailOpen(true);
+              setMobileSnap((prev) => (prev === "peek" ? "half" : prev));
             }}
           />
 
-          {/* Mobile rail peek / sheet */}
-          <div className="lg:hidden absolute inset-x-0 bottom-0 z-[450] pointer-events-none">
-            {!mobileRailOpen && (
+          {mobileSnap === "expanded" && (
+            <button
+              type="button"
+              className="lg:hidden absolute inset-0 z-[440] bg-black/20"
+              aria-label="Collapse stops sheet"
+              onClick={() => setMobileSnap("half")}
+              data-testid="route-mobile-sheet-backdrop"
+            />
+          )}
+
+          <div
+            className={`lg:hidden absolute inset-x-0 bottom-0 z-[450] pointer-events-none ${
+              mobileSnap === "expanded" ? "top-0" : ""
+            }`}
+            style={
+              mobileSnap === "expanded"
+                ? undefined
+                : {
+                    paddingBottom: hasSelection
+                      ? "calc(7.5rem + env(safe-area-inset-bottom, 0px))"
+                      : "env(safe-area-inset-bottom, 0px)",
+                  }
+            }
+          >
+            {mobileSnap === "peek" && (
               <button
                 type="button"
-                className="pointer-events-auto mx-auto mb-3 flex items-center gap-2 h-11 px-4 rounded-full bg-white shadow-lg border border-[#E5E9EF] text-sm font-semibold text-[#0B1220]"
-                onClick={() => setMobileRailOpen(true)}
+                className="pointer-events-auto mx-auto mb-2 flex items-center gap-2 h-11 px-4 rounded-full bg-white/95 shadow-lg border border-[#E5E9EF] text-sm font-semibold text-[#0B1220]"
+                onClick={cycleSnapUp}
                 data-testid="route-mobile-pane-toggle"
               >
                 <ListNumbers size={16} />
@@ -472,14 +565,56 @@ export default function PlanMode({
                 <CaretDown size={14} className="rotate-180" />
               </button>
             )}
-            {mobileRailOpen && (
+            <div
+              className={`pointer-events-auto w-full border-t border-[#E5E9EF] shadow-2xl overflow-hidden bg-white flex flex-col transition-[height] duration-200 ease-out ${
+                mobileSnap === "expanded" ? "rounded-none h-full" : "rounded-t-2xl"
+              }`}
+              style={
+                mobileSnap === "expanded"
+                  ? {
+                      height: hasSelection
+                        ? "calc(100% - 7.5rem - env(safe-area-inset-bottom, 0px))"
+                        : "100%",
+                      marginTop: "auto",
+                    }
+                  : { height: SNAP_HEIGHT[mobileSnap] }
+              }
+              data-testid="route-mobile-rail-sheet"
+              data-snap={mobileSnap}
+            >
               <div
-                className="pointer-events-auto h-[min(70vh,560px)] rounded-t-2xl border-t border-[#E5E9EF] shadow-2xl overflow-hidden"
-                data-testid="route-mobile-rail-sheet"
+                className="shrink-0 flex flex-col items-center pt-2 pb-1 cursor-grab active:cursor-grabbing touch-none"
+                onPointerDown={handleSnapPointerDown}
+                onPointerUp={handleSnapPointerUp}
+                onPointerCancel={() => {
+                  dragStartY.current = null;
+                }}
+                data-testid={`route-mobile-snap-${mobileSnap}`}
+                role="slider"
+                aria-valuetext={mobileSnap}
+                aria-label="Resize stops sheet"
               >
-                {rail}
+                <div className="h-1 w-10 rounded-full bg-[#D5DCD9]" />
+                <div className="flex gap-1 mt-1.5">
+                  {SNAP_ORDER.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      className={`h-1.5 w-1.5 rounded-full ${
+                        mobileSnap === s ? "bg-[#00BFA5]" : "bg-[#E5E9EF]"
+                      }`}
+                      aria-label={`Snap ${s}`}
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        setMobileSnap(s);
+                      }}
+                      data-testid={`route-mobile-snap-dot-${s}`}
+                    />
+                  ))}
+                </div>
               </div>
-            )}
+              <div className="flex-1 min-h-0 overflow-hidden">{rail}</div>
+            </div>
           </div>
         </div>
       </div>
@@ -499,6 +634,63 @@ export default function PlanMode({
         onClear={onClearSelection}
         onOpenRange={onOpenRange}
       />
+
+      <AppSheet
+        open={moreOpen}
+        onClose={() => setMoreOpen(false)}
+        title="More"
+        size="md"
+        closeTestId="route-mobile-more-close"
+      >
+        <div className="flex flex-col gap-3" data-testid="route-mobile-more-sheet">
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-[#5C6570]">
+              Planning date
+            </span>
+            <input
+              type="date"
+              value={planningDate}
+              onChange={(e) => onPlanningDateChange(e.target.value)}
+              className="h-11 px-3 rounded-xl border border-[#E5E9EF] text-sm text-[#0B1220]"
+              data-testid="route-planning-date-mobile"
+            />
+          </label>
+          <a
+            href={fullMapUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="h-11 px-3 rounded-xl border border-[#E5E9EF] text-sm font-medium text-[#0B1220] inline-flex items-center gap-2 hover:bg-[#F4F6F8]"
+            data-testid="route-open-full-map-mobile"
+            onClick={() => setMoreOpen(false)}
+          >
+            <MapPin size={16} /> Open in Maps
+          </a>
+          <button
+            type="button"
+            className="h-11 px-3 rounded-xl border border-[#E5E9EF] text-sm font-medium text-[#0B1220] inline-flex items-center gap-2 hover:bg-[#F4F6F8] disabled:opacity-50"
+            onClick={() => {
+              setMoreOpen(false);
+              onExportCsv();
+            }}
+            disabled={busy || loading}
+            data-testid="route-export-csv-mobile"
+          >
+            <DownloadSimple size={16} /> Export CSV
+          </button>
+          <button
+            type="button"
+            className="h-11 px-3 rounded-xl border border-[#E5E9EF] text-sm font-medium text-[#0B1220] inline-flex items-center gap-2 hover:bg-[#F4F6F8] disabled:opacity-50"
+            onClick={() => {
+              setMoreOpen(false);
+              onOpenRange();
+            }}
+            disabled={busy}
+            data-testid="route-open-range-sheet-mobile"
+          >
+            <ListNumbers size={16} /> Assign by sequence
+          </button>
+        </div>
+      </AppSheet>
     </div>
   );
 }

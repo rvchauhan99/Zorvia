@@ -46,7 +46,10 @@ Detail: API `CYCLE_SUBSCRIPTION.md` / `MONTHLY_BILLING.md`.
 Screen: `/provider/route-planning` — **full-bleed Routes workspace** (Leaflet map + side rail). Visual system: [Figma — MealHQ Route planning workspace](https://www.figma.com/design/hPOhVI0bcgtWUSaxnbz14a) (not legacy `design_guidelines.json`).
 
 - Top bar: meal slot · date · city (**filter only**) · **Export CSV** (all pools) · Optimize · Open in Maps  
+- **Mobile / tablet (`<lg`):** two-row top bar (Back · L/D · **More** · **Optimize** always visible; city full-width on row 2); map-first **snap sheet** (`peek` · `half` · `expanded` = **100% of map workspace** under the header); drag handle + dots (`route-mobile-snap-*`); map marker / highlight bumps to half; **More** holds date, Export, Maps, Bulk by sequence; selection dock owns bottom **safe-area**; filter chips horizontal-scroll; **drag-to-reorder off** on narrow (use Optimize / Move / Assign by sequence); desktop (`lg+`) keeps DnD  
+- Desktop (`lg+`): fixed 360px left rail unchanged  
 - Left rail (only scroll): Unassigned first → driver pools; compact stop rows with name + **phone** (`wa.me`); pool header shows **Start: Kitchen** / **Start: {customer}**; pool **View** → `/provider/route-planning/driver/{id}` (map + km/min from pool start + stop list + CSV/**Print**)  
+- Driver detail mobile: map ~36–40vh + list below; header respects safe-area  
 - Driver **Print**: downloads route PDF + opens **driver** WhatsApp (Settings → Team phone) to attach the PDF; customer phones in the PDF/list open **customer** chat  
 - **Deliveries** (`/provider/deliveries`, admin + driver): customer phone on each stop / next card → `wa.me`  
 - **Kitchen** pack list + Print PDF: name, phone (`wa.me` in UI), CRM notes  
@@ -59,6 +62,8 @@ Screen: `/provider/route-planning` — **full-bleed Routes workspace** (Leaflet 
 - **Best fit**: Unassigned ⋯ **Best fit** (one stop) or header **Best fit all** → confirm → `POST /route-planning/auto-place` (cheapest driver gap vs pool start, sequential)  
 - Day-build: Unassign all → Optimize Unassigned → Bulk ranges → Optimize drivers **or** one-click **Full rebalance**  
 - API/routing contract: mealhq-api `docs/ROUTE_PLANNING.md`
+
+New-customer / edit wizard (`/provider/customers/new`, `/provider/customers/[id]/edit`): five steps (Contact → Address → Schedule → Route → Review). On phone (`<sm`), navigation is the sticky bottom Back + Next/Save bar only (in-card Continue hidden); Review is single-column; meal type lines stack full-width.
 
 New-customer **Route** step (`/provider/customers/new`): after a confirmed address, shows up to **3 suggested driver+stop** cards from `POST /route-planning/suggest-placements` (cheapest haversine insert). Tapping a card fills Assigned driver + sequence; manual SearchableSelect remains the override. Assignments stay manual — suggestions are assistive only.
 
