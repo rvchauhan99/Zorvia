@@ -1,0 +1,12 @@
+---
+description: Billing UI — gate flat billing on monthly_flat and cycle_flat
+globs: "frontend/**/*billing*","frontend/**/customers/**","admin-frontend/**/*billing*"
+alwaysApply: false
+---
+
+# Billing UI
+
+- Variants in UI: `per_meal`, `monthly_adjustable`, `monthly_fixed`, `cycle_fixed`.
+- Day-cycle uses `billing_mode = cycle_flat` and `cycle_anchor_date` (not day-of-month alone).
+- Gate flat-billing UI on **both** `monthly_flat` and `cycle_flat`.
+- Product SoT: sibling mealhq-api `docs/FUNCTIONAL.md` + `CYCLE_SUBSCRIPTION.md`.

@@ -39,8 +39,8 @@ See [`.env.example`](.env.example). The only app-level config is the API target 
 | | Local | Production |
 |---|---|---|
 | Admin UI | `http://localhost:3001` | `https://admin.mealhq.ca` |
-| `BACKEND_URL` / `NEXT_PUBLIC_BACKEND_URL` | `http://127.0.0.1:8000` | `https://zorvia-api-wziqzscuaq-nn.a.run.app` |
+| `BACKEND_URL` / `NEXT_PUBLIC_BACKEND_URL` | `http://127.0.0.1:8000` | `https://api2.mealhq.ca` |
 
 On Vercel (Root Directory `admin-frontend`) set both variables in the dashboard rather than
 in a committed file. The admin origin is already allowed in the API's `CORS_ORIGINS`; set
-`ADMIN_APP_URL=https://admin.mealhq.ca` on Cloud Run so email deep links resolve.
+`ADMIN_APP_URL=https://admin.mealhq.ca` on the API host so email deep links resolve.

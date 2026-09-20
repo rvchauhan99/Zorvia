@@ -1,432 +1,53 @@
-# Zorvia — Functional Specification
+# MealHQ frontends — Functional (FE-safe)
 
-**Product brand:** Zorvia  
-**Last updated:** 2026-07-13  
-**Source of truth:** live codebase; see also [PLATFORM_BLUEPRINT.md](./PLATFORM_BLUEPRINT.md) and [TECHNICAL.md](./TECHNICAL.md)
+**Last updated:** 2026-09-20  
+**Canonical product SoT:** sibling [`mealhq-api/docs/FUNCTIONAL.md`](../../mealhq-api/docs/FUNCTIONAL.md)  
+**When this file and the API FUNCTIONAL disagree, the API file wins.**
 
----
-
-## 1. Problem and value
-
-Zorvia is a multi-tenant SaaS for **Canadian tiffin providers**. Provider admins manage customers, daily deliveries, Interac e-Transfer payments, and reports. Consumers view upcoming deliveries, cancel today’s meal within cutoff rules, submit Interac payment references (optional screenshot), and see outstanding balance.
+This doc covers UI journeys, FE billing gates, and FE-only constraints. Deep billing engines, collections, and API contracts live in mealhq-api.
 
 ---
 
-## 2. Personas
+## 1. Surfaces
 
-| Persona | Who | Primary goals |
-|---------|-----|---------------|
-| **Provider Admin** | Owner-operator of a tiffin kitchen | Onboard customers, run daily delivery list, verify Interac payments, export reports, manage org settings and SaaS subscription |
-| **Provider Driver** | Delivery staff under a provider | Mark deliveries + view Kitchen cook plan — Deliveries + Kitchen |
-| **Provider Viewer** | Read-only staff | View dashboard, customers, deliveries, payments, reports — no mutate, no settings/subscription |
-| **Consumer** | Meal subscriber under one provider | See balance and deliveries, cancel before cutoff, submit payments |
+| App | Port | Audience |
+|-----|------|----------|
+| `frontend/` | 3000 | Provider kitchen + consumer portal |
+| `admin-frontend/` | 3001 | Platform operators (`/api/platform/*`) |
 
-There are **staff roles** on `platform_users`: `admin` (default), `driver` (deliveries mutate only), `viewer` (read-only operational modules).
+Brand: **MealHQ**. Tenancy: one provider = one tenant (`tenant_id = provider_id`).
 
----
+## 2. Personas (UI)
 
-## 3. Tenancy and access model
+- **Provider admin / driver / viewer** — staff roles on provider users (see API FUNCTIONAL for mutate matrix)
+- **Consumer** — deliveries, cancel cutoff, Interac payments, balance
+- **Platform operator** — tenants, SaaS payments, reports in admin-frontend
 
-- One **provider** = one **tenant**.
-- `tenant_id` on all scoped records equals `provider_id`.
-- Provider users live in `platform_users` with role `admin` \| `driver` \| `viewer`.
-- Consumers live in `consumer_accounts` linked to a `customers` row under that tenant.
-- JWT claims: `sub` (user id), `ut` (`provider` \| `consumer`), `tid` (tenant id); staff role is loaded from `platform_users` on each request.
-- Expired / inaccessible provider subscription:
-  - Provider active routes → **402** → UI redirects admins to `/provider/subscription`
-  - Consumer routes → **403** with message that provider subscription is inactive
+## 3. Billing UI gates (non-negotiable)
 
-### Staff access matrix
+Variants: `per_meal`, `monthly_adjustable`, `monthly_fixed`, `cycle_fixed`.
 
-| Area | Admin | Viewer | Driver |
-|------|-------|--------|--------|
-| Dashboard | Full + quick mark + money KPIs | Ops KPIs only (no CAD); meal counts on route | Redirect → Deliveries |
-| Customers | Full (price + outstanding; High balance filter) | Read; meal schedule qty only — no CAD; High balance filter hidden | Blocked (API + redirect) |
-| Deliveries | Full; **meal count on every stop** (never price) | Read; meal count only | Full mark/reorder/bulk; meal count only |
-| Kitchen | Cook plan (type × slot counts + pack list); no CAD | Same (read) | Same (read) |
-| Payments | Full (amounts) | Read; status/ref without CAD amounts | Blocked |
-| Analysis / Reports | Full money KPIs + CSV | Meal/stop metrics; CAD hidden (area chart = customer counts; money tabs + Export CSV gated) | Blocked (API 403 + redirect) |
-| Settings / Subscription | Full | No access | No access |
-| More | Reports + Subscription + Settings + activity + logout | Reports + activity + logout | N/A (not in nav) |
+- Day-cycle uses `billing_mode = cycle_flat` and per-customer `cycle_anchor_date` (not day-of-month alone).
+- Gate **flat-billing UI** on both `monthly_flat` and `cycle_flat` (not `monthly_flat` alone).
+- Kitchen guides: [DAY_CYCLE_ONBOARDING.md](./DAY_CYCLE_ONBOARDING.md)
 
-Frontend helpers: `frontend/src/lib/roles.ts` (`canMutateAdmin`, `canMutateDeliveries`, `canSeePricing` — CAD for admins only). Backend uses `require_roles` / `require_roles_active` on mutating routes. Ops surfaces (`/provider/deliveries`, dashboard route) always show `fmtMealCount` (e.g. `2 meals`), never unit price.
+Detail: API `CYCLE_SUBSCRIPTION.md` / `MONTHLY_BILLING.md`.
 
-## 4. Feature catalog
+## 4. FE constraints
 
-### 4.1 Authentication
+- Preserve existing `data-testid` attributes
+- Prefer TypeScript in `frontend/`
+- Follow [design_guidelines.json](../design_guidelines.json)
+- WhatsApp product UI gated by backend `WHATSAPP_FEATURES_ENABLED`
+- Do **not** invent Phase 2: notification inbox UI, WhatsApp chat inbox
 
-| Feature | Behavior | Acceptance |
-|---------|----------|------------|
-| Provider email signup | Creates `providers` + `platform_users`, starts **trial**; provider chooses unique alphanumeric `signup_code` (**kitchen code**); captures **CA kitchen address**; sends email OTP via Resend; **no JWT until verified** | After `/verify-email`, can log in; org + code + structured address exist |
-| Unified login | **Kitchen:** email + password (or Google). **Consumer:** phone + password; optional kitchen code on multi-match | Correct `user_type` session |
-| Google Sign-In | **Providers only** via Firebase; consumer Google disabled | Provider Google works; consumers use phone |
-| Account linking | Provider: email is primary. Consumer: phone (`phone_key`, country code ignored) | Same `user_id` |
-| Forgot / reset password | Provider: email OTP. Consumer: kitchen resets from Customer Master; forced change on next login | Consumer cannot self-serve OTP |
-| Email verification | Provider 6-digit OTP (10 min); consumer phone signup skips email OTP | Provider session only after OTP |
-| Change / set password | `POST /auth/change-password`; clears `must_change_password` for consumers | `has_password` / `must_change_password` on `/auth/me` |
-| Session | Bearer JWT in `tiffin_token` / session in `tiffin_session` localStorage | `/api/auth/me` restores user |
-| Logged-in landing | Visiting `/` with an active session redirects to `/provider` or `/consumer` (same as `/login`) | No marketing home flash for returning users after hydrate |
+## 5. Route planning UI
 
-### 4.2 Provider organization
+Screen under provider route-planning. API/routing contract: mealhq-api `docs/ROUTE_PLANNING.md`. Prod API for hard-tests: `https://api2.mealhq.ca`.
 
-| Feature | Behavior |
-|---------|----------|
-| Profile | Org name, contact, Interac email, **CA kitchen address** (same fields/order as customer master) |
-| Settings | `cutoff_hours`, **meal types** (Regular / Jain / Fasting + custom) with per-type CAD price, timezone, signup code (shareable), kitchen logo (512×512), `closed_dates` (holidays), **monthly billing policy** (opt-in; default off), change password; Kitchen Identity uses structured CA address UI: **Province → City (searchable selects, city filtered by province) → Postal → Street → Apartment** |
-| Signup code | Chosen by provider at signup; **letters/numbers only** (3–32); stored uppercase; unique case-insensitively across tenants; consumers join with case-insensitive match |
-| Kitchen logo | Optional; Camera or Upload on settings → Pillow square resize 512 → R2 (`logos/`) or data-URL fallback |
-| Consumer avatar | Optional on signup (deferred upload after verify) and profile; Camera or Upload; 256×256 → R2 (`avatars/`) |
-| Closed dates | No delivery generation on dates in `settings.closed_dates` |
+## 6. Related FE docs
 
-### 4.3 Customer CRM (provider)
-
-| Feature | Behavior |
-|---------|----------|
-| CRUD | List/create/get/patch/delete customers under tenant |
-| Delivery address (UI) | Customer master add/edit: **Province → City (searchable, city filtered by province) → Postal → Street → Apartment**; same as Settings Kitchen Identity |
-| Form selects (UI) | Provider/consumer forms use **searchable combobox** (`SearchableSelect`) for local option lists (province, city, drivers, meal types, etc.); customer picker remains async search (`CustomerAsyncSelect`) |
-| Customer 360 | `GET /customers/{id}` includes outstanding + deliveries + payments; timeline at `GET /customers/{id}/timeline`; Analysis tab via `GET /customers/{id}/insights?period=` and `?tab=analysis` |
-| Payment history | Customer detail tab `?tab=payments` — policy-aware ledger with derived **comment** / **operation** on each row (no free-text DB field). **Per-meal:** payments + meal deliveries chronologically. **Monthly:** payments with renewal/credit comments + plan fee / credit / next renewal summary. Entry points: Customers list **History**, Customer subscriptions **History**, Analysis tab **Payment history** panel → View full history. APIs: `GET /customers/{id}/payments` and timeline events include `comment` + `operation`. |
-| Filters (UI) | Compact horizontal chips: all \| pending \| paused \| inactive \| high_balance (with counts) |
-| Mobile list | Whole customer card opens Analysis (`/provider/customers/{id}?tab=analysis`); action buttons (including Payment history) stop propagation |
-| Delivery days | Weekday indices `0=Mon … 6=Sun` |
-| Meal type | Settings catalog prices. CRM schedule uses **type×qty×price lines** per slot×day (no top Default type / meal price). Import: one `meal_type` (Settings name or id, case-insensitive) → `slot_meal_type_lines`; blank = Regular; unknown fails the row. Generate/kitchen/adjust expand lines; outstanding Σ(line qty × price). |
-| Meal price | Per-line unit CAD on schedule/delivery snapshots (defaults from Settings type price; editable in CRM/Adjust); charge = Σ(line qty × price) |
-| Opening balance | Signed CAD on create/edit/import: positive = outstanding owed at onboard; negative = advance credit; included in displayed outstanding |
-| Joining date | Optional `joining_date` (defaults to today on create/import); distinct from system `created_at`. Sample CSV uses `yyyy-mm-dd`; import accepts common date formats. Outstanding never accrues before `created_at` — use `opening_balance` (per-meal) or monthly `last_collection_status` for last collection collected/pending |
-| Pause / resume | Date window; deliveries in window generated as `paused`; resume restores future `paused` → `pending` |
-| Delete | Soft-delete; cancels open future deliveries from provider-today so Deliveries and Kitchen adjust; past history retained |
-| Approve | Self-signup consumers start `pending_approval=true`; provider must approve before deliveries generate |
-| Reject | `POST /customers/{id}/reject` with optional reason; sets inactive + `rejected`; notifies consumer account if present |
-
-### 4.4 Deliveries
-
-| Feature | Behavior |
-|---------|----------|
-| Auto-generate | Idempotent per `(tenant_id, customer_id, delivery_date)`; skips pending-approval, closed dates; respects meal schedule (or legacy delivery days) + pauses; snapshots unit `meal_price` and `quantity` |
-| Statuses | `pending`, `delivered`, `missed`, `cancelled`, `paused` |
-| Status filter UI | Compact horizontal chips with counts (mobile scroll); **default filter = Pending** |
-| Provider mark | One-tap delivered / missed / cancelled (**today or past only**; not future) |
-| Customer notes | CRM notes on kitchen pack list + print; deliveries list shows live `customer_notes` (searchable); ops delivery notes shown when different |
-| Delivery proof photo | Optional camera/gallery on **single** mark delivered (`/provider/deliveries` + dashboard quick Deliver); stored as `delivery_image_url` (R2 `deliveries/` prefix or base64 fallback); **Mark all delivered** skips photo |
-| Delivery proof view | Thumbnail + **View** on deliveries list (Delivered/All tabs), customer 360 Deliveries tab, and dashboard delivered rows; in-app sheet with full image + open in new tab |
-| Consumer cancel | Upcoming `pending` only; blocked for past dates; within `cutoff_hours` before assumed **local noon** (provider timezone) |
-| Adjust meal | **Day plan** with per-slot **type×qty×price lines** (e.g. Regular×1 + Fasting×1). Loads adjust-context; Save via adjust-day. Qty **0** cancels pending stop. Preview expands lines into kitchen plan. |
-| Kitchen cook plan | `/provider/kitchen` for admin/driver/viewer; `GET /reports/kitchen-summary` (shared helper also returned from adjust); counts by meal type × slot for pending+delivered; pack list with CRM notes; delivery snapshots `meal_type_id`/`meal_type_name` at generate/adjust **and** when CRM meal type/schedule is saved. The page refetches when the tab becomes visible again. **Print** downloads `GET /reports/kitchen-print.pdf` for the **full** filter-matched pack list (not only the current UI page), generated server-side via Playwright Chromium. When the kitchen keeps a weekly menu (§4.6d), the page and the PDF add an **Items to cook** table — how much of each item to make that day, split by lunch/dinner, already accounting for every customer's choices — and each pack row lists that tiffin's items. |
-
-### 4.5 Payments (Interac)
-
-| Feature | Behavior |
-|---------|----------|
-| Consumer submit | Multipart: `amount`, `reference` (unique per tenant), optional `screenshot` (jpeg/png/webp ≤5MB) |
-| Provider record | Admin multipart `POST /payments`: `customer_id`, `amount`, `reference`, optional screenshot — saved as **verified** immediately (`source=provider_recorded`) for offline Interac |
-| Screenshot / images UI | **Camera** (mobile rear camera via `capture`) or **Upload** (gallery/files) on payment screenshots, avatars, kitchen logo, and optional delivery proof photos |
-| Screenshot storage | Cloudflare R2 when configured; else **base64 data URL** fallback |
-| Provider verify | Sets verified; notifies consumer (DB + email if Resend set) |
-| Provider reject | Requires reason; notifies consumer |
-| Status filter UI | Compact horizontal chips (Pending / Verified / Rejected / All); **default = Pending**; label-only (no page-local counts) |
-| Outstanding | `opening_balance` + Σ `meal_price × quantity` for `delivered` − Σ `amount` for `verified` payments (quantity defaults to 1; opening_balance signed) |
-| Meal schedule | Customer `meal_slots` (**lunch** and/or **dinner** only; default dinner) + `slot_schedules` qty per slot; Same every day / Custom per day; dual slots = two stops/day with allocated qty (not duplicated); optional per-slot drivers. Legacy `uncategorized` is migrated to dinner. |
-| List pagination | Cursor Prev/Next + per-page **10/20/50/100/200** via `CursorPaginationBar`. CRM/payments/reports/consumer default **20**; deliveries / kitchen pack / route stops ops default **200**. Envelope: `{items\|rows, next_cursor, has_more, total\|row_count, page_size}` |
-
-### 4.5b Monthly flat billing (kitchen default + per-customer override)
-
-**Day-cycle provider guide:** [DAY_CYCLE_ONBOARDING.md](./DAY_CYCLE_ONBOARDING.md) — settings, CRM, Adjust cycle, and sample CSV [`samples/mealhq-customers-cycle-fixed-sample.csv`](./samples/mealhq-customers-cycle-fixed-sample.csv).
-
-**Kitchen default:** `settings.monthly_billing.enabled = false` — Inherit customers use per-meal outstanding until an admin enables the monthly default in Settings.
-
-**Per-customer:** CRM field `billing_policy` = `inherit` (default) \| `per_meal` \| `monthly_adjustable` \| `monthly_fixed` \| `cycle_fixed`. Effective policy drives outstanding, payments, and reports. Mixed policies on one kitchen are supported. See [`MONTHLY_BILLING.md`](MONTHLY_BILLING.md).
-
-| Setting | Behavior |
-|---------|----------|
-| Policy variant | Kitchen default for Inherit. **`monthly_adjustable`**: flat fee, extra days free, 2-tier cancellation. **`monthly_fixed`**: always charge flat monthly plan fee. **`cycle_fixed`**: always charge the plan fee, renewing every N plan days from a per-customer anchor instead of a calendar month. CRM may override per customer. |
-| Plan templates | Editable Mon–Fri / Mon–Sat defaults (fee, standard days, weekdays); auto-matched from customer schedule; optional `monthly_plan_id` override. Available for overrides even when kitchen default is per-meal. Day-cycle adds per-plan **Cycle length (plan days)** and reads the weekday ticks as the counting basis. |
-| Collection day | Provider `default_collection_day` (1–31, required when kitchen default monthly); per-customer `payment_collection_day` when effective policy is monthly. Day-cycle uses neither — it collects on each customer's **next payment collection date** (`cycle_anchor_date`, required), and Settings hides the collection-day field. |
-| Outstanding | Per-meal cohort: delivered×tax − payments. Monthly cohort: Σ month charges − payments. Day-cycle: accrued cycles × cycle fee − payments. Batch splits by effective policy. **Listing:** per-meal and Adjustable = balances `> 0`; Fixed and day-cycle = overdue only. Report `billing_mode` may be `mixed` (`cycle_flat` for a pure cycle kitchen). |
-| Reports | `GET /reports/payment-due` / `monthly-dues` include monthly-effective customers (default or override), day-cycle included. |
-| Monthly dues UI | `/provider/monthly-dues` — monthly-effective customers; expand **How this month was calculated** (tier, cancelled/delivered units, rates, explainer); History / Quick Renew; Adjustable settlement blurb when any row is `monthly_adjustable` (works when report mode is `mixed`). Day-cycle rows add a **Cycle** column (`#index · Nd`) with the cycle period, and an **Adjust cycle** action. |
-| Adjust cycle | Day-cycle only. Sheet picks the collection (upcoming, or one already due to grant grace), the move (postpone N plan days, or set an exact date), and an optional reason. Cycles already collected are preserved. |
-| Settlement | Adjustable only, when plan fee ≠ pre-tax month charge: choose **Plan** or **Adjustable** on Quick Renew, Record payment, and Approve/Verify. Persists `settlement_basis` on the payment; Verify also supports Keep submitted. Tier + cancel/delivered shown in the settle UI. Fixed and day-cycle always settle at plan fee. |
-| Statement | Per-row billing mode; monthly rows include plan, tier, collection due date; day-cycle rows show **Cycle charge** and `cycle #N · Nd` |
-| Cycle CSV import | Policy **Day-cycle subscription** requires `monthly_plan` + `next_payment_date`; `payment_collection_day` and `last_collection_status` are rejected. A future date means nothing is owed yet; a past date means that cycle is already due. Use `opening_balance` for older debt. Sample: [`samples/mealhq-customers-cycle-fixed-sample.csv`](./samples/mealhq-customers-cycle-fixed-sample.csv). Full walkthrough: [DAY_CYCLE_ONBOARDING.md](./DAY_CYCLE_ONBOARDING.md). |
-| Consumer view | Day-cycle customers see a **Subscription plan** card with the fee per N plan days and the next renewal, plus "regardless of skips" copy on the cancel sheet. |
-
-### 4.6 Reports (provider)
-
-- Dashboard remains the day-of-operations cockpit: today’s required meals, pending / delivered / missed / cancelled deliveries, today’s collections, **outstanding receivables** (sum of customers who owe only — advances excluded), optional customer-credit total, pending payment approvals, pending customer approvals, and route quick actions.
-- Dashboard loads sections independently (summary KPIs, kitchen profile, today’s route) so KPI cards paint as soon as their request finishes—without waiting for the slowest call.
-- Quick mark (Deliver / Miss) on Today’s route refetches summary; backend invalidates the outstanding TTL cache so Outstanding and related KPIs update on that refetch (not stuck up to ~45s).
-- Analysis (`/provider/analysis`) is the period business-health report: presets **7d / 30d / 90d / MTD / Last month / YTD** plus **custom From–To** (max 366 days); optional **meal slot** filter scopes period delivery KPIs/series only. Outstanding receivables and Customer credit stay as-of today. Charts, receivables aging, top outstanding, top collectors, area concentration, rule-based highlights. Top customer rows deep-link to `/provider/customers/{id}?tab=analysis`.
-- Analysis and customer Analysis use shared KPI/section skeletons on first load; period changes keep previous KPIs visible (stale-while-revalidate) with a small spinner on the period toggle, then staggered reveal of charts/lists.
-- Per-customer Analysis (customer detail tab) reuses the same analytics kit (including custom dates + meal slot) via `GET /customers/{id}/insights` plus the activity timeline.
-- Outstanding balances (**owed only**, `outstanding > 0`; highest amount first; search / min amount / cursor Prev–Next + page size). Default Reports tab. **Fixed** customers: overdue only (past collection day) with renewal/overdue columns; per-meal and Adjustable: all positive balances; kitchen may be `mixed`.  
-- Customer credit (advance balances, `outstanding < 0`; largest credit first; same search / min / pagination; monthly customers may include next renewal when prepaid)  
-- Daily deliveries  
-- Collections (payments received by submission date)  
-- **Payment due** (`GET /reports/payment-due`) — monthly kitchens: who owes what by collection due date  
-- **Customer subscriptions** (`GET /reports/monthly-dues`, Fixed **or** Adjustable) — all active customers, overdue-first then nearest renewal; Amount = plan fee; This month = recalc charge with expandable this-month calc (units, tier, `charge_explainer`); credit + prepaid-aware renewal; Quick Renew with settlement choice when Adjustable amounts differ  
-- **Customer credit** (`GET /reports/outstanding?balance=credit`) — advances for all policies; Fixed rows include next renewal when prepaid  
-- Active customers  
-- Area summary (optional FSA prefix)  
-- Dashboard summary  
-- Business insights (`GET /reports/business-insights`) for Analysis — `period` presets or `start`+`end`, optional `meal_slot`  
-- Monthly statement (`GET /reports/statement?month=YYYY-MM`) — optional `q`, `activity_only`  
-- CSV export supported in UI for report tabs  
-
-**Large-tenant list filters:** Deliveries support server `q` / `driver_id` / `meal_slot` / `city` (drivers auto-scoped; city joins customer.city); Customers CRM adds `driver_id` / `meal_type_id` / `city` (+ `GET /customers/cities` facet); Payments add From/To + customer picker + `city`; Kitchen pack list supports search + driver + `city`. Reports (outstanding, statement, monthly-dues, payment-due, area, collections, business-insights) accept optional `city`. City values use customer display labels (same as route planning).
-
-### 4.6b Consumer profile
-
-- `PATCH /consumer/me/profile` — phone, address, apartment, city, province, postal_code, delivery_days  
-- Statement CSV download from payments/profile  
-- **Your weekly menu** card (only when the kitchen keeps a detailed menu, §4.6d): what comes in the tiffin each day they receive one, plus any “pick 2 of 3” choices. Picks repeat weekly until changed.  
-
-### 4.6c Onboarding
-
-- Provider dashboard checklist when Interac email missing, no customers, or first visit (dismissible)  
-- Consumer pending-approval empty state explains “what happens next”
-### 4.6d Menu (`/provider/menu`)
-
-Three tabs when the kitchen only uses a poster. Once at least one Weekly menu day is filled, **Menu picture** hides from the tab bar (default becomes Weekly menu). Email / WhatsApp share stays reachable from Weekly menu → **Share menu picture**.
-
-| Tab | Purpose |
-|-----|---------|
-| **Menu picture** | Poster flow: upload anytime, history, email notify, WhatsApp share. Shown only while Weekly menu is empty; when weekly is in use, opened via the share link from Weekly menu. |
-| **Items** | Item master — every dish the kitchen can cook, with category, unit, veg/non-veg, and a default per-tiffin quantity. Search + category + diet filter. Every kitchen is pre-filled with a starter veg + non-veg list. |
-| **Weekly menu** | Grid of **weekday × meal type**. Fill a cell with fixed items and/or choice groups. Copy a day onto others. One weekly picture per meal type. |
-
-**No setting to switch this on.** The detailed menu is considered “in use” the moment one grid cell has content. Seeding the starter item list does **not** count. Until a cell is filled, the consumer portal, the customer master, and the kitchen report show nothing new, so a poster-only kitchen never sees this feature. When weekly is in use, the customer app shows **Your weekly menu** only (not the old Current menu poster).
-
-**Days and slots.** The grid is 2‑D (weekday × meal type) by default. A kitchen that genuinely cooks different food at lunch and dinner turns on **separate lunch and dinner menus** and gets extra per-slot cells; anything left unset falls back to the all-day cell.
-
-**Choice groups (“any 2 of 3”).** A cell can hold a group like *Pick 2 of Aloo Gobi / Bhindi / Paneer*. The provider marks exactly as many defaults as the customer picks, so there is always a valid answer before anyone chooses.
-
-**Standing weekly preference.** A consumer picks **once per group per weekday**, and that repeats every week until they change it. Picks are re-validated against the live plan, so if the provider edits or removes an option the customer falls back to the current defaults rather than erroring. Provider staff can set or correct picks from **Customers → detail → Menu choices**.
-
-**Cutoff.** Consumers cannot change **today’s** meal inside the kitchen’s `cutoff_hours` before local noon; the change applies from next week instead. Providers editing on a customer’s behalf are not restricted.
-
-Frontend: `src/app/(provider)/provider/menu/_components/` (`PosterTab` / `ItemsTab` / `WeeklyMenuTab`), shared `src/components/MenuWeekPanel.tsx` and `src/lib/menuPlan.ts`.
-
-### 4.7 SaaS subscription (provider)
-
-| Feature | Behavior |
-|---------|----------|
-| Trial | New providers: `trialing` for `TRIAL_DAYS` (default 15); trial has Professional features (unlimited customers) |
-| Plans | Tiers: **Starter** (≤50 customers), **Growth** (≤150), **Professional** (unlimited). Periods: monthly / quarterly (−5%) / half-yearly (−10%) / yearly (−15%). Composite plan ids e.g. `starter_monthly`, `growth_yearly`. |
-| Renew banner | Active paid plans: provider admin shell shows renew banner when `days_left ≤ 5` (`renewal_due`); CTA → `/provider/subscription`. Renew activate extends from remaining `current_period_end`. |
-| Activate (`BILLING_PROVIDER=none`) | Self-activate immediately; stores plan + `current_period_end` |
-| Activate (`BILLING_PROVIDER=stripe`) | Returns Stripe Checkout URL; webhook marks active |
-| Activate (`BILLING_PROVIDER=manual`) | Provider pays `PLATFORM_INTERAC_EMAIL`, submits Interac ref (+ optional screenshot). Plan **activates immediately**; creates `saas_payment_records` pending; emails `CONTACT_TO_EMAILS`. Platform admin approves/rejects in `admin-frontend`. **Reject** expires subscription (402) until a new payment is submitted. |
-| Renew / switch | While already `active`, period **extends** from remaining end |
-| Access | `trialing` or `active` required for gated provider/consumer operations |
-| Platform admin | Separate app (`admin-frontend/`); JWT `ut=platform`; allowlist `PLATFORM_ADMIN_EMAILS`. Console: **Dashboard**, **Tenants** (+ notes, anonymized kitchen health), **SaaS payments**, **WhatsApp credits**, **Inbox** (persisted contact form), **Reports** (+ CSV export). Trial digest email via cron/`Email digest now`. Read-mostly except SaaS/WA credit review, notes, contact status. |
-
-### 4.7b Tax (GST/HST)
-
-- Provider setting `tax_rate_percent` (default `0`).  
-- Outstanding uses add-on: `sum(meal × (1 + tax/100)) − payments`.  
-- Monthly statements include `tax_rate` and `tax_amount` lines.
-
-### 4.7c Activity audit
-
-- Writers on login, customer soft-delete/reject, payment verify/reject/record, settings patch, plan activate, extra meals / adjust meal.  
-- List via `GET /providers/me/activity` or `GET /reports/activity`.  
-- Simple list on provider More page.
-
-### 4.7d WhatsApp credit (provider)
-
-Gated by `WHATSAPP_FEATURES_ENABLED` (default off until Meta verification). When off, share/credit/admin WhatsApp UI and APIs are hidden/503.
-
-WhatsApp menu shares are **not** included in the SaaS subscription.
-
-| Rule | Behavior |
-|------|----------|
-| Wallet | `providers.whatsapp_billing.balance_cad` (CAD prepaid) |
-| Rate | `WHATSAPP_COST_PER_MSG_CAD` (default 0.10) deducted only for `status=sent` Meta messages |
-| Top-up | Packages CAD **25 / 50 / 100** (100 recommended). Provider pays `PLATFORM_INTERAC_EMAIL`, submits ref (+ optional screenshot) via `/provider/whatsapp-credit`. Creates `whatsapp_credit_purchases` **pending** — **no optimistic credit**. |
-| Admin settle | Platform admin approves/rejects in `admin-frontend` `/whatsapp-credits`. Approve `$inc`s balance + ledger; reject emails provider (no credit). |
-| Disable | When WhatsApp is configured and estimated blast cost &gt; balance → `402` `whatsapp_credit_required`. UI soft-warns when balance &lt; CAD 10. |
-| Once per menu | After a successful share (`share_status=shared` and `wa_sent > 0`), further shares for that menu → `409`. Stubbed/failed blasts may retry. |
-
-### 4.8 Notifications
-
-- Written via `notify()` on payment submit/verify/reject, consumer cancel, and consumer signup.  
-- Inbox API: `GET /notifications`, `POST /notifications/{id}/read`, `POST /notifications/read-all`.  
-- **Inbox UI still deferred** (API is available).
-
-### 4.9 Cancel cutoff
-
-- Delivery treated as **local noon** in provider `settings.timezone` (default `America/Toronto`).  
-- Cancel blocked when within `cutoff_hours` of that instant.
-
----
-
-## 5. End-to-end journeys
-
-### Journey A — Provider onboarding
-
-1. Land on `/` → Sign up → `/signup` (password + confirm; choose alphanumeric signup code; CA kitchen address)  
-2. Verify email via OTP → `/verify-email` → redirect `/provider`  
-3. Copy signup code from settings / dashboard; optional kitchen logo  
-4. Add or approve customers; open Deliveries for today  
-
-**Done when:** Dashboard loads; signup code visible; customers appear on delivery day after approval.
-
-### Journey B — Consumer joins via kitchen code
-
-1. `/consumer-signup` with kitchen code + phone + password (verify password). Prefill `?code=` works  
-2. Account created only if that phone already exists on the kitchen’s Customer Master (country code ignored). No email OTP  
-3. Sign in with phone + password. Forgot password → ask kitchen to reset from Customer Master; change password on next login  
-
-**Done when:** Consumer home shows upcoming meals after generate.
-
-### Journey C — Daily delivery run
-
-1. Provider opens Deliveries (auto-generates for date)  
-2. Marks each stop delivered / missed / cancelled  
-3. Dashboard stats update  
-
-**Done when:** Statuses persist; outstanding increases only for `delivered`.
-
-### Journey D — Pay and reconcile
-
-1. Consumer submits Interac amount + reference (+ screenshot), **or** provider admin records an offline payment via **Record payment** (Payments page or customer 360)  
-2. Consumer-submitted: provider verifies or rejects; provider-recorded: already verified  
-3. Outstanding recalculates; email/notify sent if Resend configured  
-
-**Done when:** Verified payment reduces outstanding on provider and consumer views; reject shows reason path.
-
-### Journey E — Subscription gate
-
-1. Trial expires without activate → provider hits 402 on gated APIs  
-2. Provider activates plan on `/provider/subscription`  
-3. Access restored  
-
-**Done when:** After activate, provider routes work; banner should clear (see known UX issue: may need reload).
-
-### Journey F — Landing contact
-
-1. Visitor opens `/` → Contact (nav or `#contact`)  
-2. Submits name, email, message (optional subject) via form **or** uses mailto links  
-3. Backend `POST /api/public/contact` emails both `CONTACT_TO_EMAILS` inboxes via Resend (`Reply-To` = visitor)  
-
-**Done when:** Team receives the message (or visitor emailed directly when Resend is unset).
-
----
-
-## 6. Business rules (must not break)
-
-1. **Tenant isolation:** Never return or mutate another tenant’s data.  
-2. **Outstanding:** `sum(delivered.meal_price × quantity) - sum(verified.payment.amount)` (quantity defaults to 1; tax applies to the line amount).  
-3. **Cancel cutoff:** `cutoff_hours` before local noon on delivery date in provider `settings.timezone` (default America/Toronto). Past dates cannot be cancelled.  
-4. **Pending approval:** No auto-deliveries until approved.  
-5. **Idempotent generation:** Unique index on tenant + customer + date (one stop; multi-tiffin via `quantity`).  
-6. **Subscription:** Gated deps use effective status (lazy expiry of trial).  
-7. **Integrations degrade:** Missing Resend → log stub; missing R2 → base64; missing Firebase → Google auth 501.  
-8. **Mark status:** Provider may mark delivered/missed/cancelled only for `delivery_date <= provider today` and only from `pending`. Undo to `pending` only from delivered/missed/cancelled.  
-9. **Payments:** Submit amount must be `> 0`; verify/reject only from `pending`.  
-10. **Pause:** `end` must be on or after `start`.
-11. **Meal schedule:** Provider sets weekday→quantity; consumers may change days only (new days get qty 1).  
-12. **Adjust meal (day plan):** Per-slot qty + type; qty 0 cancels pending; reopen stays cancelled at 0 until raised; adjust-context + adjust-day; multi-slot preview before Save.
-
----
-
-## 7. UI / UX requirements
-
-- Mobile-first; provider bottom nav + desktop sidebar; consumer bottom nav.  
-- Design tokens: [`design_guidelines.json`](../design_guidelines.json) (Cabinet Grotesk / Satoshi, terracotta `#D95D39`, sage `#4A7C59`).  
-- Preserve existing `data-testid` attributes used in QA.  
-- Toasts via Sonner.
-
----
-
-## 8. MVP shipped vs Phase 2
-
-### Shipped (MVP)
-
-- Provider/consumer auth (email + Google when Firebase configured)  
-- CRM, deliveries, Interac payments, reports, CSV  
-- Trial + plan activate (`BILLING_PROVIDER=none` by default)  
-- Resend + R2 with graceful fallback  
-- Firebase Admin + client wiring  
-- Next.js App Router frontend (TypeScript)
-
-### Wave A (shipped)
-
-| Item | Notes |
-|------|-------|
-| Subscription banner refresh | Unified `zorvia:subscription-refresh` event |
-| Timezone cancel cutoff | Provider `settings.timezone` local noon (default America/Toronto) |
-| Notification inbox | `GET/POST /notifications`; bell UI; emits on pay/cancel/signup |
-| Delivery day ops | FSA sort, bulk mark delivered, sticky next stop |
-| Interac reconcile | Search, outstanding hint, batch verify, unique references; admin **Record payment** for offline Interac |
-| Security hardening | Prod JWT guard, rate limits, soft-delete, upload limits |
-
-### Wave B (shipped)
-
-| Item | Notes |
-|------|-------|
-| Customer 360 | Detail page + timeline; list filters; name links |
-| Reject pending | API + list UI; notifies consumer |
-| Consumer schedule/profile | Cancel any upcoming pending; editable profile |
-| Pause resume | Future paused deliveries restored to pending |
-| Holidays | `closed_dates` on provider settings; engine skips |
-| Onboarding checklist | Provider dashboard + consumer pending empty state |
-| Monthly statements | `GET /reports/statement`; CSV on reports/payments/profile |
-
-### Wave C (shipped)
-
-| Item | Notes |
-|------|-------|
-| Staff / driver / viewer | Access matrix in §3; FE `lib/roles.ts`; layout redirects; More link filter; dashboard marks admin-only; drivers land on `/provider/deliveries` and can open `/provider/kitchen` |
-| Route order | `PATCH /deliveries/route-order`; up/down + Open in Maps |
-| PWA | `manifest.webmanifest`, `sw.js`, offline delivery status queue |
-| Live board | Deliveries poll 10s when focused; nav badges every 45s |
-| Mobile listings | Customers + Reports: stacked cards below `md`; dense tables from `md+` (no horizontal scroll) |
-| Delivery filters | Compact status chips + search; route reorder on `sm+` only |
-| Bulk confirms | Mark all delivered + Verify selected require AppSheet confirmation before applying |
-| Action button colors | `btn-danger` for delete/reject/cancel-delivery; `btn-secondary` for deliver/verify; `btn-outline` for dismiss Cancel |
-| CSV import + invites | Guided import sheet: pick billing policy → download policy sample → upload; `lunch_qty` / `dinner_qty` (0 = off); optional `notes` (CRM delivery notes); required `driver_name` (Settings staff, case-insensitive). Optional `meal_type` (Settings name or id, case-insensitive; blank = Regular; unknown fails). `city` / `province` match the CA master case-insensitively (`toronto`→Toronto, `ontario`→ON; unknown province fails). **Per-meal:** `delivery_days` + optional `opening_balance`. **Monthly:** required `monthly_plan`; `last_collection_status` `collected` = last collection taken (balance ~$0, next collection day) / `pending` = last collection open (due `last_collection_due`). Sample `joining_date` is `yyyy-mm-dd` (flexible parse on import). Phone/email unique per kitchen (row fails if duplicate in DB or same file). Local validation first, then unique-address ORS only for passed rows (fail → row error) + auto best-gap sequence. Policy from UI; async job + REST poll; error CSV. CRM add wizard unchanged; invite HTML → `/consumer-signup?code=` |
-| Customer route master | Optional `driver_id` + `delivery_sequence`; unique per driver pool; insert/move at N auto-shifts later stops; new deliveries inherit **0-based** `route_order` (`sequence − 1`) + driver |
-| Route planning | `/provider/route-planning` — **Overview** (all cities verify + Fix deep link) + **Plan** (city workspace: map + stop list, drag reorder/reassign, Setup/Optimize on demand); optimize keeps drivers and resequences from start; day deliveries sync latest `route_order` — see mealhq-api [`ROUTE_PLANNING.md`](https://github.com/rvchauhan99/mealhq-api/blob/main/docs/ROUTE_PLANNING.md) |
-| SMS stub | `send_sms` + `sms_notifications` setting; cancel confirmation |
-| Menu | Upload image anytime; history kept; consumer sees current (latest); email notify (Resend); WhatsApp share (Meta Cloud API) — see `docs/WHATSAPP_SETUP.md` |
-| WhatsApp credit | Prepaid wallet separate from SaaS plan; packages CAD 25/50/100 via Interac; admin approve adds credit; share deducts `WHATSAPP_COST_PER_MSG_CAD` per successful send; one successful share per menu; share disabled when balance &lt; blast estimate. Product gated by `WHATSAPP_FEATURES_ENABLED` (default off). |
-
-### Wave D (shipped)
-
-| Item | Notes |
-|------|-------|
-| Stripe billing (graceful) | `BILLING_PROVIDER=none\|stripe`; Checkout URL; webhook; 501 if keys missing |
-| Period extend on renew | `activate_plan` extends from remaining period when active |
-| Audit log | `audit.log_activity`; writers; More-page activity list |
-| GST/HST | `tax_rate_percent`; outstanding add-on; statement tax lines |
-| Brand rename | User-facing **Zorvia** (layouts, landing, emails) |
-
-### Detailed menus (shipped)
-
-| Item | Notes |
-|------|-------|
-| Item master | `/provider/menu?tab=items` — starter veg + non-veg catalog on signup and deploy; dish list with category, unit, default per-tiffin quantity; deactivate (never delete) and only when unused |
-| Weekly menu grid | `/provider/menu?tab=plan` — weekday × meal type; fixed items + “any *N* of *M*” choice groups; copy-day; optional lunch/dinner split; one weekly picture per meal type |
-| Consumer choices | Standing weekly preference (pick once, repeats until changed) on the consumer portal; provider can edit on a customer's behalf from the customer master |
-| Kitchen item totals | **Items to cook** on `/provider/kitchen` and the print PDF, resolved per customer choice, split by lunch/dinner |
-| Opt-in by use | No setting: the whole layer stays hidden until a grid cell is filled, so poster-only kitchens are unaffected |
-
-### Phase 2 / deferred
-
-| Item | Notes |
-|------|-------|
-| Notification inbox UI | API exists; UI deferred |
-| Stripe Customer Portal / recurring polish | Checkout + webhook shipped; portal optional |
-| Multi-currency | CAD assumptions |
-| WhatsApp two-way inbox | Outbound menu share shipped; chat inbox not built |
-
----
-
-## 9. Non-goals (do not invent)
-
-- Do not invent a notifications **inbox UI** without a product request (API already exists).  
-- Do not change tenancy model (`tenant_id = provider_id`).  
-- Do not commit secrets; document env **names** only.
-- Stripe is optional via `BILLING_PROVIDER`; leave default `none` unless tasked to enable.
+- [CONSUMER_ACCOUNT.md](./CONSUMER_ACCOUNT.md)
+- [SEO.md](./SEO.md)
+- [DEPLOY_VERCEL.md](./DEPLOY_VERCEL.md)
+- [INDEX.md](./INDEX.md)

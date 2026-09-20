@@ -419,6 +419,9 @@ export default function RoutePlanningPage() {
         <div>
           <p className="label-overline">Operations</p>
           <h1 className="font-display font-bold text-xl sm:text-2xl">Route planning</h1>
+          <p className="text-[11px] text-muted-foreground mt-1" data-testid="route-planning-page-attribution">
+            Geocoding powered by Geoapify. Map data © OpenStreetMap contributors.
+          </p>
         </div>
         <Link
           href="/provider/settings"

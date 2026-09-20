@@ -1,35 +1,13 @@
 ---
-description: MealHQ frontend repo memory — always apply; API is private mealhq-api
+description: MealHQ frontend platform — always apply; API is mealhq-api
 alwaysApply: true
 ---
 
-# MealHQ platform rule (public frontends)
+# MealHQ frontends (Zorvia)
 
-This repo is **frontend-only** (`frontend/` + `admin-frontend/`). Backend lives in private **`rvchauhan99/mealhq-api`**.
+Frontend-only (`frontend/` + `admin-frontend/`). Backend: sibling **mealhq-api**.
 
-Before broad exploration, prefer:
-
-- `docs/FUNCTIONAL.md` (product / journeys)
-- `docs/SEO.md` / `docs/README.md`
-- `AGENTS.md` (agent contract)
-- `design_guidelines.json` (UI)
-- API/schema/deploy docs: sibling clone of `mealhq-api` (`docs/PLATFORM_BLUEPRINT.md`, `TECHNICAL.md`, etc.)
-
-## Product
-
-- Brand: **MealHQ**. Infra IDs may still be `zorvia-*`.
-- Multi-tenant tiffin SaaS: provider admin + consumer; `tenant_id = provider_id`.
-- Frontend: Next.js App Router in `frontend/`. Platform admin: `admin-frontend/`.
-
-## Do not reinvent
-
-- Waves A–D shipped. Inbox UI deferred. WhatsApp chat inbox deferred; outbound share gated by backend flag.
-- Firebase client: `NEXT_PUBLIC_FIREBASE_*` (`mealhq-ca`).
-
-## Engineering constraints
-
-- Never commit `.env` or secrets.
-- Do **not** deploy to production (Vercel) or create git commits unless the user explicitly asks.
-- Preserve `data-testid`.
-- UI: follow `design_guidelines.json`.
-- Do not reintroduce a `backend/` folder here — change API code in `mealhq-api`.
+- Read [docs/INDEX.md](docs/INDEX.md). Product/API conflicts → mealhq-api docs win.
+- UI chrome: [design_guidelines.json](design_guidelines.json). Preserve `data-testid`.
+- No Phase 2 inbox / WhatsApp chat UI unless asked. No `backend/` folder here.
+- Full contract: [AGENTS.md](AGENTS.md).

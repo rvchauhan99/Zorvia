@@ -1,0 +1,14 @@
+---
+description: Mandatory FE testing gate — build + browser before Done
+alwaysApply: true
+---
+
+# Testing gate (FE)
+
+Before marking UI work **Done**:
+
+1. Follow [docs/TESTING.md](docs/TESTING.md).
+2. Run production **build** for the touched app.
+3. **Browser** verify primary path (start local servers if needed).
+4. Use skill `.cursor/skills/mealhq-ui-screen/SKILL.md`.
+5. Report build + browser results; close session tabs when finished.
