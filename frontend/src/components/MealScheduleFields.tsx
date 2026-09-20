@@ -143,10 +143,10 @@ function LinesEditor({
       {lines.map((ln, idx) => (
         <div
           key={`${ln.meal_type_id}-${idx}`}
-          className="flex flex-wrap items-end gap-2 rounded-xl border border-brand-border/60 p-2"
+          className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-2 rounded-xl border border-brand-border/60 p-2"
           data-testid={`${testidPrefix}-line-${idx}`}
         >
-          <label className="flex flex-col gap-1 min-w-[120px] flex-1">
+          <label className="flex flex-col gap-1 w-full sm:min-w-[120px] sm:flex-1">
             <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Type</span>
             <select
               data-testid={`${testidPrefix}-type-${idx}`}
@@ -170,43 +170,45 @@ function LinesEditor({
               )}
             </select>
           </label>
-          <label className="flex flex-col gap-1 w-[72px]">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Qty</span>
-            <input
-              type="number"
-              min={1}
-              max={MAX_LINE_TOTAL_QTY}
-              data-testid={`${testidPrefix}-qty-${idx}`}
-              disabled={disabled}
-              value={ln.quantity}
-              onChange={(e) => updateAt(idx, { quantity: Math.max(1, Math.min(MAX_LINE_TOTAL_QTY, Number(e.target.value) || 1)) })}
-              className={inputClassName}
-            />
-          </label>
-          <label className="flex flex-col gap-1 w-[88px]">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Price</span>
-            <input
-              type="number"
-              min={0.01}
-              step={0.01}
-              data-testid={`${testidPrefix}-price-${idx}`}
-              disabled={disabled}
-              value={ln.unit_price}
-              onChange={(e) => updateAt(idx, { unit_price: Number(e.target.value) || 0 })}
-              className={inputClassName}
-            />
-          </label>
-          {(lines.length > 1 || allowEmpty) ? (
-            <button
-              type="button"
-              data-testid={`${testidPrefix}-remove-${idx}`}
-              disabled={disabled}
-              onClick={() => removeAt(idx)}
-              className="h-11 min-h-[44px] px-2.5 rounded-full text-xs font-medium border border-brand-border bg-white text-muted-foreground cursor-pointer hover:bg-brand-surface"
-            >
-              Remove
-            </button>
-          ) : null}
+          <div className="flex gap-2 w-full sm:w-auto">
+            <label className="flex flex-col gap-1 flex-1 sm:w-[72px] sm:flex-none">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Qty</span>
+              <input
+                type="number"
+                min={1}
+                max={MAX_LINE_TOTAL_QTY}
+                data-testid={`${testidPrefix}-qty-${idx}`}
+                disabled={disabled}
+                value={ln.quantity}
+                onChange={(e) => updateAt(idx, { quantity: Math.max(1, Math.min(MAX_LINE_TOTAL_QTY, Number(e.target.value) || 1)) })}
+                className={inputClassName}
+              />
+            </label>
+            <label className="flex flex-col gap-1 flex-1 sm:w-[88px] sm:flex-none">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Price</span>
+              <input
+                type="number"
+                min={0.01}
+                step={0.01}
+                data-testid={`${testidPrefix}-price-${idx}`}
+                disabled={disabled}
+                value={ln.unit_price}
+                onChange={(e) => updateAt(idx, { unit_price: Number(e.target.value) || 0 })}
+                className={inputClassName}
+              />
+            </label>
+            {(lines.length > 1 || allowEmpty) ? (
+              <button
+                type="button"
+                data-testid={`${testidPrefix}-remove-${idx}`}
+                disabled={disabled}
+                onClick={() => removeAt(idx)}
+                className="h-11 min-h-[44px] self-end px-2.5 rounded-full text-xs font-medium border border-brand-border bg-white text-muted-foreground cursor-pointer hover:bg-brand-surface"
+              >
+                Remove
+              </button>
+            ) : null}
+          </div>
         </div>
       ))}
       <div className="flex flex-wrap items-center gap-2">

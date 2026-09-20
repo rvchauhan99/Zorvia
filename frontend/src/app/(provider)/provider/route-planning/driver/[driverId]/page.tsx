@@ -277,7 +277,7 @@ export default function DriverRouteDetailPage() {
       data-testid="route-driver-detail"
     >
       <header
-        className="shrink-0 z-20 px-3 sm:px-4 py-3 flex flex-wrap items-center gap-2 border-b border-[#E5E9EF] bg-white print:border-0"
+        className="shrink-0 z-20 px-3 sm:px-4 py-3 flex flex-wrap items-center gap-2 border-b border-[#E5E9EF] bg-white print:border-0 pt-[max(0.75rem,env(safe-area-inset-top,0px))]"
         data-testid="route-driver-detail-header"
       >
         <Link
@@ -344,7 +344,7 @@ export default function DriverRouteDetailPage() {
 
       <div className="flex-1 min-h-0 flex flex-col lg:flex-row">
         <div
-          className="h-[40vh] lg:h-auto lg:flex-1 min-h-0 relative print:hidden"
+          className="h-[min(40vh,320px)] lg:h-auto lg:flex-1 min-h-0 relative print:hidden pb-[env(safe-area-inset-bottom,0px)]"
           data-testid="route-driver-detail-map"
         >
           {loading ? (
