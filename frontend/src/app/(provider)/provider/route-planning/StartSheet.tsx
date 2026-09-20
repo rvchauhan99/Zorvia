@@ -17,7 +17,7 @@ export default function StartSheet({ state, busy, onChange, onClose, onSave }: P
     <AppSheet
       open={!!state}
       onClose={onClose}
-      title="Set city start"
+      title="Set pool start"
       size="md"
       closeTestId="route-start-sheet-close"
       footer={
@@ -45,7 +45,8 @@ export default function StartSheet({ state, busy, onChange, onClose, onSave }: P
       {state && (
         <div className="flex flex-col gap-4" data-testid="route-start-sheet">
           <p className="text-sm">
-            Start from <span className="font-medium">{state.customerName}</span>
+            Start <span className="font-medium">{state.poolTitle}</span> from{" "}
+            <span className="font-medium">{state.customerName}</span>
           </p>
 
           <div className="flex flex-col gap-2">
@@ -122,8 +123,8 @@ export default function StartSheet({ state, busy, onChange, onClose, onSave }: P
           )}
 
           <p className="text-xs text-muted-foreground">
-            Saving a start re-optimizes this city so sequences match the new depot. Driver assignments
-            are preserved.
+            Saving re-optimizes this pool&apos;s sequence from the new start. Other drivers are not
+            changed.
           </p>
         </div>
       )}

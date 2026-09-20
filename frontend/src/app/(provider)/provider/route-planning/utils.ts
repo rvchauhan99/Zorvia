@@ -1,4 +1,4 @@
-import type { BulkRangeRow, Driver, Kitchen, PoolSection, Stop } from "./types";
+import type { BulkRangeRow, Driver, EffectiveStart, Kitchen, PoolSection, Stop } from "./types";
 
 export function todayIsoLocal() {
   const d = new Date();
@@ -20,6 +20,25 @@ export function kitchenAddressLine(kitchen: Kitchen) {
       .join(", ");
   }
   return (kitchen.address || "").trim();
+}
+
+/** API pool_key: driver id or "unassigned". */
+export function poolKeyForDriverId(driverId: string | null | undefined): string {
+  if (!driverId) return "unassigned";
+  return driverId;
+}
+
+export function poolKeyForStop(stop: { driver_id?: string | null }): string {
+  return poolKeyForDriverId(stop.driver_id);
+}
+
+export function originLineForPool(
+  poolKey: string,
+  effectivePoolStarts: Record<string, EffectiveStart> | undefined,
+  kitchenFallback: string
+): string {
+  const eff = effectivePoolStarts?.[poolKey];
+  return (eff?.label as string | undefined) || kitchenFallback || "";
 }
 
 export function mapsUrlForStops(originAddress: string, stops: Stop[]) {

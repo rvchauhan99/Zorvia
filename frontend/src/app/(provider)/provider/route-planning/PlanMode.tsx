@@ -51,7 +51,8 @@ type Props = {
   drivers: Driver[];
   kitchen: Kitchen;
   effectiveStart: EffectiveStart | null;
-  activeOverride: { ends_on?: string } | null;
+  effectivePoolStarts: Record<string, EffectiveStart>;
+  kitchenLine: string;
   routingConfigured: boolean;
   originLine: string;
   selected: Set<string>;
@@ -94,7 +95,8 @@ export default function PlanMode({
   drivers,
   kitchen,
   effectiveStart,
-  activeOverride,
+  effectivePoolStarts,
+  kitchenLine,
   routingConfigured,
   originLine,
   selected,
@@ -298,6 +300,8 @@ export default function PlanMode({
             listFilter={listFilter}
             searchQuery={searchQuery}
             originLine={originLine}
+            kitchenLine={kitchenLine}
+            effectivePoolStarts={effectivePoolStarts}
             busy={busy}
             routingConfigured={routingConfigured}
             hiddenDriverKeys={hiddenDriverKeys}
@@ -324,10 +328,12 @@ export default function PlanMode({
         )}
       </div>
 
-      {(effectiveStart || activeOverride) && (
+      {effectiveStart && (
         <div className="shrink-0 px-3 py-2 border-t border-[#E5E9EF] text-[10px] text-[#5C6570]">
-          Start: {effectiveStart?.label || "Kitchen"}
-          {activeOverride?.ends_on ? ` · temp until ${activeOverride.ends_on}` : ""}
+          Start: {effectiveStart.label || "Kitchen"}
+          {effectiveStart.override?.ends_on
+            ? ` · temp until ${effectiveStart.override.ends_on}`
+            : ""}
         </div>
       )}
     </div>

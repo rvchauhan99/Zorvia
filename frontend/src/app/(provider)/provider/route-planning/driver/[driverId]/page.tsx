@@ -171,8 +171,10 @@ export default function DriverRouteDetailPage() {
     : drivers.find((d) => d.id === driverIdParam)?.phone || "";
 
   const kitchen: Kitchen = plan?.kitchen || {};
+  const poolKey = isUnassigned ? "unassigned" : driverIdParam;
+  const poolStart = plan?.effective_pool_starts?.[poolKey] || null;
   const originLine =
-    (plan?.effective_start?.label as string | undefined) ||
+    (poolStart?.label as string | undefined) ||
     kitchenAddressLine(kitchen) ||
     "";
   const mapsUrl = mapsUrlForStops(originLine, stops);
@@ -353,7 +355,7 @@ export default function DriverRouteDetailPage() {
             <RouteMap
               stops={stops}
               kitchen={kitchen}
-              effectiveStart={plan?.effective_start || null}
+              effectiveStart={poolStart}
               driverIds={isUnassigned ? [] : [driverIdParam]}
               roadPolylines={polyline ? [polyline] : []}
               fullBleed

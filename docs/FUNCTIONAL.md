@@ -45,17 +45,18 @@ Detail: API `CYCLE_SUBSCRIPTION.md` / `MONTHLY_BILLING.md`.
 
 Screen: `/provider/route-planning` — **full-bleed Routes workspace** (Leaflet map + side rail). Visual system: [Figma — MealHQ Route planning workspace](https://www.figma.com/design/hPOhVI0bcgtWUSaxnbz14a) (not legacy `design_guidelines.json`).
 
-- Top bar: meal slot · date · city · **Export CSV** (all pools) · Optimize · Open in Maps  
-- Left rail (only scroll): Unassigned first → driver pools; compact stop rows with name + **phone** (`wa.me`); pool **View** → `/provider/route-planning/driver/{id}` (map + km/min + stop list + CSV/**Print**)  
+- Top bar: meal slot · date · city (**filter only**) · **Export CSV** (all pools) · Optimize · Open in Maps  
+- Left rail (only scroll): Unassigned first → driver pools; compact stop rows with name + **phone** (`wa.me`); pool header shows **Start: Kitchen** / **Start: {customer}**; pool **View** → `/provider/route-planning/driver/{id}` (map + km/min from pool start + stop list + CSV/**Print**)  
 - Driver **Print**: downloads route PDF + opens **driver** WhatsApp (Settings → Team phone) to attach the PDF; customer phones in the PDF/list open **customer** chat  
 - **Deliveries** (`/provider/deliveries`, admin + driver): customer phone on each stop / next card → `wa.me`  
 - **Kitchen** pack list + Print PDF: name, phone (`wa.me` in UI), CRM notes  
 - Settings → Team: optional staff **phone** (create + blur-save on drivers) for Print→driver WhatsApp  
-- Map: OSRM road polylines via `POST /route-planning/route-geometry` (distance/duration when available; straight-leg fallback)  
+- Map: OSRM road polylines via `POST /route-planning/route-geometry` (distance/duration when available; straight-leg fallback); origin = each pool’s effective start  
 - Selection dock: Assign / **To Unassigned** / By sequence (empty SearchableSelect shows “Unassigned pool”)  
 - **Assign by sequence** sheet: defaults source to the largest non-empty pool; range rows are stacked cards (From/To + full-width driver) so the picker is not clipped  
-- **Optimize sheet** (Figma): scope = This city / All cities / Unassigned pool / **Full rebalance (auto-assign)** / Selected drivers; every run requires a confirm step; Full rebalance needs an ack checkbox; Unassigned gets a VROOM tour (`1..N`) then Bulk-split by sequence; Full rebalance unassigns all → tour → even-split to every active driver → per-driver reopt  
-- **Best fit**: Unassigned ⋯ **Best fit** (one stop) or header **Best fit all** → confirm → `POST /route-planning/auto-place` (cheapest driver gap, sequential)  
+- **Set as start**: stop ⋯ → StartSheet (**Set pool start**) without selecting a city → Temporary / Default → quiet Optimize **that pool only**  
+- **Optimize sheet** (Figma): scope = This city / All cities / Unassigned pool / **Full rebalance (auto-assign)** / Selected drivers; every run requires a confirm step; Full rebalance needs an ack checkbox; tours use **per-pool starts** (kitchen by default); Full rebalance unassigns all → kitchen day-build → even-split → per-driver reopt from each pool start  
+- **Best fit**: Unassigned ⋯ **Best fit** (one stop) or header **Best fit all** → confirm → `POST /route-planning/auto-place` (cheapest driver gap vs pool start, sequential)  
 - Day-build: Unassign all → Optimize Unassigned → Bulk ranges → Optimize drivers **or** one-click **Full rebalance**  
 - API/routing contract: mealhq-api `docs/ROUTE_PLANNING.md`
 

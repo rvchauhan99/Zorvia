@@ -70,12 +70,12 @@ function confirmCopy(
     case "unassigned_pool":
       return {
         title: "Confirm optimize Unassigned?",
-        body: `Build one kitchen tour for ${unassignedCount} unassigned stop${unassignedCount === 1 ? "" : "s"} (sequences 1…N). Drivers are not changed.`,
+        body: `Build one tour from the Unassigned pool start for ${unassignedCount} stop${unassignedCount === 1 ? "" : "s"} (sequences 1…N). Drivers are not changed.`,
       }
     case "full_rebalance":
       return {
         title: "Confirm full rebalance?",
-        body: `This unassigns every stop, builds one kitchen tour, even-splits across ${driverCount} active driver${driverCount === 1 ? "" : "s"}, then re-optimizes each route. Existing driver assignments will be replaced.`,
+        body: `This unassigns every stop, builds one kitchen day-tour, even-splits across ${driverCount} active driver${driverCount === 1 ? "" : "s"}, then re-optimizes each pool from its start. Existing driver assignments will be replaced.`,
       }
     case "selected_drivers":
       return {
@@ -339,25 +339,25 @@ export default function OptimizeSheet({
                   "this_city",
                   hasCity ? `This city (${city})` : "This city",
                   hasCity
-                    ? "Splices this city’s tour into each pool’s full multi-city order (including Unassigned)."
+                    ? "Per-pool tours for this city’s stops from each pool’s start, spliced into the full multi-city order."
                     : "Pick a city in the top bar to enable this scope.",
                   !hasCity
                 )}
                 {scopeOption(
                   "all_cities",
                   "All cities",
-                  "Independent road-smart tour for every non-empty pool from the kitchen (drivers + Unassigned)."
+                  "Independent road-smart tour for every non-empty pool from that pool’s start (kitchen by default)."
                 )}
                 {scopeOption(
                   "unassigned_pool",
                   `Unassigned pool (${unassignedCount})`,
-                  "One road-smart tour from the kitchen (1..N). Then use Bulk to split by sequence.",
+                  "One road-smart tour from the Unassigned pool start (1..N). Then use Bulk to split by sequence.",
                   unassignedCount === 0
                 )}
                 {scopeOption(
                   "full_rebalance",
                   `Full rebalance (auto-assign · ${drivers.length} drivers)`,
-                  "Unassign all → one kitchen tour → even split to every active driver → re-optimize each route.",
+                  "Unassign all → kitchen day-build → even split → re-optimize each pool from its start.",
                   stops.length === 0 || drivers.length === 0
                 )}
                 {scopeOption(
