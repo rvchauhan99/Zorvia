@@ -98,5 +98,13 @@ frontend/node_modules/.cache/default-development/0.pack
 # Local agent git identity (do not commit)
 .gitconfig
 
+# Local-only ops (NEVER GitHub) — see .cursor/rules/no-local-ops-to-github.mdc
+docs/*_CLIENT_TEST_GUIDE.md
+docs/*_GO_LIVE.md
+docs/KRISHNA_*
+**/testdata/
+**/*_customers.csv
+**/*MealHQ_Import*
+
 # Firebase / local secrets
 *.pem

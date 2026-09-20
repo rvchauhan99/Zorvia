@@ -28,6 +28,8 @@ import {
   kitchenAddressLine,
   largestPoolKey,
   newBulkRow,
+  originLineForPool,
+  poolKeyForStop,
   seqSpan,
   todayIsoLocal,
 } from "./utils";
@@ -290,13 +292,15 @@ export default function RoutePlanningPage() {
   };
 
   const openStartSheet = (stop: Stop) => {
-    if (!selectedCity || selectedCity === "all") {
-      toast.error("Select a city first to set a start point");
-      return;
-    }
+    const poolKey = poolKeyForStop(stop);
+    const poolTitle = stop.driver_id
+      ? stop.driver_name || drivers.find((d) => d.id === stop.driver_id)?.name || "Driver"
+      : "Unassigned";
     setStartSheet({
       customerId: stop.id,
       customerName: stop.name || stop.id,
+      poolKey,
+      poolTitle,
       mode: "temporary",
       duration: "today",
       days: 3,
@@ -304,22 +308,24 @@ export default function RoutePlanningPage() {
   };
 
   const saveStartFromSheet = async () => {
-    if (!startSheet || !selectedCity || selectedCity === "all") return;
+    if (!startSheet) return;
     setBusy(true);
     try {
       if (startSheet.mode === "default") {
         await api
-          .delete("/route-planning/city-start-override", { params: { city: selectedCity } })
+          .delete("/route-planning/pool-start-override", {
+            params: { pool_key: startSheet.poolKey },
+          })
           .catch(() => undefined);
-        await api.post("/route-planning/city-start", {
-          city: selectedCity,
+        await api.post("/route-planning/pool-start", {
+          pool_key: startSheet.poolKey,
           type: "customer",
           customer_id: startSheet.customerId,
         });
-        toast.success("Default start saved (temporary cleared) — optimizing…");
+        toast.success("Pool start saved — optimizing…");
       } else {
-        await api.post("/route-planning/city-start-override", {
-          city: selectedCity,
+        await api.post("/route-planning/pool-start-override", {
+          pool_key: startSheet.poolKey,
           customer_id: startSheet.customerId,
           mode: startSheet.duration,
           days: startSheet.duration === "days" ? startSheet.days : undefined,
@@ -327,15 +333,20 @@ export default function RoutePlanningPage() {
         });
         toast.success(
           startSheet.duration === "today"
-            ? "Temporary start set — optimizing route…"
-            : `Temporary start set for ${startSheet.days} days — optimizing…`
+            ? "Temporary pool start set — optimizing…"
+            : `Temporary pool start for ${startSheet.days} days — optimizing…`
         );
       }
+      const poolKey = startSheet.poolKey;
       setStartSheet(null);
       setBusy(false);
-      await runOptimize({ quiet: true });
+      if (poolKey === "unassigned") {
+        await runOptimize({ quiet: true, unassignedOnly: true, city: null });
+      } else {
+        await runOptimize({ quiet: true, driverIds: [poolKey], city: null });
+      }
     } catch (e: any) {
-      toast.error(e?.response?.data?.detail || "Could not set start point");
+      toast.error(e?.response?.data?.detail || "Could not set pool start");
       setBusy(false);
     }
   };
@@ -523,10 +534,19 @@ export default function RoutePlanningPage() {
 
   const kitchen = plan?.kitchen || {};
   const kitchenLine = kitchenAddressLine(kitchen);
-  const effectiveStart = plan?.effective_start || null;
-  const activeOverride = plan?.active_override || null;
+  const effectivePoolStarts = plan?.effective_pool_starts || {};
   const cities: CityChip[] = Array.isArray(plan?.cities) ? plan.cities : [];
-  const originLine = (effectiveStart?.label as string | undefined) || kitchenLine || "";
+  // Map / global Maps: when list filter is one pool, use that pool's start; else kitchen.
+  const mapPoolKey =
+    listFilter === "unassigned"
+      ? "unassigned"
+      : listFilter !== "all" && listFilter !== "issues"
+        ? listFilter
+        : null;
+  const effectiveStart = mapPoolKey ? effectivePoolStarts[mapPoolKey] || null : null;
+  const originLine = mapPoolKey
+    ? originLineForPool(mapPoolKey, effectivePoolStarts, kitchenLine)
+    : kitchenLine || "";
   const configured = !!plan?.routing_configured;
 
   if (!admin) {
@@ -551,7 +571,8 @@ export default function RoutePlanningPage() {
         drivers={drivers}
         kitchen={kitchen}
         effectiveStart={effectiveStart}
-        activeOverride={activeOverride}
+        effectivePoolStarts={effectivePoolStarts}
+        kitchenLine={kitchenLine}
         routingConfigured={configured}
         originLine={originLine}
         selected={selected}

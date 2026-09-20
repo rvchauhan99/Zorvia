@@ -37,11 +37,13 @@ import { CustomerWhatsAppContact } from "@/components/CustomerWhatsAppContact";
 import { OPS_DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
 import MoveStopSheet from "./MoveStopSheet";
-import type { Driver, PoolSection, Stop } from "./types";
+import type { Driver, EffectiveStart, PoolSection, Stop } from "./types";
 import {
   driverColor,
   isIssueStop,
   mapsUrlForStops,
+  originLineForPool,
+  poolKeyForDriverId,
   seqSpan,
   stopAddress,
   stopMatchesQuery,
@@ -55,6 +57,8 @@ type Props = {
   listFilter: string;
   searchQuery: string;
   originLine: string;
+  kitchenLine?: string;
+  effectivePoolStarts?: Record<string, EffectiveStart>;
   busy: boolean;
   routingConfigured: boolean;
   hiddenDriverKeys?: Set<string>;
@@ -291,6 +295,8 @@ export default function StopListPane({
   listFilter,
   searchQuery,
   originLine,
+  kitchenLine = "",
+  effectivePoolStarts,
   busy,
   routingConfigured,
   hiddenDriverKeys,
@@ -505,6 +511,17 @@ export default function StopListPane({
           const dropTarget = overSectionKey === section.key;
           const poolColor = driverColor(section.driverId, driverIds);
           const isHidden = hidden.has(section.key);
+          const pkey = poolKeyForDriverId(section.driverId);
+          const poolStart = effectivePoolStarts?.[pkey];
+          const poolOrigin =
+            originLineForPool(pkey, effectivePoolStarts, kitchenLine || originLine) ||
+            originLine;
+          const startBadge =
+            !poolStart ||
+            poolStart.source === "kitchen_fallback" ||
+            poolStart.type === "kitchen"
+              ? "Start: Kitchen"
+              : `Start: ${poolStart.label || "Custom"}`;
 
           return (
             <div
@@ -536,8 +553,8 @@ export default function StopListPane({
                   <p className="font-semibold text-[13px] text-[#0B1220] truncate leading-tight">
                     {section.title}
                   </p>
-                  <p className="text-[10px] text-[#5C6570] leading-tight">
-                    {section.stops.length} · {spanLabel}
+                  <p className="text-[10px] text-[#5C6570] leading-tight truncate" title={startBadge}>
+                    {section.stops.length} · {spanLabel} · {startBadge}
                   </p>
                 </div>
                 {onToggleDriverVisibility ? (
@@ -562,7 +579,7 @@ export default function StopListPane({
                   All
                 </label>
                 <a
-                  href={mapsUrlForStops(originLine, mapsStops)}
+                  href={mapsUrlForStops(poolOrigin, mapsStops)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="h-8 px-2 rounded-lg text-[11px] font-medium text-[#0B1220] hover:bg-[#F4F6F8] inline-flex items-center gap-1"

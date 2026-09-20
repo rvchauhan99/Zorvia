@@ -47,11 +47,13 @@ export type EffectiveStart = {
   label?: string;
   source?: "override" | "default" | "kitchen_fallback" | string;
   city_key?: string;
+  pool_key?: string;
   override?: {
     id?: string;
     starts_on?: string;
     ends_on?: string;
     customer_id?: string;
+    pool_key?: string;
   } | null;
 };
 
@@ -64,9 +66,12 @@ export type CityStartDefault = {
   updated_at?: string;
 };
 
+export type PoolStartDefault = CityStartDefault;
+
 export type ActiveOverride = {
   id?: string;
   city?: string;
+  pool_key?: string;
   customer_id?: string;
   starts_on?: string;
   ends_on?: string;
@@ -86,6 +91,9 @@ export type RoutePlan = {
   city_start_default?: CityStartDefault | null;
   active_override?: ActiveOverride | null;
   effective_start?: EffectiveStart | null;
+  pool_starts?: Record<string, PoolStartDefault>;
+  effective_pool_starts?: Record<string, EffectiveStart>;
+  pool_start_overrides?: ActiveOverride[];
   stops?: Stop[];
   unplaced?: Stop[];
   geocode_failed?: Stop[];
@@ -118,6 +126,8 @@ export type BulkRangeRow = {
 export type StartSheetState = {
   customerId: string;
   customerName: string;
+  poolKey: string;
+  poolTitle: string;
   mode: "default" | "temporary";
   duration: "today" | "days";
   days: number;
