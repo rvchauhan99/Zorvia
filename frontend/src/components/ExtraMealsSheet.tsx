@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import AppSheet from "@/components/AppSheet";
 import SearchableSelect from "@/components/SearchableSelect";
+import { NumericInput } from "@/components/NumericInput";
 import { fmtCAD, todayISO } from "@/lib/format";
 import {
   projectConsumerDaySummary,
@@ -162,6 +163,7 @@ export default function ExtraMealsSheet({
   const [ctx, setCtx] = useState<AdjustContext | null>(null);
   const [ctxLoading, setCtxLoading] = useState(false);
   const [edits, setEdits] = useState<Record<string, SlotEdit>>({});
+  const [qtyDrafts, setQtyDrafts] = useState<Record<string, string>>({});
   const [daySummary, setDaySummary] = useState<DaySummary | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [highlightSlot, setHighlightSlot] = useState<string | null>(defaultMealSlot || null);
@@ -174,6 +176,7 @@ export default function ExtraMealsSheet({
     setHighlightSlot(defaultMealSlot || null);
     setCtx(null);
     setEdits({});
+    setQtyDrafts({});
   }, [open, defaultDate, defaultMealSlot]);
 
   useEffect(() => {
@@ -711,32 +714,53 @@ export default function ExtraMealsSheet({
                                   : `adjust-qty-dec-${slot.meal_slot}-${idx}`
                               }
                               className="h-11 w-11 rounded-full border border-brand-border bg-white text-lg font-semibold cursor-pointer hover:bg-brand-surface disabled:opacity-40"
-                              onClick={() =>
+                              onClick={() => {
                                 updateLine(slot.meal_slot, idx, {
                                   quantity: Math.max(1, ln.quantity - 1),
-                                })
-                              }
+                                });
+                                setQtyDrafts((prev) => {
+                                  const next = { ...prev };
+                                  delete next[`${slot.meal_slot}-${idx}`];
+                                  return next;
+                                });
+                              }}
                               disabled={ln.quantity <= 1 || locked}
                             >
                               −
                             </button>
-                            <input
+                            <NumericInput
                               data-testid={
                                 idx === 0
                                   ? `adjust-qty-${slot.meal_slot}`
                                   : `adjust-qty-${slot.meal_slot}-${idx}`
                               }
-                              type="number"
+                              mode="integer"
                               min={1}
                               max={MAX_QTY}
+                              emptyFallback="1"
                               className="h-11 w-16 text-center rounded-xl border border-brand-border bg-white text-sm font-semibold"
-                              value={ln.quantity}
-                              onChange={(e) => {
-                                const v = Math.floor(Number(e.target.value) || 1);
-                                updateLine(slot.meal_slot, idx, {
-                                  quantity: Math.min(MAX_QTY, Math.max(1, v)),
+                              value={
+                                qtyDrafts[`${slot.meal_slot}-${idx}`] ?? String(ln.quantity)
+                              }
+                              onValueChange={(v) =>
+                                setQtyDrafts((prev) => ({
+                                  ...prev,
+                                  [`${slot.meal_slot}-${idx}`]: v,
+                                }))
+                              }
+                              onBlurCommit={(committed) => {
+                                const v = Math.min(
+                                  MAX_QTY,
+                                  Math.max(1, Math.floor(Number(committed) || 1)),
+                                );
+                                updateLine(slot.meal_slot, idx, { quantity: v });
+                                setQtyDrafts((prev) => {
+                                  const next = { ...prev };
+                                  delete next[`${slot.meal_slot}-${idx}`];
+                                  return next;
                                 });
                               }}
+                              disabled={locked}
                             />
                             <button
                               type="button"
@@ -746,11 +770,16 @@ export default function ExtraMealsSheet({
                                   : `adjust-qty-inc-${slot.meal_slot}-${idx}`
                               }
                               className="h-11 w-11 rounded-full border border-brand-border bg-white text-lg font-semibold cursor-pointer hover:bg-brand-surface disabled:opacity-40"
-                              onClick={() =>
+                              onClick={() => {
                                 updateLine(slot.meal_slot, idx, {
                                   quantity: Math.min(MAX_QTY, ln.quantity + 1),
-                                })
-                              }
+                                });
+                                setQtyDrafts((prev) => {
+                                  const next = { ...prev };
+                                  delete next[`${slot.meal_slot}-${idx}`];
+                                  return next;
+                                });
+                              }}
                               disabled={ln.quantity >= MAX_QTY || locked || qty >= MAX_QTY}
                             >
                               +
@@ -771,19 +800,18 @@ export default function ExtraMealsSheet({
                         {allowPriceOverride ? (
                           <label className="flex flex-col gap-1.5">
                             <span className="label-overline">Unit price (CAD)</span>
-                            <input
+                            <NumericInput
                               data-testid={
                                 idx === 0
                                   ? `adjust-meal-price-${slot.meal_slot}`
                                   : `adjust-meal-price-${slot.meal_slot}-${idx}`
                               }
-                              type="number"
+                              mode="decimal"
                               min={0.01}
-                              step={0.01}
                               className="h-11 px-3 rounded-xl border border-brand-border bg-white text-sm"
                               value={ln.priceStr}
-                              onChange={(e) =>
-                                updateLine(slot.meal_slot, idx, { priceStr: e.target.value })
+                              onValueChange={(v) =>
+                                updateLine(slot.meal_slot, idx, { priceStr: v })
                               }
                               disabled={locked}
                             />

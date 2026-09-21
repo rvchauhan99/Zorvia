@@ -28,6 +28,7 @@ import { formatCaPostal, isValidCaPostal } from "@/lib/ca-provinces";
 import { CA_TIMEZONE_OPTIONS_LONG } from "@/lib/ca-timezones";
 import CaAddressFields from "@/components/CaAddressFields";
 import SearchableSelect from "@/components/SearchableSelect";
+import { NumericInput } from "@/components/NumericInput";
 import AppSheet from "@/components/AppSheet";
 
 type TabId = "general" | "operations" | "billing" | "notifications" | "team";
@@ -78,6 +79,7 @@ export default function Settings() {
   const [hasPassword, setHasPassword] = useState(true);
   const [waEnabled, setWaEnabled] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("general");
+  const [numDrafts, setNumDrafts] = useState<Record<string, string>>({});
 
   const inputClass =
     "h-11 px-4 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all w-full text-sm";
@@ -661,14 +663,13 @@ export default function Settings() {
                         <div className="flex items-center gap-2 shrink-0">
                           <div className="relative flex items-center">
                             <span className="absolute left-3 text-xs font-semibold text-muted-foreground">$</span>
-                            <input
+                            <NumericInput
                               data-testid={t.id === "regular" ? "s-price" : `s-meal-type-price-${t.id}`}
-                              type="number"
-                              step="0.5"
+                              mode="decimal"
                               min={0.01}
                               className={`${inputClass} w-28 pl-7 pr-3 font-mono`}
-                              value={t.price}
-                              onChange={(e) => updMealTypePrice(t.id, e.target.value)}
+                              value={String(t.price ?? "")}
+                              onValueChange={(v) => updMealTypePrice(t.id, v)}
                               aria-label={`${t.name} price CAD`}
                             />
                           </div>
@@ -699,21 +700,20 @@ export default function Settings() {
               <div className="card-tinted p-3 sm:p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="flex flex-col gap-1.5">
                   <span className="label-overline">Cancellation Cutoff (Hours)</span>
-                  <input data-testid="s-cutoff" type="number" className={inputClass} value={prov.settings?.cutoff_hours ?? 4} onChange={(e) => updSettings("cutoff_hours", e.target.value)} />
+                  <NumericInput data-testid="s-cutoff" mode="integer" min={0} className={inputClass} value={String(prov.settings?.cutoff_hours ?? 4)} onValueChange={(v) => updSettings("cutoff_hours", v)} />
                   <span className="text-xs text-muted-foreground">Hours before delivery time after which customers cannot cancel.</span>
                 </label>
 
                 <label className="flex flex-col gap-1.5">
                   <span className="label-overline">Tax Rate % (GST/HST)</span>
-                  <input
+                  <NumericInput
                     data-testid="s-tax-rate"
-                    type="number"
+                    mode="decimal"
                     min={0}
                     max={100}
-                    step="0.01"
                     className={inputClass}
-                    value={prov.settings?.tax_rate_percent ?? 0}
-                    onChange={(e) => updSettings("tax_rate_percent", e.target.value)}
+                    value={String(prov.settings?.tax_rate_percent ?? 0)}
+                    onValueChange={(v) => updSettings("tax_rate_percent", v)}
                   />
                   <span className="text-xs text-muted-foreground">Applied to meal prices on outstanding statements. 0 = tax exempt.</span>
                 </label>
@@ -848,13 +848,22 @@ export default function Settings() {
                     {isCycleVariant ? (
                       <label className="flex flex-col gap-1.5 max-w-xs">
                         <span className="label-overline">Default cycle length (plan days)</span>
-                        <input
+                        <NumericInput
                           data-testid="monthly-default-cycle-days"
-                          type="number"
+                          mode="integer"
                           min={1}
+                          emptyFallback="20"
                           className={inputClass}
-                          value={mb.default_cycle_days ?? 20}
-                          onChange={(e) => updMonthlyBilling({ default_cycle_days: Number(e.target.value) })}
+                          value={numDrafts["default_cycle_days"] ?? String(mb.default_cycle_days ?? 20)}
+                          onValueChange={(v) => setNumDrafts((d) => ({ ...d, default_cycle_days: v }))}
+                          onBlurCommit={(c) => {
+                            updMonthlyBilling({ default_cycle_days: Number(c) || 20 });
+                            setNumDrafts((d) => {
+                              const next = { ...d };
+                              delete next.default_cycle_days;
+                              return next;
+                            });
+                          }}
                         />
                         <span className="text-xs text-muted-foreground">
                           Used when a plan below leaves its cycle length blank. Collection dates
@@ -864,14 +873,23 @@ export default function Settings() {
                     ) : (
                       <label className="flex flex-col gap-1.5 max-w-xs">
                         <span className="label-overline">Default Collection Day (1–31)</span>
-                        <input
+                        <NumericInput
                           data-testid="monthly-default-collection-day"
-                          type="number"
+                          mode="integer"
                           min={1}
                           max={31}
+                          emptyFallback="1"
                           className={inputClass}
-                          value={mb.default_collection_day ?? 1}
-                          onChange={(e) => updMonthlyBilling({ default_collection_day: Number(e.target.value) })}
+                          value={numDrafts["default_collection_day"] ?? String(mb.default_collection_day ?? 1)}
+                          onValueChange={(v) => setNumDrafts((d) => ({ ...d, default_collection_day: v }))}
+                          onBlurCommit={(c) => {
+                            updMonthlyBilling({ default_collection_day: Number(c) || 1 });
+                            setNumDrafts((d) => {
+                              const next = { ...d };
+                              delete next.default_collection_day;
+                              return next;
+                            });
+                          }}
                         />
                       </label>
                     )}
@@ -889,42 +907,61 @@ export default function Settings() {
                               <span className="font-medium text-muted-foreground">
                                 {isCycleVariant ? "Fee per cycle (CAD)" : "Monthly Fee (CAD)"}
                               </span>
-                              <input
-                                type="number"
+                              <NumericInput
+                                mode="decimal"
                                 min={0.01}
-                                step="0.5"
+                                emptyFallback="0"
                                 className={inputClass}
-                                value={plan.monthly_fee_cad}
-                                onChange={(e) => updMonthlyPlan(idx, "monthly_fee_cad", Number(e.target.value))}
+                                value={numDrafts[`plan-fee-${idx}`] ?? String(plan.monthly_fee_cad ?? "")}
+                                onValueChange={(v) => setNumDrafts((d) => ({ ...d, [`plan-fee-${idx}`]: v }))}
+                                onBlurCommit={(c) => {
+                                  updMonthlyPlan(idx, "monthly_fee_cad", Number(c) || 0);
+                                  setNumDrafts((d) => {
+                                    const next = { ...d };
+                                    delete next[`plan-fee-${idx}`];
+                                    return next;
+                                  });
+                                }}
                               />
                             </label>
                             <label className="flex flex-col gap-1 text-xs">
                               <span className="font-medium text-muted-foreground">Standard Expected Days</span>
-                              <input
-                                type="number"
+                              <NumericInput
+                                mode="integer"
                                 min={1}
+                                emptyFallback="1"
                                 className={inputClass}
-                                value={plan.standard_days}
-                                onChange={(e) => updMonthlyPlan(idx, "standard_days", Number(e.target.value))}
+                                value={numDrafts[`plan-days-${idx}`] ?? String(plan.standard_days ?? "")}
+                                onValueChange={(v) => setNumDrafts((d) => ({ ...d, [`plan-days-${idx}`]: v }))}
+                                onBlurCommit={(c) => {
+                                  updMonthlyPlan(idx, "standard_days", Number(c) || 1);
+                                  setNumDrafts((d) => {
+                                    const next = { ...d };
+                                    delete next[`plan-days-${idx}`];
+                                    return next;
+                                  });
+                                }}
                               />
                             </label>
                             {isCycleVariant && (
                               <label className="flex flex-col gap-1 text-xs">
                                 <span className="font-medium text-muted-foreground">Cycle length (plan days)</span>
-                                <input
+                                <NumericInput
                                   data-testid={`monthly-plan-cycle-days-${plan.id || idx}`}
-                                  type="number"
+                                  mode="integer"
                                   min={1}
                                   placeholder={String(mb.default_cycle_days ?? 20)}
                                   className={inputClass}
-                                  value={plan.cycle_days ?? ""}
-                                  onChange={(e) =>
-                                    updMonthlyPlan(
-                                      idx,
-                                      "cycle_days",
-                                      e.target.value === "" ? null : Number(e.target.value),
-                                    )
-                                  }
+                                  value={numDrafts[`plan-cycle-${idx}`] ?? (plan.cycle_days == null ? "" : String(plan.cycle_days))}
+                                  onValueChange={(v) => setNumDrafts((d) => ({ ...d, [`plan-cycle-${idx}`]: v }))}
+                                  onBlurCommit={(c) => {
+                                    updMonthlyPlan(idx, "cycle_days", c === "" ? null : Number(c) || null);
+                                    setNumDrafts((d) => {
+                                      const next = { ...d };
+                                      delete next[`plan-cycle-${idx}`];
+                                      return next;
+                                    });
+                                  }}
                                 />
                                 <span className="text-muted-foreground">
                                   Renews every N days ticked below, skipping kitchen closed dates.
@@ -964,25 +1001,42 @@ export default function Settings() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 border-t border-brand-border pt-3">
                         <label className="flex flex-col gap-1.5">
                           <span className="label-overline">Free Cancellations / Month</span>
-                          <input
+                          <NumericInput
                             data-testid="monthly-free-cancellations"
-                            type="number"
+                            mode="integer"
                             min={0}
+                            emptyFallback="0"
                             className={inputClass}
-                            value={mb.cancellation?.free_cancellations ?? 2}
-                            onChange={(e) => updMonthlyCancellation("free_cancellations", Number(e.target.value))}
+                            value={numDrafts.free_cancellations ?? String(mb.cancellation?.free_cancellations ?? 2)}
+                            onValueChange={(v) => setNumDrafts((d) => ({ ...d, free_cancellations: v }))}
+                            onBlurCommit={(c) => {
+                              updMonthlyCancellation("free_cancellations", Number(c) || 0);
+                              setNumDrafts((d) => {
+                                const next = { ...d };
+                                delete next.free_cancellations;
+                                return next;
+                              });
+                            }}
                           />
                         </label>
                         <label className="flex flex-col gap-1.5">
                           <span className="label-overline">Recalc Daily Rate (CAD)</span>
-                          <input
+                          <NumericInput
                             data-testid="monthly-recalc-rate"
-                            type="number"
+                            mode="decimal"
                             min={0.01}
-                            step="0.5"
+                            emptyFallback="12"
                             className={inputClass}
-                            value={mb.cancellation?.recalc_daily_rate_cad ?? 12}
-                            onChange={(e) => updMonthlyCancellation("recalc_daily_rate_cad", Number(e.target.value))}
+                            value={numDrafts.recalc_rate ?? String(mb.cancellation?.recalc_daily_rate_cad ?? 12)}
+                            onValueChange={(v) => setNumDrafts((d) => ({ ...d, recalc_rate: v }))}
+                            onBlurCommit={(c) => {
+                              updMonthlyCancellation("recalc_daily_rate_cad", Number(c) || 12);
+                              setNumDrafts((d) => {
+                                const next = { ...d };
+                                delete next.recalc_rate;
+                                return next;
+                              });
+                            }}
                           />
                         </label>
                         <label className="flex items-center gap-2.5 sm:col-span-2 text-xs font-medium cursor-pointer">

@@ -36,7 +36,7 @@ export default function SelectionToolbar({
       data-testid="route-selection-toolbar-wrap"
     >
       <div
-        className="pointer-events-auto w-[min(96vw,28rem)] rounded-2xl border border-[#E5E9EF] bg-white shadow-2xl p-3 flex flex-col gap-2.5"
+        className="pointer-events-auto w-[min(96vw,28rem)] rounded-2xl border border-[#E5E9EF] bg-white/95 backdrop-blur-xl shadow-[0_-4px_24px_rgba(0,0,0,0.08)] p-3 flex flex-col gap-2.5"
         data-testid="route-selection-toolbar"
       >
         <div className="flex items-center gap-2 min-w-0">

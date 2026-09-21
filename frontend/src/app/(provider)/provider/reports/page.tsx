@@ -12,6 +12,7 @@ import { AreaChart } from "@/components/analytics/AreaChart";
 import CursorPaginationBar from "@/components/CursorPaginationBar";
 import SearchableSelect from "@/components/SearchableSelect";
 import CityFilterSelect from "@/components/CityFilterSelect";
+import { NumericInput } from "@/components/NumericInput";
 import { DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
 
@@ -350,13 +351,12 @@ export default function Reports() {
           </label>
           <label className="flex items-center gap-2">
             <span className="label-overline shrink-0">Min $</span>
-            <input
+            <NumericInput
               data-testid="reports-min-amount"
-              type="number"
+              mode="decimal"
               min={0}
-              step="0.01"
               value={minAmount}
-              onChange={(e) => setMinAmount(e.target.value)}
+              onValueChange={setMinAmount}
               placeholder="0"
               className="h-10 px-3 rounded-xl bg-white border border-brand-border transition-all w-28"
             />

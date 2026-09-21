@@ -23,6 +23,8 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
+  ArrowDown,
+  ArrowUp,
   CaretDown,
   CaretRight,
   DotsThree,
@@ -122,6 +124,11 @@ function SortableStopRow({
   onPlace,
   onOpenMove,
   onBestFit,
+  onMoveUp,
+  onMoveDown,
+  isFirst,
+  isLast,
+  isNarrow,
 }: {
   stop: Stop;
   selected: boolean;
@@ -135,6 +142,11 @@ function SortableStopRow({
   onPlace: () => void;
   onOpenMove: () => void;
   onBestFit?: () => void;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  isFirst?: boolean;
+  isLast?: boolean;
+  isNarrow?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: stop.id,
@@ -283,6 +295,31 @@ function SortableStopRow({
           </>
         )}
       </div>
+      {/* Phone-only: move up/down buttons */}
+      {stop.delivery_sequence != null && isNarrow && (
+        <div className="shrink-0 flex flex-col gap-0.5 md:hidden" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            className="h-7 w-7 rounded-md hover:bg-[#F4F6F8] inline-flex items-center justify-center text-[#5C6570] disabled:opacity-30"
+            aria-label="Move up"
+            disabled={busy || isFirst}
+            onClick={() => onMoveUp?.()}
+            data-testid={`route-stop-move-up-${stop.id}`}
+          >
+            <ArrowUp size={12} />
+          </button>
+          <button
+            type="button"
+            className="h-7 w-7 rounded-md hover:bg-[#F4F6F8] inline-flex items-center justify-center text-[#5C6570] disabled:opacity-30"
+            aria-label="Move down"
+            disabled={busy || isLast}
+            onClick={() => onMoveDown?.()}
+            data-testid={`route-stop-move-down-${stop.id}`}
+          >
+            <ArrowDown size={12} />
+          </button>
+        </div>
+      )}
     </li>
   );
 }
@@ -323,7 +360,7 @@ export default function StopListPane({
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
-    const mq = window.matchMedia("(max-width: 1023px)");
+    const mq = window.matchMedia("(max-width: 767px)");
     const sync = () => setIsNarrow(mq.matches);
     sync();
     mq.addEventListener("change", sync);
@@ -595,7 +632,7 @@ export default function StopListPane({
                   href={mapsUrlForStops(poolOrigin, mapsStops)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="hidden sm:inline-flex h-9 px-2 rounded-lg text-[11px] font-medium text-[#0B1220] hover:bg-[#F4F6F8] items-center gap-1"
+                  className="inline-flex h-9 px-2 rounded-lg text-[11px] font-medium text-[#0B1220] hover:bg-[#F4F6F8] items-center gap-1"
                   data-testid={`route-pool-maps-${section.key}`}
                 >
                   <MapPin size={12} /> Maps
@@ -644,7 +681,7 @@ export default function StopListPane({
                     {paged.length === 0 ? (
                       <li className="px-3 py-3 text-xs text-[#5C6570]">No stops in this pool.</li>
                     ) : (
-                      paged.map((stop) => (
+                      paged.map((stop, idx) => (
                         <SortableStopRow
                           key={stop.id}
                           stop={stop}
@@ -663,6 +700,25 @@ export default function StopListPane({
                               : undefined
                           }
                           onOpenMove={() => setMoveStop(stop)}
+                          isNarrow={isNarrow}
+                          isFirst={idx === 0}
+                          isLast={idx === paged.length - 1}
+                          onMoveUp={() => {
+                            if (idx === 0) return;
+                            const next = [...section.stops];
+                            const fullIdx = next.findIndex((s) => s.id === stop.id);
+                            if (fullIdx <= 0) return;
+                            [next[fullIdx - 1], next[fullIdx]] = [next[fullIdx], next[fullIdx - 1]];
+                            onReorder(fullSection, next.map((s) => s.id));
+                          }}
+                          onMoveDown={() => {
+                            if (idx === paged.length - 1) return;
+                            const next = [...section.stops];
+                            const fullIdx = next.findIndex((s) => s.id === stop.id);
+                            if (fullIdx < 0 || fullIdx >= next.length - 1) return;
+                            [next[fullIdx], next[fullIdx + 1]] = [next[fullIdx + 1], next[fullIdx]];
+                            onReorder(fullSection, next.map((s) => s.id));
+                          }}
                         />
                       ))
                     )}

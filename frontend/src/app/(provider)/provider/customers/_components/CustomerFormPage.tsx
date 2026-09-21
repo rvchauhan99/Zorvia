@@ -48,6 +48,7 @@ import {
 import { formatCaPostal, isValidCaPostal } from "@/lib/ca-provinces";
 import CaAddressFields from "@/components/CaAddressFields";
 import SearchableSelect from "@/components/SearchableSelect";
+import { NumericInput } from "@/components/NumericInput";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1369,12 +1370,12 @@ export default function CustomerFormPage({
                       label="Opening balance (CAD)"
                       hint="Positive = outstanding owed; negative = advance credit. Leave 0 for new customers."
                     >
-                      <input
-                        type="number"
-                        step="0.01"
+                      <NumericInput
+                        mode="decimal"
+                        allowNegative
                         data-testid="cf-opening-balance"
                         value={form.opening_balance}
-                        onChange={(e) => setForm({ ...form, opening_balance: e.target.value })}
+                        onValueChange={(v) => setForm({ ...form, opening_balance: v })}
                         className={inp()}
                         placeholder="0"
                       />
@@ -1451,14 +1452,14 @@ export default function CustomerFormPage({
                           label="Collection day override (1–31)"
                           hint="Uses kitchen default if empty"
                         >
-                          <input
-                            type="number"
+                          <NumericInput
+                            mode="integer"
                             min={1}
                             max={31}
                             data-testid="cf-collection-day"
                             value={form.payment_collection_day}
-                            onChange={(e) =>
-                              setForm({ ...form, payment_collection_day: e.target.value })
+                            onValueChange={(v) =>
+                              setForm({ ...form, payment_collection_day: v })
                             }
                             className={inp()}
                             placeholder="e.g. 15"
@@ -1657,20 +1658,19 @@ export default function CustomerFormPage({
                     </FieldLabel>
 
                     <FieldLabel label="Lunch stop sequence" hint="Auto-set when driver is selected">
-                      <input
-                        type="number"
+                      <NumericInput
+                        mode="integer"
                         min={1}
-                        step={1}
                         data-testid="cf-lunch-sequence"
-                        value={form.slot_assignments?.lunch?.delivery_sequence || ""}
-                        onChange={(e) =>
+                        value={String(form.slot_assignments?.lunch?.delivery_sequence || "")}
+                        onValueChange={(v) =>
                           setForm({
                             ...form,
                             slot_assignments: {
                               ...form.slot_assignments,
                               lunch: {
                                 ...form.slot_assignments.lunch,
-                                delivery_sequence: e.target.value,
+                                delivery_sequence: v,
                               },
                             },
                           })
@@ -1708,20 +1708,19 @@ export default function CustomerFormPage({
                     </FieldLabel>
 
                     <FieldLabel label="Dinner stop sequence" hint="Auto-set when driver is selected">
-                      <input
-                        type="number"
+                      <NumericInput
+                        mode="integer"
                         min={1}
-                        step={1}
                         data-testid="cf-dinner-sequence"
-                        value={form.slot_assignments?.dinner?.delivery_sequence || ""}
-                        onChange={(e) =>
+                        value={String(form.slot_assignments?.dinner?.delivery_sequence || "")}
+                        onValueChange={(v) =>
                           setForm({
                             ...form,
                             slot_assignments: {
                               ...form.slot_assignments,
                               dinner: {
                                 ...form.slot_assignments.dinner,
-                                delivery_sequence: e.target.value,
+                                delivery_sequence: v,
                               },
                             },
                           })
@@ -1755,13 +1754,12 @@ export default function CustomerFormPage({
                     </FieldLabel>
 
                     <FieldLabel label="Delivery sequence" hint="Set automatically when you pick a driver">
-                      <input
-                        type="number"
+                      <NumericInput
+                        mode="integer"
                         min={1}
-                        step={1}
                         data-testid="cf-sequence"
-                        value={form.delivery_sequence}
-                        onChange={(e) => setForm({ ...form, delivery_sequence: e.target.value })}
+                        value={String(form.delivery_sequence)}
+                        onValueChange={(v) => setForm({ ...form, delivery_sequence: v })}
                         className={inp()}
                         placeholder="Auto on driver select"
                         disabled={isReview}

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { fmtCAD } from "@/lib/format";
 import AppSheet from "@/components/AppSheet";
+import { NumericInput } from "@/components/NumericInput";
 import CustomerAsyncSelect, { type CustomerAsyncOption } from "@/components/CustomerAsyncSelect";
 import ImageSourceField from "@/components/ImageSourceField";
 import { monthlyTierLabel as tierLabel } from "@/lib/monthlyBillingCopy";
@@ -303,14 +304,13 @@ export default function RecordPaymentSheet({ open, onClose, onRecorded, lockedCu
       <div className="flex flex-col gap-3">
         <label className="flex flex-col gap-1.5">
           <span className="label-overline">Amount (CAD)</span>
-          <input
+          <NumericInput
             data-testid="record-payment-amount"
-            type="number"
-            min="0.01"
-            step="0.01"
+            mode="decimal"
+            min={0.01}
             required
             value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            onValueChange={setAmount}
             className={input}
             placeholder="0.00"
           />
