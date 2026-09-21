@@ -1,6 +1,6 @@
 # Documentation index — MealHQ frontends (Zorvia)
 
-**Last updated:** 2026-09-20  
+**Last updated:** 2026-09-21  
 **Status:** FE-safe map. Product/API truth lives in sibling **mealhq-api**. When FE and API docs disagree on behavior, **mealhq-api wins**.
 
 | # | Doc | What it decides |
@@ -15,7 +15,7 @@
 | 7 | [CONSUMER_ACCOUNT.md](./CONSUMER_ACCOUNT.md) | Consumer signup guide |
 | 8 | [../design_guidelines.json](../design_guidelines.json) | UI visual constitution |
 
-API deep docs (open sibling clone): `mealhq-api/docs/INDEX.md` → FUNCTIONAL, TECHNICAL, DEPLOY_VULTR, ROUTE_PLANNING, etc.
+API deep docs (open sibling clone): `mealhq-api/docs/INDEX.md` → FUNCTIONAL, TECHNICAL, DEPLOY_VULTR, **ROUTE_PLANNING** (full routing specification), etc.
 
 ## Non-negotiables (FE)
 

@@ -61,7 +61,7 @@ Screen: `/provider/route-planning` — **full-bleed Routes workspace** (Leaflet 
 - **Optimize sheet** (Figma): scope = This city / All cities / Unassigned pool / **Full rebalance (auto-assign)** / Selected drivers; every run requires a confirm step; Full rebalance needs an ack checkbox; tours use **per-pool starts** (kitchen by default); Full rebalance unassigns all → kitchen day-build → even-split → per-driver reopt from each pool start  
 - **Best fit**: Unassigned ⋯ **Best fit** (one stop) or header **Best fit all** → confirm → `POST /route-planning/auto-place` (cheapest driver gap vs pool start, sequential)  
 - Day-build: Unassign all → Optimize Unassigned → Bulk ranges → Optimize drivers **or** one-click **Full rebalance**  
-- API/routing contract: mealhq-api `docs/ROUTE_PLANNING.md`
+- API/routing contract (full logic + infra): sibling mealhq-api [`docs/ROUTE_PLANNING.md`](../../mealhq-api/docs/ROUTE_PLANNING.md)
 
 New-customer / edit wizard (`/provider/customers/new`, `/provider/customers/[id]/edit`): five steps (Contact → Address → Schedule → Route → Review). On phone (`<sm`), navigation is the sticky bottom Back + Next/Save bar only (in-card Continue hidden); Review is single-column; meal type lines stack full-width.
 
