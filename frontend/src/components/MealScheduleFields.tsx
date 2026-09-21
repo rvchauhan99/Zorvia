@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { WEEKDAYS, fmtCAD } from "@/lib/format";
+import { NumericInput } from "@/components/NumericInput";
 import {
   MealSlot,
   MEAL_SLOT_LABELS,
@@ -14,6 +15,7 @@ import {
   type SlotMealTypeLines,
   MAX_MEAL_TYPE_LINES,
   MAX_LINE_TOTAL_QTY,
+  clampLineQty,
   defaultLine,
   linesTotalQty,
   linesTotalAmount,
@@ -108,13 +110,38 @@ function LinesEditor({
 }) {
   const total = linesTotalQty(lines);
   const amount = linesTotalAmount(lines);
+  const [qtyDrafts, setQtyDrafts] = useState<Record<number, string>>({});
+  const [priceDrafts, setPriceDrafts] = useState<Record<number, string>>({});
 
   function updateAt(idx: number, patch: Partial<MealTypeLine>) {
     const next = lines.map((ln, i) => (i === idx ? { ...ln, ...patch } : ln));
     onChange(normalizeLines(next));
   }
 
+  function commitQty(idx: number, raw: string) {
+    updateAt(idx, { quantity: clampLineQty(raw) });
+    setQtyDrafts((prev) => {
+      const next = { ...prev };
+      delete next[idx];
+      return next;
+    });
+  }
+
+  function commitPrice(idx: number, raw: string) {
+    const n = Number.parseFloat(raw);
+    updateAt(idx, {
+      unit_price: Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : 0,
+    });
+    setPriceDrafts((prev) => {
+      const next = { ...prev };
+      delete next[idx];
+      return next;
+    });
+  }
+
   function removeAt(idx: number) {
+    setQtyDrafts({});
+    setPriceDrafts({});
     onChange(lines.filter((_, i) => i !== idx));
   }
 
@@ -125,6 +152,8 @@ function LinesEditor({
     const used = new Set(lines.map((ln) => ln.meal_type_id));
     const nextType =
       mealTypeOptions.find((t) => !used.has(t.id)) || mealTypeOptions[0] || { id: "regular", name: "Regular", price: 12 };
+    setQtyDrafts({});
+    setPriceDrafts({});
     onChange(
       normalizeLines([
         ...lines,
@@ -173,27 +202,30 @@ function LinesEditor({
           <div className="flex gap-2 w-full sm:w-auto">
             <label className="flex flex-col gap-1 flex-1 sm:w-[72px] sm:flex-none">
               <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Qty</span>
-              <input
-                type="number"
+              <NumericInput
+                mode="integer"
                 min={1}
                 max={MAX_LINE_TOTAL_QTY}
+                emptyFallback="1"
                 data-testid={`${testidPrefix}-qty-${idx}`}
                 disabled={disabled}
-                value={ln.quantity}
-                onChange={(e) => updateAt(idx, { quantity: Math.max(1, Math.min(MAX_LINE_TOTAL_QTY, Number(e.target.value) || 1)) })}
+                value={qtyDrafts[idx] ?? String(ln.quantity)}
+                onValueChange={(v) => setQtyDrafts((prev) => ({ ...prev, [idx]: v }))}
+                onBlurCommit={(committed) => commitQty(idx, committed)}
                 className={inputClassName}
               />
             </label>
             <label className="flex flex-col gap-1 flex-1 sm:w-[88px] sm:flex-none">
               <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Price</span>
-              <input
-                type="number"
+              <NumericInput
+                mode="decimal"
                 min={0.01}
-                step={0.01}
+                emptyFallback="12"
                 data-testid={`${testidPrefix}-price-${idx}`}
                 disabled={disabled}
-                value={ln.unit_price}
-                onChange={(e) => updateAt(idx, { unit_price: Number(e.target.value) || 0 })}
+                value={priceDrafts[idx] ?? String(ln.unit_price)}
+                onValueChange={(v) => setPriceDrafts((prev) => ({ ...prev, [idx]: v }))}
+                onBlurCommit={(committed) => commitPrice(idx, committed)}
                 className={inputClassName}
               />
             </label>

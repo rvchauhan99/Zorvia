@@ -6,6 +6,7 @@ import { fmtCAD, fmtDateTime, todayISO } from "@/lib/format";
 import { toast } from "sonner";
 import StatusPill from "@/components/StatusPill";
 import ImageSourceField from "@/components/ImageSourceField";
+import { NumericInput } from "@/components/NumericInput";
 import CursorPaginationBar from "@/components/CursorPaginationBar";
 import { asPageEnvelope, DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
@@ -142,7 +143,7 @@ export default function ConsumerPayments() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="flex flex-col gap-1.5">
             <span className="label-overline">Amount (CAD)</span>
-            <input data-testid="pay-amount" required type="number" step="0.01" min="0.01" className={input} value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
+            <NumericInput data-testid="pay-amount" required mode="decimal" min={0.01} className={input} value={form.amount} onValueChange={(v) => setForm({ ...form, amount: v })} />
           </label>
           <label className="flex flex-col gap-1.5">
             <span className="label-overline">Interac reference</span>

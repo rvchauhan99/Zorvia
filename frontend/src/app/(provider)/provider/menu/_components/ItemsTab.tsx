@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { Plus, PencilSimple, ArrowCounterClockwise, Prohibit } from "@phosphor-icons/react";
 import AppSheet from "@/components/AppSheet";
+import { NumericInput } from "@/components/NumericInput";
 import {
   DIET_FILTERS,
   ITEM_CATEGORIES,
@@ -424,14 +425,13 @@ export default function ItemsTab({
           </fieldset>
           <label className="flex flex-col gap-1.5">
             <span className="label-overline">Quantity per tiffin</span>
-            <input
+            <NumericInput
               data-testid="menu-item-quantity"
-              type="number"
-              min="0"
-              step="0.5"
+              mode="decimal"
+              min={0}
               className="h-11 rounded-xl border border-brand-border bg-white px-3 text-sm"
               value={draft.default_quantity}
-              onChange={(e) => setDraft({ ...draft, default_quantity: e.target.value })}
+              onValueChange={(v) => setDraft({ ...draft, default_quantity: v })}
             />
             <span className="text-xs text-muted-foreground">
               Prefilled when you add this item to the weekly menu. You can override it per day.

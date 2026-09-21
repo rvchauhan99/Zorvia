@@ -13,6 +13,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canMutateAdmin, canSeePricing, isDriver } from "@/lib/roles";
 import { fmtCAD } from "@/lib/format";
+import { NumericInput } from "@/components/NumericInput";
 import {
   collapsedMonthHint,
   formatBillingMonthLabel,
@@ -270,12 +271,12 @@ function AdjustCycleSheet({
         {mode === "postpone" ? (
           <label className="flex flex-col gap-1.5">
             <span className="label-overline">Plan days to add</span>
-            <input
-              type="number"
+            <NumericInput
+              mode="integer"
               min={1}
               data-testid="adjust-cycle-days"
               value={days}
-              onChange={(e) => setDays(e.target.value)}
+              onValueChange={setDays}
               className={inputClass}
             />
             <span className="text-xs text-muted-foreground">

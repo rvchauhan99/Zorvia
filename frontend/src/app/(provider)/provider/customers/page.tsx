@@ -13,6 +13,7 @@ import { fmtCAD, WEEKDAYS, todayISO } from "@/lib/format";
 import { asPageEnvelope, DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
 import AppSheet from "@/components/AppSheet";
+import { NumericInput } from "@/components/NumericInput";
 import AddExtraMealSheet from "@/components/AddExtraMealSheet";
 import CursorPaginationBar from "@/components/CursorPaginationBar";
 import { StatusFilterCards } from "@/components/StatusFilterCards";
@@ -1528,12 +1529,12 @@ export default function Customers() {
           {canMutate ? (
             <label className="flex flex-col gap-1.5 sm:col-span-2">
               <span className="label-overline">Opening balance (CAD)</span>
-              <input
-                type="number"
-                step="0.01"
+              <NumericInput
+                mode="decimal"
+                allowNegative
                 data-testid="cf-opening-balance"
                 value={form.opening_balance}
-                onChange={(e) => setForm({ ...form, opening_balance: e.target.value })}
+                onValueChange={(v) => setForm({ ...form, opening_balance: v })}
                 className={input}
                 placeholder="0"
               />
@@ -1617,13 +1618,13 @@ export default function Customers() {
               ) : (
                 <label className="flex flex-col gap-1.5">
                   <span className="label-overline">Collection day override (1–31)</span>
-                  <input
-                    type="number"
+                  <NumericInput
+                    mode="integer"
                     min={1}
                     max={31}
                     data-testid="cf-collection-day"
                     value={form.payment_collection_day}
-                    onChange={(e) => setForm({ ...form, payment_collection_day: e.target.value })}
+                    onValueChange={(v) => setForm({ ...form, payment_collection_day: v })}
                     className={input}
                     placeholder="Uses kitchen default if empty"
                   />
@@ -1806,18 +1807,17 @@ export default function Customers() {
               </label>
               <label className="flex flex-col gap-1.5">
                 <span className="label-overline">Lunch sequence</span>
-                <input
-                  type="number"
+                <NumericInput
+                  mode="integer"
                   min={1}
-                  step={1}
                   data-testid="cf-lunch-sequence"
-                  value={form.slot_assignments?.lunch?.delivery_sequence || ""}
-                  onChange={(e) =>
+                  value={String(form.slot_assignments?.lunch?.delivery_sequence || "")}
+                  onValueChange={(v) =>
                     setForm({
                       ...form,
                       slot_assignments: {
                         ...form.slot_assignments,
-                        lunch: { ...form.slot_assignments.lunch, delivery_sequence: e.target.value },
+                        lunch: { ...form.slot_assignments.lunch, delivery_sequence: v },
                       },
                     })
                   }
@@ -1852,18 +1852,17 @@ export default function Customers() {
               </label>
               <label className="flex flex-col gap-1.5">
                 <span className="label-overline">Dinner sequence</span>
-                <input
-                  type="number"
+                <NumericInput
+                  mode="integer"
                   min={1}
-                  step={1}
                   data-testid="cf-dinner-sequence"
-                  value={form.slot_assignments?.dinner?.delivery_sequence || ""}
-                  onChange={(e) =>
+                  value={String(form.slot_assignments?.dinner?.delivery_sequence || "")}
+                  onValueChange={(v) =>
                     setForm({
                       ...form,
                       slot_assignments: {
                         ...form.slot_assignments,
-                        dinner: { ...form.slot_assignments.dinner, delivery_sequence: e.target.value },
+                        dinner: { ...form.slot_assignments.dinner, delivery_sequence: v },
                       },
                     })
                   }
@@ -1898,13 +1897,12 @@ export default function Customers() {
               </label>
               <label className="flex flex-col gap-1.5">
                 <span className="label-overline">Delivery sequence</span>
-                <input
-                  type="number"
+                <NumericInput
+                  mode="integer"
                   min={1}
-                  step={1}
                   data-testid="cf-sequence"
-                  value={form.delivery_sequence}
-                  onChange={(e) => setForm({ ...form, delivery_sequence: e.target.value })}
+                  value={String(form.delivery_sequence)}
+                  onValueChange={(v) => setForm({ ...form, delivery_sequence: v })}
                   className={input}
                   placeholder="Auto on driver select"
                 />

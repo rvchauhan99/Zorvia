@@ -1,7 +1,8 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import AppSheet from "@/components/AppSheet";
+import { NumericInput } from "@/components/NumericInput";
 import type { StartSheetState } from "./types";
 
 type Props = {
@@ -13,6 +14,8 @@ type Props = {
 };
 
 export default function StartSheet({ state, busy, onChange, onClose, onSave }: Props) {
+  const [daysDraft, setDaysDraft] = useState<string | null>(null);
+
   return (
     <AppSheet
       open={!!state}
@@ -103,17 +106,18 @@ export default function StartSheet({ state, busy, onChange, onClose, onSave }: P
               {state.duration === "days" && (
                 <label className="text-sm flex items-center gap-2">
                   Days
-                  <input
-                    type="number"
+                  <NumericInput
+                    mode="integer"
                     min={2}
                     max={14}
-                    value={state.days}
-                    onChange={(e) =>
-                      onChange({
-                        ...state,
-                        days: Math.min(14, Math.max(2, parseInt(e.target.value, 10) || 2)),
-                      })
-                    }
+                    emptyFallback="2"
+                    value={daysDraft ?? String(state.days)}
+                    onValueChange={setDaysDraft}
+                    onBlurCommit={(committed) => {
+                      const days = Math.min(14, Math.max(2, parseInt(committed, 10) || 2));
+                      onChange({ ...state, days });
+                      setDaysDraft(null);
+                    }}
                     className="h-10 w-20 px-3 rounded-xl border border-brand-border"
                     data-testid="route-start-days"
                   />

@@ -4,14 +4,18 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
+  ArrowsDownUp,
   CaretDown,
   DotsThree,
   DownloadSimple,
+  Funnel,
   ListNumbers,
   MagnifyingGlass,
   MapPin,
+  MapTrifold,
   Path,
   SignOut,
+  Wrench,
   X,
 } from "@phosphor-icons/react";
 import { InlineLoader } from "@/components/loaders";
@@ -41,6 +45,7 @@ const RouteMap = dynamic(() => import("./RouteMap"), {
   ),
 });
 
+/* ── Snap system (kept for legacy compat) ─────────────────────────── */
 export type MobileSnap = "peek" | "half" | "expanded";
 
 const SNAP_HEIGHT: Record<MobileSnap, string> = {
@@ -50,6 +55,9 @@ const SNAP_HEIGHT: Record<MobileSnap, string> = {
 };
 
 const SNAP_ORDER: MobileSnap[] = ["peek", "half", "expanded"];
+
+/* ── Phone tab system ─────────────────────────────────────────────── */
+type MobileTab = "map" | "stops";
 
 type Props = {
   loading: boolean;
@@ -141,6 +149,7 @@ export default function PlanMode({
   const [highlightedStopId, setHighlightedStopId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileSnap, setMobileSnap] = useState<MobileSnap>("peek");
+  const [mobileTab, setMobileTab] = useState<MobileTab>("map");
   const [moreOpen, setMoreOpen] = useState(false);
   const [hiddenDriverKeys, setHiddenDriverKeys] = useState<Set<string>>(new Set());
   const dragStartY = useRef<number | null>(null);
@@ -226,150 +235,167 @@ export default function PlanMode({
     setMobileSnap(SNAP_ORDER[Math.min(idx + 1, SNAP_ORDER.length - 1)]);
   };
 
-  const rail = (
-    <div className="flex flex-col h-full min-h-0 bg-white" data-testid="route-side-rail">
-      <div className="shrink-0 px-3 pt-3 pb-2 border-b border-[#E5E9EF] space-y-2">
-        <div className="flex items-center gap-2">
-          <Path size={18} className="text-[#00BFA5]" weight="bold" />
-          <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-[#5C6570]">Routes</p>
-            <p className="text-sm font-bold text-[#0B1220] truncate" data-testid="route-stats">
-              {totalStops} stops · {unassignedStops} open
-              {issueCount > 0 ? ` · ${issueCount} issues` : ""}
-            </p>
-          </div>
-          <button
-            type="button"
-            className="lg:hidden h-9 w-9 rounded-lg hover:bg-[#F4F6F8] inline-flex items-center justify-center text-[#5C6570]"
-            aria-label="Collapse to peek"
-            onClick={() => setMobileSnap("peek")}
-            data-testid="route-mobile-sheet-collapse"
-          >
-            <X size={18} />
-          </button>
-        </div>
+  /* ────────────────────────────────────────────────────────────────
+     StopListPane — shared between desktop/tablet rail and phone tab
+     ──────────────────────────────────────────────────────────────── */
+  const stopListPaneContent = (
+    <StopListPane
+      sections={sections}
+      drivers={drivers}
+      selected={selected}
+      highlightedStopId={highlightedStopId}
+      listFilter={listFilter}
+      searchQuery={searchQuery}
+      originLine={originLine}
+      kitchenLine={kitchenLine}
+      effectivePoolStarts={effectivePoolStarts}
+      busy={busy}
+      routingConfigured={routingConfigured}
+      hiddenDriverKeys={hiddenDriverKeys}
+      onToggleDriverVisibility={toggleDriverVisibility}
+      onToggleStop={onToggleStop}
+      onToggleSection={onToggleSection}
+      onHighlight={setHighlightedStopId}
+      onReorder={onReorder}
+      onReassign={onReassign}
+      onOpenStart={onOpenStart}
+      onPlace={onPlace}
+      onBestFit={onBestFit}
+      onBestFitAllUnassigned={onBestFitAllUnassigned}
+      onMoveDriver={onMoveDriver}
+      viewHrefForSection={(section) =>
+        driverDetailHref({
+          driverId: section.driverId,
+          mealSlot: slot,
+          planningDate,
+          city: selectedCity,
+        })
+      }
+    />
+  );
 
-        <div className="relative">
-          <MagnifyingGlass
-            size={15}
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#5C6570] pointer-events-none"
-          />
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search stops…"
-            className="h-9 w-full pl-8 pr-3 rounded-lg border border-[#E5E9EF] bg-[#F4F6F8] text-sm text-[#0B1220] outline-none focus:ring-2 focus:ring-[#00BFA5]/35 focus:border-[#00BFA5]"
-            data-testid="route-stop-search"
-          />
-        </div>
-
-        <div
-          className="flex gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          data-testid="route-filter-row"
-        >
-          {filters.map((f) => {
-            const isActive = listFilter === f.key;
-            return (
-              <button
-                key={f.key}
-                type="button"
-                className={`h-9 shrink-0 px-2.5 rounded-full text-[11px] font-medium transition-colors ${
-                  isActive
-                    ? "bg-[#0B1220] text-white"
-                    : "bg-[#F4F6F8] text-[#5C6570] hover:text-[#0B1220]"
-                }`}
-                onClick={() => onListFilterChange(f.key)}
-                data-testid={f.testid}
-              >
-                {f.label}
-                {f.count != null && <span className="ml-1 opacity-70">{f.count}</span>}
-              </button>
-            );
-          })}
-        </div>
-
-        {!drivers.length && (
-          <div
-            className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] text-amber-900"
-            data-testid="route-no-drivers"
-          >
-            No drivers — add staff in{" "}
-            <Link href="/provider/settings" className="underline font-medium">
-              Settings
-            </Link>
-            .
-          </div>
-        )}
-
-        {!routingConfigured && (
-          <div
-            className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] text-amber-900"
-            data-testid="route-ors-warning"
-          >
-            Local routing not configured — optimize may be limited.
-          </div>
-        )}
-
-        <div className="flex gap-1.5">
-          <button
-            type="button"
-            className="flex-1 h-9 rounded-lg border border-[#E5E9EF] text-[12px] font-medium text-[#0B1220] hover:bg-[#F4F6F8] disabled:opacity-50"
-            onClick={onGeocode}
-            disabled={busy}
-            data-testid="route-geocode"
-          >
-            Fix addresses
-          </button>
-          <button
-            type="button"
-            className="hidden sm:inline-flex flex-1 h-9 rounded-lg border border-[#E5E9EF] text-[12px] font-medium text-[#0B1220] hover:bg-[#F4F6F8] items-center justify-center gap-1 disabled:opacity-50"
-            onClick={onOpenRange}
-            disabled={busy}
-            data-testid="route-open-range-sheet-header"
-          >
-            <ListNumbers size={13} /> Bulk
-          </button>
+  /* ────────────────────────────────────────────────────────────────
+     Rail header — search, filters, quick-action buttons
+     ──────────────────────────────────────────────────────────────── */
+  const railHeaderBlock = (
+    <div className="shrink-0 px-3 pt-3 pb-2 border-b border-[#E5E9EF] space-y-2">
+      <div className="flex items-center gap-2">
+        <Path size={18} className="text-[#00BFA5]" weight="bold" />
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#5C6570]">Routes</p>
+          <p className="text-sm font-bold text-[#0B1220] truncate" data-testid="route-stats">
+            {totalStops} stops · {unassignedStops} open
+            {issueCount > 0 ? ` · ${issueCount} issues` : ""}
+          </p>
         </div>
       </div>
+
+      <div className="relative">
+        <MagnifyingGlass
+          size={15}
+          className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#5C6570] pointer-events-none"
+        />
+        <input
+          type="search"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search stops…"
+          className="h-9 w-full pl-8 pr-3 rounded-lg border border-[#E5E9EF] bg-[#F4F6F8] text-sm text-[#0B1220] outline-none focus:ring-2 focus:ring-[#00BFA5]/35 focus:border-[#00BFA5]"
+          data-testid="route-stop-search"
+        />
+      </div>
+
+      <div
+        className="flex gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        data-testid="route-filter-row"
+      >
+        {filters.map((f) => {
+          const isActive = listFilter === f.key;
+          return (
+            <button
+              key={f.key}
+              type="button"
+              className={`h-9 shrink-0 px-2.5 rounded-full text-[11px] font-medium transition-colors ${
+                isActive
+                  ? "bg-[#0B1220] text-white"
+                  : "bg-[#F4F6F8] text-[#5C6570] hover:text-[#0B1220]"
+              }`}
+              onClick={() => onListFilterChange(f.key)}
+              data-testid={f.testid}
+            >
+              {f.label}
+              {f.count != null && <span className="ml-1 opacity-70">{f.count}</span>}
+            </button>
+          );
+        })}
+      </div>
+
+      {!drivers.length && (
+        <div
+          className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] text-amber-900"
+          data-testid="route-no-drivers"
+        >
+          No drivers — add staff in{" "}
+          <Link href="/provider/settings" className="underline font-medium">
+            Settings
+          </Link>
+          .
+        </div>
+      )}
+
+      {!routingConfigured && (
+        <div
+          className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] text-amber-900"
+          data-testid="route-ors-warning"
+        >
+          Local routing not configured — optimize may be limited.
+        </div>
+      )}
+
+      <div className="flex gap-1.5">
+        <button
+          type="button"
+          className="flex-1 h-9 rounded-lg border border-[#E5E9EF] text-[12px] font-medium text-[#0B1220] hover:bg-[#F4F6F8] disabled:opacity-50 inline-flex items-center justify-center gap-1"
+          onClick={onGeocode}
+          disabled={busy}
+          data-testid="route-geocode"
+        >
+          <Wrench size={13} /> Fix addresses
+        </button>
+        <button
+          type="button"
+          className="flex-1 h-9 rounded-lg border border-[#E5E9EF] text-[12px] font-medium text-[#0B1220] hover:bg-[#F4F6F8] items-center justify-center gap-1 disabled:opacity-50 inline-flex"
+          onClick={onOpenRange}
+          disabled={busy}
+          data-testid="route-open-range-sheet-header"
+        >
+          <ListNumbers size={13} /> Bulk
+        </button>
+        <button
+          type="button"
+          className="flex-1 h-9 rounded-lg bg-[#0B1220] text-white text-[12px] font-semibold hover:bg-[#1A2332] disabled:opacity-50 inline-flex items-center justify-center gap-1"
+          onClick={onOptimize}
+          disabled={busy}
+          data-testid="route-optimize-rail"
+        >
+          <ArrowsDownUp size={13} /> {busy ? "…" : "Optimize"}
+        </button>
+      </div>
+    </div>
+  );
+
+  /* ────────────────────────────────────────────────────────────────
+     Desktop/Tablet side rail (md+ visible)
+     ──────────────────────────────────────────────────────────────── */
+  const rail = (
+    <div className="flex flex-col h-full min-h-0 bg-white" data-testid="route-side-rail">
+      {railHeaderBlock}
 
       <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-2 py-2">
         {loading ? (
           <InlineLoader label="Loading plan…" testid="route-plan-loading" />
         ) : (
-          <StopListPane
-            sections={sections}
-            drivers={drivers}
-            selected={selected}
-            highlightedStopId={highlightedStopId}
-            listFilter={listFilter}
-            searchQuery={searchQuery}
-            originLine={originLine}
-            kitchenLine={kitchenLine}
-            effectivePoolStarts={effectivePoolStarts}
-            busy={busy}
-            routingConfigured={routingConfigured}
-            hiddenDriverKeys={hiddenDriverKeys}
-            onToggleDriverVisibility={toggleDriverVisibility}
-            onToggleStop={onToggleStop}
-            onToggleSection={onToggleSection}
-            onHighlight={setHighlightedStopId}
-            onReorder={onReorder}
-            onReassign={onReassign}
-            onOpenStart={onOpenStart}
-            onPlace={onPlace}
-            onBestFit={onBestFit}
-            onBestFitAllUnassigned={onBestFitAllUnassigned}
-            onMoveDriver={onMoveDriver}
-            viewHrefForSection={(section) =>
-              driverDetailHref({
-                driverId: section.driverId,
-                mealSlot: slot,
-                planningDate,
-                city: selectedCity,
-              })
-            }
-          />
+          stopListPaneContent
         )}
       </div>
 
@@ -384,18 +410,23 @@ export default function PlanMode({
     </div>
   );
 
+  /* ════════════════════════════════════════════════════════════════
+     RENDER
+     ════════════════════════════════════════════════════════════════ */
   return (
     <div
       className="h-dvh w-full flex flex-col bg-[#F4F6F8] overflow-hidden"
       data-testid="route-plan-mode"
       data-mobile-snap={mobileSnap}
+      data-mobile-tab={mobileTab}
     >
+      {/* ── HEADER ─────────────────────────────────────────────── */}
       <header
         className="shrink-0 z-20 border-b border-[#E5E9EF] bg-white pt-[env(safe-area-inset-top,0px)]"
         data-testid="route-top-bar"
       >
-        {/* Row 1: always-visible actions on mobile; full chrome on lg */}
-        <div className="h-12 lg:h-14 px-3 sm:px-4 flex items-center gap-1.5 sm:gap-3 min-w-0">
+        {/* Row 1 */}
+        <div className="h-12 md:h-14 px-3 sm:px-4 flex items-center gap-1.5 sm:gap-3 min-w-0">
           <button
             type="button"
             onClick={onExit}
@@ -406,7 +437,7 @@ export default function PlanMode({
             <SignOut size={18} className="rotate-180" />
           </button>
 
-          <div className="hidden lg:flex items-center gap-1.5 min-w-0">
+          <div className="hidden md:flex items-center gap-1.5 min-w-0">
             <span className="text-sm font-bold text-[#0B1220] truncate">Route planning</span>
           </div>
 
@@ -430,7 +461,8 @@ export default function PlanMode({
             ))}
           </div>
 
-          <label className="hidden lg:flex items-center gap-1.5 text-[11px] text-[#5C6570] shrink-0">
+          {/* Date — md+ */}
+          <label className="hidden md:flex items-center gap-1.5 text-[11px] text-[#5C6570] shrink-0">
             <input
               type="date"
               value={planningDate}
@@ -440,6 +472,7 @@ export default function PlanMode({
             />
           </label>
 
+          {/* City — lg+ */}
           <div
             className="hidden lg:block flex-1 min-w-[120px] max-w-[240px]"
             data-testid="route-city-chips"
@@ -454,6 +487,7 @@ export default function PlanMode({
             />
           </div>
 
+          {/* Right-side actions */}
           <div className="ml-auto flex items-center gap-1.5 shrink-0">
             <a
               href={fullMapUrl}
@@ -474,6 +508,7 @@ export default function PlanMode({
             >
               <DownloadSimple size={14} /> Export
             </button>
+            {/* More (phone + tablet) */}
             <button
               type="button"
               className="lg:hidden shrink-0 h-9 w-9 rounded-lg hover:bg-[#F4F6F8] inline-flex items-center justify-center text-[#5C6570]"
@@ -483,6 +518,7 @@ export default function PlanMode({
             >
               <DotsThree size={20} weight="bold" />
             </button>
+            {/* Optimize — always visible */}
             <button
               type="button"
               className="shrink-0 h-9 px-2.5 sm:px-3 rounded-lg bg-[#0B1220] text-white text-[12px] font-semibold hover:bg-[#1A2332] disabled:opacity-50"
@@ -495,8 +531,8 @@ export default function PlanMode({
           </div>
         </div>
 
-        {/* Row 2 (mobile only): city full width */}
-        <div className="lg:hidden px-3 pb-2" data-testid="route-city-chips-mobile">
+        {/* Row 2 (phone only): city + tab switcher */}
+        <div className="md:hidden px-3 pb-2 space-y-2">
           <SearchableSelect
             value={selectedCity}
             onChange={onSelectedCityChange}
@@ -505,117 +541,213 @@ export default function PlanMode({
             testid="route-city-select"
             inputClassName="h-9 px-2.5 rounded-lg border border-[#E5E9EF] bg-[#F4F6F8] text-[12px] w-full"
           />
+          {/* Segmented tab switcher: Map | Stops */}
+          <div
+            className="flex rounded-xl bg-[#F4F6F8] p-0.5"
+            data-testid="route-mobile-tabs"
+          >
+            <button
+              type="button"
+              className={`flex-1 h-9 rounded-[10px] text-[12px] font-semibold inline-flex items-center justify-center gap-1.5 transition-colors ${
+                mobileTab === "map"
+                  ? "bg-white text-[#0B1220] shadow-sm"
+                  : "text-[#5C6570]"
+              }`}
+              onClick={() => setMobileTab("map")}
+              data-testid="route-mobile-tab-map"
+            >
+              <MapTrifold size={15} /> Map
+            </button>
+            <button
+              type="button"
+              className={`flex-1 h-9 rounded-[10px] text-[12px] font-semibold inline-flex items-center justify-center gap-1.5 transition-colors ${
+                mobileTab === "stops"
+                  ? "bg-white text-[#0B1220] shadow-sm"
+                  : "text-[#5C6570]"
+              }`}
+              onClick={() => setMobileTab("stops")}
+              data-testid="route-mobile-tab-stops"
+            >
+              <Funnel size={15} /> Stops
+              <span className="text-[10px] opacity-70">({totalStops})</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Row 2 (tablet only): city */}
+        <div className="hidden md:block lg:hidden px-3 pb-2" data-testid="route-city-chips-tablet">
+          <SearchableSelect
+            value={selectedCity}
+            onChange={onSelectedCityChange}
+            options={cityOptions}
+            placeholder="City…"
+            testid="route-city-select-tablet"
+            inputClassName="h-9 px-2.5 rounded-lg border border-[#E5E9EF] bg-[#F4F6F8] text-[12px] w-full"
+          />
         </div>
       </header>
 
+      {/* ── BODY ──────────────────────────────────────────────── */}
       <div className="flex-1 min-h-0 flex relative">
+
+        {/* Desktop rail: lg+ */}
         <aside className="hidden lg:flex w-[360px] shrink-0 flex-col border-r border-[#E5E9EF] bg-white min-h-0">
           {rail}
         </aside>
 
-        <div className="flex-1 min-w-0 min-h-0 relative" data-testid="route-map-canvas">
-          <RouteMap
-            stops={stops}
-            kitchen={kitchen}
-            effectiveStart={effectiveStart}
-            driverIds={driverIds}
-            highlightedStopId={highlightedStopId}
-            roadPolylines={roadPolylines}
-            hiddenDriverKeys={hiddenDriverKeys}
-            fullBleed
-            onStopClick={(id) => {
-              setHighlightedStopId(id);
-              setMobileSnap((prev) => (prev === "peek" ? "half" : prev));
-            }}
-          />
+        {/* Tablet rail: md to lg */}
+        <aside className="hidden md:flex lg:hidden w-[280px] shrink-0 flex-col border-r border-[#E5E9EF] bg-white min-h-0">
+          {rail}
+        </aside>
 
-          {mobileSnap === "expanded" && (
-            <button
-              type="button"
-              className="lg:hidden absolute inset-0 z-[440] bg-black/20"
-              aria-label="Collapse stops sheet"
-              onClick={() => setMobileSnap("half")}
-              data-testid="route-mobile-sheet-backdrop"
+        {/* ── Map + Mobile content area ──────────────────────── */}
+        <div className="flex-1 min-w-0 min-h-0 relative" data-testid="route-map-canvas">
+
+          {/* Map — always shown on md+, on phones only in "map" tab */}
+          <div className={`absolute inset-0 ${mobileTab === "stops" ? "hidden md:block" : ""}`}>
+            <RouteMap
+              stops={stops}
+              kitchen={kitchen}
+              effectiveStart={effectiveStart}
+              driverIds={driverIds}
+              highlightedStopId={highlightedStopId}
+              roadPolylines={roadPolylines}
+              hiddenDriverKeys={hiddenDriverKeys}
+              fullBleed
+              onStopClick={(id) => {
+                setHighlightedStopId(id);
+                setMobileSnap((prev) => (prev === "peek" ? "half" : prev));
+              }}
             />
+          </div>
+
+          {/* ── Phone: "Stops" tab — full-screen stop list ──── */}
+          {mobileTab === "stops" && (
+            <div className="md:hidden absolute inset-0 z-10 bg-white flex flex-col" data-testid="route-mobile-stops-tab">
+              {/* Search + filters + actions */}
+              <div className="shrink-0 px-3 pt-2 pb-2 space-y-2 border-b border-[#E5E9EF]">
+                {/* Search */}
+                <div className="relative">
+                  <MagnifyingGlass
+                    size={15}
+                    className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#5C6570] pointer-events-none"
+                  />
+                  <input
+                    type="search"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search stops…"
+                    className="h-9 w-full pl-8 pr-3 rounded-lg border border-[#E5E9EF] bg-[#F4F6F8] text-sm text-[#0B1220] outline-none focus:ring-2 focus:ring-[#00BFA5]/35 focus:border-[#00BFA5]"
+                    data-testid="route-stop-search-mobile"
+                  />
+                </div>
+
+                {/* Filter pills */}
+                <div
+                  className="flex gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                  data-testid="route-filter-row-mobile"
+                >
+                  {filters.map((f) => {
+                    const isActive = listFilter === f.key;
+                    return (
+                      <button
+                        key={f.key}
+                        type="button"
+                        className={`h-8 shrink-0 px-2.5 rounded-full text-[11px] font-medium transition-colors ${
+                          isActive
+                            ? "bg-[#0B1220] text-white"
+                            : "bg-[#F4F6F8] text-[#5C6570] hover:text-[#0B1220]"
+                        }`}
+                        onClick={() => onListFilterChange(f.key)}
+                        data-testid={`${f.testid}-mobile`}
+                      >
+                        {f.label}
+                        {f.count != null && <span className="ml-1 opacity-70">{f.count}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Quick actions */}
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    className="flex-1 h-9 rounded-lg border border-[#E5E9EF] text-[11px] font-medium text-[#0B1220] hover:bg-[#F4F6F8] disabled:opacity-50 inline-flex items-center justify-center gap-1"
+                    onClick={onGeocode}
+                    disabled={busy}
+                    data-testid="route-geocode-mobile"
+                  >
+                    <Wrench size={12} /> Fix
+                  </button>
+                  <button
+                    type="button"
+                    className="flex-1 h-9 rounded-lg border border-[#E5E9EF] text-[11px] font-medium text-[#0B1220] hover:bg-[#F4F6F8] disabled:opacity-50 inline-flex items-center justify-center gap-1"
+                    onClick={onOpenRange}
+                    disabled={busy}
+                    data-testid="route-open-range-sheet-mobile-tab"
+                  >
+                    <ListNumbers size={12} /> Bulk
+                  </button>
+                  <button
+                    type="button"
+                    className="flex-1 h-9 rounded-lg bg-[#0B1220] text-white text-[11px] font-semibold hover:bg-[#1A2332] disabled:opacity-50 inline-flex items-center justify-center gap-1"
+                    onClick={onOptimize}
+                    disabled={busy}
+                    data-testid="route-optimize-mobile-tab"
+                  >
+                    <ArrowsDownUp size={12} /> {busy ? "…" : "Optimize"}
+                  </button>
+                </div>
+
+                {/* Warnings */}
+                {!drivers.length && (
+                  <div
+                    className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-900"
+                    data-testid="route-no-drivers-mobile"
+                  >
+                    No drivers —{" "}
+                    <Link href="/provider/settings" className="underline font-medium">
+                      add staff in Settings
+                    </Link>
+                  </div>
+                )}
+              </div>
+
+              {/* Stop list — scrollable */}
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-2 py-2">
+                {loading ? (
+                  <InlineLoader label="Loading plan…" testid="route-plan-loading-mobile" />
+                ) : (
+                  stopListPaneContent
+                )}
+              </div>
+
+              {effectiveStart && (
+                <div className="shrink-0 px-3 py-1.5 border-t border-[#E5E9EF] text-[10px] text-[#5C6570]">
+                  Start: {effectiveStart.label || "Kitchen"}
+                  {effectiveStart.override?.ends_on
+                    ? ` · temp until ${effectiveStart.override.ends_on}`
+                    : ""}
+                </div>
+              )}
+            </div>
           )}
 
-          <div
-            className={`lg:hidden absolute inset-x-0 bottom-0 z-[450] pointer-events-none ${
-              mobileSnap === "expanded" ? "top-0" : ""
-            }`}
-            style={
-              mobileSnap === "expanded"
-                ? undefined
-                : {
-                    paddingBottom: hasSelection
-                      ? "calc(7.5rem + env(safe-area-inset-bottom, 0px))"
-                      : "env(safe-area-inset-bottom, 0px)",
-                  }
-            }
-          >
-            {mobileSnap === "peek" && (
+          {/* ── Phone: "Map" tab — floating stop count pill ─── */}
+          {mobileTab === "map" && (
+            <div className="md:hidden absolute bottom-4 left-1/2 -translate-x-1/2 z-[435]">
               <button
                 type="button"
-                className="pointer-events-auto mx-auto mb-2 flex items-center gap-2 h-11 px-4 rounded-full bg-white/95 shadow-lg border border-[#E5E9EF] text-sm font-semibold text-[#0B1220]"
-                onClick={cycleSnapUp}
+                className="flex items-center gap-2 h-11 px-5 rounded-full bg-white/95 backdrop-blur-xl shadow-lg border border-[#E5E9EF] text-sm font-semibold text-[#0B1220] active:scale-95 transition-transform"
+                onClick={() => setMobileTab("stops")}
                 data-testid="route-mobile-pane-toggle"
               >
                 <ListNumbers size={16} />
-                Stops ({totalStops})
-                <CaretDown size={14} className="rotate-180" />
+                {totalStops} Stops · {unassignedStops} open
+                <CaretDown size={14} className="rotate-180 text-[#5C6570]" />
               </button>
-            )}
-            <div
-              className={`pointer-events-auto w-full border-t border-[#E5E9EF] shadow-2xl overflow-hidden bg-white flex flex-col transition-[height] duration-200 ease-out ${
-                mobileSnap === "expanded" ? "rounded-none h-full" : "rounded-t-2xl"
-              }`}
-              style={
-                mobileSnap === "expanded"
-                  ? {
-                      height: hasSelection
-                        ? "calc(100% - 7.5rem - env(safe-area-inset-bottom, 0px))"
-                        : "100%",
-                      marginTop: "auto",
-                    }
-                  : { height: SNAP_HEIGHT[mobileSnap] }
-              }
-              data-testid="route-mobile-rail-sheet"
-              data-snap={mobileSnap}
-            >
-              <div
-                className="shrink-0 flex flex-col items-center pt-2 pb-1 cursor-grab active:cursor-grabbing touch-none"
-                onPointerDown={handleSnapPointerDown}
-                onPointerUp={handleSnapPointerUp}
-                onPointerCancel={() => {
-                  dragStartY.current = null;
-                }}
-                data-testid={`route-mobile-snap-${mobileSnap}`}
-                role="slider"
-                aria-valuetext={mobileSnap}
-                aria-label="Resize stops sheet"
-              >
-                <div className="h-1 w-10 rounded-full bg-[#D5DCD9]" />
-                <div className="flex gap-1 mt-1.5">
-                  {SNAP_ORDER.map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      className={`h-1.5 w-1.5 rounded-full ${
-                        mobileSnap === s ? "bg-[#00BFA5]" : "bg-[#E5E9EF]"
-                      }`}
-                      aria-label={`Snap ${s}`}
-                      onClick={(ev) => {
-                        ev.stopPropagation();
-                        setMobileSnap(s);
-                      }}
-                      data-testid={`route-mobile-snap-dot-${s}`}
-                    />
-                  ))}
-                </div>
-              </div>
-              <div className="flex-1 min-h-0 overflow-hidden">{rail}</div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -623,6 +755,7 @@ export default function PlanMode({
         Geocoding powered by Geoapify. Map data © OpenStreetMap contributors.
       </p>
 
+      {/* ── Selection toolbar ──────────────────────────────────── */}
       <SelectionToolbar
         selectedCount={selected.size}
         drivers={drivers}
@@ -635,6 +768,7 @@ export default function PlanMode({
         onOpenRange={onOpenRange}
       />
 
+      {/* ── "More" action sheet (phone + tablet) ───────────────── */}
       <AppSheet
         open={moreOpen}
         onClose={() => setMoreOpen(false)}
@@ -643,6 +777,7 @@ export default function PlanMode({
         closeTestId="route-mobile-more-close"
       >
         <div className="flex flex-col gap-3" data-testid="route-mobile-more-sheet">
+          {/* Planning date */}
           <label className="flex flex-col gap-1.5">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-[#5C6570]">
               Planning date
@@ -655,6 +790,66 @@ export default function PlanMode({
               data-testid="route-planning-date-mobile"
             />
           </label>
+
+          {/* Driver/pool filter */}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-[#5C6570]">
+              Filter by pool
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {filters.map((f) => {
+                const isActive = listFilter === f.key;
+                return (
+                  <button
+                    key={f.key}
+                    type="button"
+                    className={`h-9 px-3 rounded-full text-[12px] font-medium transition-colors truncate max-w-[10rem] ${
+                      isActive
+                        ? "bg-[#0B1220] text-white"
+                        : "bg-[#F4F6F8] text-[#5C6570] hover:text-[#0B1220]"
+                    }`}
+                    onClick={() => {
+                      onListFilterChange(f.key);
+                      setMoreOpen(false);
+                      setMobileTab("stops");
+                    }}
+                    data-testid={`route-more-filter-${f.key}`}
+                  >
+                    {f.label}
+                    {f.count != null && <span className="ml-1 opacity-60">{f.count}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <hr className="border-[#E5E9EF]" />
+
+          {/* Actions */}
+          <button
+            type="button"
+            className="h-11 px-3 rounded-xl border border-[#E5E9EF] text-sm font-medium text-[#0B1220] inline-flex items-center gap-2 hover:bg-[#F4F6F8] disabled:opacity-50"
+            onClick={() => {
+              setMoreOpen(false);
+              onGeocode();
+            }}
+            disabled={busy}
+            data-testid="route-geocode-more"
+          >
+            <Wrench size={16} /> Fix addresses (Geocode)
+          </button>
+          <button
+            type="button"
+            className="h-11 px-3 rounded-xl border border-[#E5E9EF] text-sm font-medium text-[#0B1220] inline-flex items-center gap-2 hover:bg-[#F4F6F8] disabled:opacity-50"
+            onClick={() => {
+              setMoreOpen(false);
+              onOptimize();
+            }}
+            disabled={busy}
+            data-testid="route-optimize-more"
+          >
+            <ArrowsDownUp size={16} /> Optimize routes
+          </button>
           <a
             href={fullMapUrl}
             target="_blank"

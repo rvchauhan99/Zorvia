@@ -11,6 +11,7 @@ import { trackEvent } from "@/lib/ga";
 import { CA_PROVINCES, formatCaPostal, isValidCaPostal } from "@/lib/ca-provinces";
 import { CA_TIMEZONE_OPTIONS } from "@/lib/ca-timezones";
 import SearchableSelect from "@/components/SearchableSelect";
+import { NumericInput } from "@/components/NumericInput";
 
 export default function ProviderSignup() {
   const { providerSignup } = useAuth();
@@ -32,9 +33,9 @@ export default function ProviderSignup() {
     country: "CA",
     postal_code: "",
     interac_email: "",
-    meal_price_default: 12,
+    meal_price_default: "12",
     timezone: "America/Toronto",
-    cutoff_hours: 4,
+    cutoff_hours: "4",
   });
   const [submitting, setSubmitting] = useState(false);
   const upd = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [k]: e.target.value });
@@ -183,7 +184,7 @@ export default function ProviderSignup() {
               </label>
               <label className={label}>
                 <span className="label-overline">Default meal price (CAD)</span>
-                <input data-testid="signup-meal-price" type="number" step="0.5" min="0" className={input} value={form.meal_price_default} onChange={upd("meal_price_default")} />
+                <NumericInput data-testid="signup-meal-price" mode="decimal" min={0} className={input} value={form.meal_price_default} onValueChange={(v) => setForm({ ...form, meal_price_default: v })} />
               </label>
               <label className={label}>
                 <span className="label-overline">Timezone</span>
@@ -198,7 +199,7 @@ export default function ProviderSignup() {
               </label>
               <label className={label}>
                 <span className="label-overline">Cancellation cutoff (hours)</span>
-                <input data-testid="signup-cutoff" type="number" min="0" max="24" className={input} value={form.cutoff_hours} onChange={upd("cutoff_hours")} />
+                <NumericInput data-testid="signup-cutoff" mode="integer" min={0} max={24} className={input} value={form.cutoff_hours} onValueChange={(v) => setForm({ ...form, cutoff_hours: v })} />
               </label>
             </div>
             <button data-testid="signup-submit" disabled={submitting} className="pill-btn btn-primary h-12 gap-2 disabled:opacity-60 cursor-pointer">

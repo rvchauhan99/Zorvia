@@ -4,6 +4,7 @@ import React, { useEffect, useMemo } from "react"
 import { Plus, Trash } from "@phosphor-icons/react"
 import AppSheet from "@/components/AppSheet"
 import SearchableSelect from "@/components/SearchableSelect"
+import { NumericInput } from "@/components/NumericInput"
 import type { BulkRangeRow, Driver, PoolSection } from "./types"
 import { countInRange, evenSplitRanges, newBulkRow, seqSpan } from "./utils"
 
@@ -190,14 +191,14 @@ export default function AssignRangeSheet({
                   <div className="flex-1 grid grid-cols-2 gap-2 min-w-0">
                     <label className="flex flex-col gap-1 min-w-0">
                       <span className="text-[10px] font-medium text-[#5C6570]">From</span>
-                      <input
-                        type="number"
+                      <NumericInput
+                        mode="integer"
                         min={1}
                         placeholder="#"
                         value={row.from}
-                        onChange={(e) => {
+                        onValueChange={(v) => {
                           const next = [...bulkRows]
-                          next[i] = { ...row, from: e.target.value }
+                          next[i] = { ...row, from: v }
                           onBulkRowsChange(next)
                         }}
                         className="h-10 px-3 rounded-xl border border-[#E5E9EF] text-sm text-[#0B1220] w-full"
@@ -206,14 +207,14 @@ export default function AssignRangeSheet({
                     </label>
                     <label className="flex flex-col gap-1 min-w-0">
                       <span className="text-[10px] font-medium text-[#5C6570]">To</span>
-                      <input
-                        type="number"
+                      <NumericInput
+                        mode="integer"
                         min={1}
                         placeholder="#"
                         value={row.to}
-                        onChange={(e) => {
+                        onValueChange={(v) => {
                           const next = [...bulkRows]
-                          next[i] = { ...row, to: e.target.value }
+                          next[i] = { ...row, to: v }
                           onBulkRowsChange(next)
                         }}
                         className="h-10 px-3 rounded-xl border border-[#E5E9EF] text-sm text-[#0B1220] w-full"

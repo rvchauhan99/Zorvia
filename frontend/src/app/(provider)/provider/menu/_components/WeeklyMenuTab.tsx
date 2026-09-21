@@ -14,6 +14,7 @@ import {
 import AppSheet from "@/components/AppSheet";
 import MenuImageLightbox from "@/components/MenuImageLightbox";
 import SearchableSelect from "@/components/SearchableSelect";
+import { NumericInput } from "@/components/NumericInput";
 import Link from "next/link";
 import { WEEKDAYS } from "@/lib/format";
 import {
@@ -600,6 +601,18 @@ function CellEditorSheet({
   items: MenuItem[];
   title: string;
 }) {
+  const [lineQtyDrafts, setLineQtyDrafts] = useState<Record<string, string>>({});
+  const [chooseDrafts, setChooseDrafts] = useState<Record<string, string>>({});
+  const [optionQtyDrafts, setOptionQtyDrafts] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!open) {
+      setLineQtyDrafts({});
+      setChooseDrafts({});
+      setOptionQtyDrafts({});
+    }
+  }, [open]);
+
   if (!open || !draft) return null;
 
   const usedInLines = new Set(draft.lines.map((l) => l.item_id));
@@ -700,15 +713,25 @@ function CellEditorSheet({
                   <span className="flex-1 min-w-0 truncate text-sm">
                     {itemById(line.item_id)?.name || "Removed item"}
                   </span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.5"
+                  <NumericInput
+                    mode="decimal"
+                    min={0}
                     aria-label="Quantity"
                     data-testid={`menu-plan-line-qty-${line.item_id}`}
                     className="h-11 w-20 rounded-xl border border-brand-border bg-white px-2 text-sm"
-                    value={line.quantity}
-                    onChange={(e) => updateLineQty(line.item_id, Number(e.target.value))}
+                    value={lineQtyDrafts[line.item_id] ?? String(line.quantity)}
+                    onValueChange={(v) =>
+                      setLineQtyDrafts((prev) => ({ ...prev, [line.item_id]: v }))
+                    }
+                    onBlurCommit={(committed) => {
+                      const n = Number(committed);
+                      updateLineQty(line.item_id, Number.isFinite(n) ? n : 0);
+                      setLineQtyDrafts((prev) => {
+                        const next = { ...prev };
+                        delete next[line.item_id];
+                        return next;
+                      });
+                    }}
                   />
                   <span className="text-xs text-muted-foreground w-14 shrink-0">
                     {itemById(line.item_id)?.unit || ""}
@@ -778,16 +801,27 @@ function CellEditorSheet({
                     value={group.label}
                     onChange={(e) => updateGroup(group.id, { label: e.target.value })}
                   />
-                  <input
-                    type="number"
-                    min="1"
+                  <NumericInput
+                    mode="integer"
+                    min={1}
+                    emptyFallback="1"
                     aria-label="How many the customer picks"
                     data-testid={`menu-plan-group-choose-${group.id}`}
                     className="h-11 w-16 rounded-xl border border-brand-border bg-white px-2 text-sm"
-                    value={group.choose}
-                    onChange={(e) =>
-                      updateGroup(group.id, { choose: Math.max(1, Number(e.target.value) || 1) })
+                    value={chooseDrafts[group.id] ?? String(group.choose)}
+                    onValueChange={(v) =>
+                      setChooseDrafts((prev) => ({ ...prev, [group.id]: v }))
                     }
+                    onBlurCommit={(committed) => {
+                      updateGroup(group.id, {
+                        choose: Math.max(1, Number(committed) || 1),
+                      });
+                      setChooseDrafts((prev) => {
+                        const next = { ...prev };
+                        delete next[group.id];
+                        return next;
+                      });
+                    }}
                   />
                   <button
                     type="button"
@@ -826,22 +860,36 @@ function CellEditorSheet({
                       <span className="flex-1 min-w-0 truncate text-sm">
                         {itemById(option.item_id)?.name || "Removed item"}
                       </span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.5"
+                      <NumericInput
+                        mode="decimal"
+                        min={0}
                         aria-label="Quantity"
                         className="h-11 w-20 rounded-xl border border-brand-border bg-white px-2 text-sm"
-                        value={option.quantity}
-                        onChange={(e) =>
+                        value={
+                          optionQtyDrafts[`${group.id}:${option.item_id}`] ??
+                          String(option.quantity)
+                        }
+                        onValueChange={(v) =>
+                          setOptionQtyDrafts((prev) => ({
+                            ...prev,
+                            [`${group.id}:${option.item_id}`]: v,
+                          }))
+                        }
+                        onBlurCommit={(committed) => {
+                          const n = Number(committed);
                           updateGroup(group.id, {
                             options: group.options.map((o) =>
                               o.item_id === option.item_id
-                                ? { ...o, quantity: Number(e.target.value) }
+                                ? { ...o, quantity: Number.isFinite(n) ? n : 0 }
                                 : o,
                             ),
-                          })
-                        }
+                          });
+                          setOptionQtyDrafts((prev) => {
+                            const next = { ...prev };
+                            delete next[`${group.id}:${option.item_id}`];
+                            return next;
+                          });
+                        }}
                       />
                       <button
                         type="button"
