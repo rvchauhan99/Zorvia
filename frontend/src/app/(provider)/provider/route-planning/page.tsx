@@ -253,9 +253,22 @@ export default function RoutePlanningPage() {
         } else {
           const n = data?.ordered_ids?.length ?? 0
           const skip = data?.skipped?.length ? ` (${data.skipped.length} skipped)` : ""
+          const dup = Array.isArray(data?.duplicate_coord_groups)
+            ? data.duplicate_coord_groups.length
+            : 0
+          const dupWarn = dup
+            ? ` · ${dup} duplicate-coordinate cluster${dup === 1 ? "" : "s"}`
+            : ""
           toast.success(
-            opts?.quiet ? `Route optimized${skip}` : `Optimized ${n} stops${skip}`
+            opts?.quiet
+              ? `Route optimized${skip}${dupWarn}`
+              : `Optimized ${n} stops${skip}${dupWarn}`
           )
+          if (dup > 0) {
+            toast.warning(
+              "Suspicious duplicate coordinates — re-geocode before trusting this tour"
+            )
+          }
         }
         await load()
         return true
