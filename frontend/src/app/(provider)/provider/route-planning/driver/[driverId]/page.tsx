@@ -371,11 +371,16 @@ export default function DriverRouteDetailPage() {
             <p className="text-[11px] text-[#5C6570] mt-0.5">
               Distance {distanceLabel} · Time {durationLabel}
               {polyline?.method === "straight"
-                ? " (straight-line estimate)"
+                ? " · Straight-line"
                 : polyline?.method === "osrm"
-                  ? " (OSRM roads)"
+                  ? " · Road (OSRM)"
                   : ""}
             </p>
+            {originLine ? (
+              <p className="text-[11px] text-[#5C6570] mt-0.5 truncate" title={originLine}>
+                Start: {originLine}
+              </p>
+            ) : null}
           </div>
           {loading ? (
             <div className="p-4">
