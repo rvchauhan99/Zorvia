@@ -1201,7 +1201,7 @@ export default function Customers() {
         <div className="flex items-center gap-2 max-w-md">
           <div className="flex-1 relative">
             <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input data-testid="customers-search" placeholder="Search name, phone, email or postal…" value={q} onChange={(e) => setQ(e.target.value)} className="w-full h-10 pl-9 pr-3 rounded-xl bg-white border border-brand-border outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all text-sm" />
+            <input data-testid="customers-search" placeholder="Search name, phone, email, postal or address…" value={q} onChange={(e) => setQ(e.target.value)} className="w-full h-10 pl-9 pr-3 rounded-xl bg-white border border-brand-border outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all text-sm" />
           </div>
         </div>
         <div className="flex flex-wrap gap-2" data-testid="customers-extra-filters">

@@ -96,6 +96,7 @@ type Props = {
   onReorder: (section: PoolSection, orderedIds: string[]) => void;
   onReassign: (customerIds: string[], driverId: string | null) => void;
   onOpenStart: (stop: Stop) => void;
+  onOpenEnd: (stop: Stop) => void;
   onPlace: (stop: Stop) => void;
   onBestFit: (stop: Stop) => void;
   onBestFitAllUnassigned: () => void;
@@ -140,6 +141,7 @@ export default function PlanMode({
   onReorder,
   onReassign,
   onOpenStart,
+  onOpenEnd,
   onPlace,
   onBestFit,
   onBestFitAllUnassigned,
@@ -259,6 +261,7 @@ export default function PlanMode({
       onReorder={onReorder}
       onReassign={onReassign}
       onOpenStart={onOpenStart}
+      onOpenEnd={onOpenEnd}
       onPlace={onPlace}
       onBestFit={onBestFit}
       onBestFitAllUnassigned={onBestFitAllUnassigned}

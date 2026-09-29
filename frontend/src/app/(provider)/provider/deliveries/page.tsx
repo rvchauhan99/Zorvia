@@ -74,6 +74,7 @@ export default function Deliveries() {
   const [debouncedQ, setDebouncedQ] = useState("");
   const [driverId, setDriverId] = useState("");
   const [mealSlot, setMealSlot] = useState("all");
+  const [filterMealTypeId, setFilterMealTypeId] = useState("");
   const [filterCity, setFilterCity] = useState("");
   const [drivers, setDrivers] = useState<{ id: string; name: string; email?: string }[]>([]);
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -105,6 +106,7 @@ export default function Deliveries() {
       if (debouncedQ) params.q = debouncedQ;
       if (!isDriver && driverId) params.driver_id = driverId;
       if (mealSlot && mealSlot !== "all") params.meal_slot = mealSlot;
+      if (filterMealTypeId) params.meal_type_id = filterMealTypeId;
       if (filterCity) params.city = filterCity;
       if (filter && filter !== "all") params.status = filter;
       if (opts.cursor) params.cursor = opts.cursor;
@@ -112,6 +114,7 @@ export default function Deliveries() {
       if (debouncedQ) sumParams.q = debouncedQ;
       if (!isDriver && driverId) sumParams.driver_id = driverId;
       if (mealSlot && mealSlot !== "all") sumParams.meal_slot = mealSlot;
+      if (filterMealTypeId) sumParams.meal_type_id = filterMealTypeId;
       if (filterCity) sumParams.city = filterCity;
 
       const [{ data }, sumRes] = await Promise.all([
@@ -137,14 +140,14 @@ export default function Deliveries() {
     } finally {
       if (!opts.silent) setLoading(false);
     }
-  }, [date, debouncedQ, driverId, mealSlot, filterCity, isDriver, filter, paging.pageSize, paging.applyPageResult]);
+  }, [date, debouncedQ, driverId, mealSlot, filterMealTypeId, filterCity, isDriver, filter, paging.pageSize, paging.applyPageResult]);
 
   // Reset to page 1 when filters change
   useEffect(() => {
     paging.resetToFirstPage();
     fetchPage({ cursor: null });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset+fetch on filter identity
-  }, [date, debouncedQ, driverId, mealSlot, filterCity, filter, paging.pageSize]);
+  }, [date, debouncedQ, driverId, mealSlot, filterMealTypeId, filterCity, filter, paging.pageSize]);
 
   const load = useCallback(async (silent = false) => {
     const c = paging.currentPageIndex > 0 ? paging.cursorHistory[paging.currentPageIndex - 1] ?? null : null;
@@ -287,6 +290,7 @@ export default function Deliveries() {
       if (debouncedQ) params.q = debouncedQ;
       if (!isDriver && driverId) params.driver_id = driverId;
       if (mealSlot && mealSlot !== "all") params.meal_slot = mealSlot;
+      if (filterMealTypeId) params.meal_type_id = filterMealTypeId;
       if (filterCity) params.city = filterCity;
       const { data } = await api.get(`/deliveries`, { params });
       const pending = Array.isArray(data) ? data : asPageEnvelope<any>(data).items;
@@ -518,6 +522,18 @@ export default function Deliveries() {
               ]}
               inputClassName="h-10 px-3 rounded-xl bg-white border border-brand-border text-sm"
               placeholder="Search slot…"
+            />
+          </div>
+          <div className="min-w-[160px] max-w-xs flex-1 sm:flex-none">
+            <SearchableSelect
+              testid="delivery-meal-type-filter"
+              value={filterMealTypeId}
+              onChange={setFilterMealTypeId}
+              allowEmpty
+              emptyLabel="All meal types"
+              options={mealTypes.map((t) => ({ value: t.id, label: t.name }))}
+              inputClassName="h-10 px-3 rounded-xl bg-white border border-brand-border text-sm"
+              placeholder="Search meal type…"
             />
           </div>
           <CityFilterSelect

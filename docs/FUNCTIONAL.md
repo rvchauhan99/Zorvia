@@ -48,16 +48,17 @@ Screen: `/provider/route-planning` — **full-bleed Routes workspace** (Leaflet 
 - Top bar: meal slot · date · city (**filter only**) · **Export CSV** (all pools) · Optimize · Open in Maps  
 - **Mobile / tablet (`<lg`):** two-row top bar (Back · L/D · **More** · **Optimize** always visible; city full-width on row 2); map-first **snap sheet** (`peek` · `half` · `expanded` = **100% of map workspace** under the header); drag handle + dots (`route-mobile-snap-*`); map marker / highlight bumps to half; **More** holds date, Export, Maps, Bulk by sequence; selection dock owns bottom **safe-area**; filter chips horizontal-scroll; **drag-to-reorder off** on narrow (use Optimize / Move / Assign by sequence); desktop (`lg+`) keeps DnD  
 - Desktop (`lg+`): fixed 360px left rail unchanged  
-- Left rail (only scroll): Unassigned first → driver pools; compact stop rows with name + **phone** (`wa.me`); pool header shows **Start: Kitchen** / **Start: {customer}**; pool **View** → `/provider/route-planning/driver/{id}` (map + km/min from pool start + stop list + CSV/**Print**)  
+- Left rail (only scroll): Unassigned first → driver pools; compact stop rows with name + **phone** (`wa.me`); pool header shows **Start: Kitchen** / **Start: {customer}** (+ optional End; default NA); pool **View** → `/provider/route-planning/driver/{id}` (map + km/min + CSV/**Print** with Type + Qty)  
 - Driver detail mobile: map ~36–40vh + list below; header respects safe-area  
 - Driver **Print**: downloads route PDF + opens **driver** WhatsApp (Settings → Team phone) to attach the PDF; customer phones in the PDF/list open **customer** chat  
-- **Deliveries** (`/provider/deliveries`, admin + driver): each stop / next card shows customer phone (`wa.me`), meal type, qty, slot, address, and notes  
-- **Kitchen** pack list + Print PDF: name, phone (`wa.me` in UI), CRM notes  
+- **Deliveries** (`/provider/deliveries`, admin + driver): meal type filter + each stop shows phone (`wa.me`), meal type, qty, slot, address, notes  
+- **Kitchen** pack list + Print PDF: market-style larger fonts; name, phone (`wa.me` in UI), CRM notes  
+- Customers CRM free-text search includes street address / apartment  
 - Settings → Team: optional staff **phone** (create + blur-save on drivers) for Print→driver WhatsApp; **Remove** soft-deletes staff — drivers pick Unassigned / transfer to existing / create new driver & transfer before removal
-- Map: OSRM road polylines via `POST /route-planning/route-geometry` (distance/duration when available; straight-leg fallback); origin = each pool’s effective start  
+- Map: OSRM road polylines via `POST /route-planning/route-geometry` (distance/duration when available; straight-leg fallback); origin = each pool’s effective start (+ end when set); paused-on-date customers omitted  
 - Selection dock: Assign / **To Unassigned** / By sequence (empty SearchableSelect shows “Unassigned pool”)  
 - **Assign by sequence** sheet: defaults source to the largest non-empty pool; range rows are stacked cards (From/To + full-width driver) so the picker is not clipped  
-- **Set as start**: stop ⋯ → StartSheet (**Set pool start**) without selecting a city → Temporary / Default → quiet Optimize **that pool only**  
+- **Set as start / Set as end**: stop ⋯ → StartSheet / EndSheet → Temporary / Default (end Clear = NA) → quiet Optimize **that pool only**  
 - **Optimize sheet** (Figma): scope = This city / All cities / Unassigned pool / **Full rebalance (auto-assign)** / Selected drivers; every run requires a confirm step; Full rebalance needs an ack checkbox; tours use **per-pool starts** (kitchen by default); Full rebalance unassigns all → kitchen day-build → even-split → per-driver reopt from each pool start  
 - **Best fit**: Unassigned ⋯ **Best fit** (one stop) or header **Best fit all** → confirm → `POST /route-planning/auto-place` (cheapest driver gap vs pool start, sequential)  
 - Day-build: Unassign all → Optimize Unassigned → Bulk ranges → Optimize drivers **or** one-click **Full rebalance**  
