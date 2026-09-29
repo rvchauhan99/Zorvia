@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canMutateDeliveries, canMutateAdmin, isDriver as sessionIsDriver } from "@/lib/roles";
-import { fmtDate, todayISO, fmtMealCount, deliveryQty, fmtExtraBadge, fmtMealTypeLinesBreakdown } from "@/lib/format";
+import { fmtDate, todayISO, fmtMealCount, deliveryQty, fmtExtraBadge, fmtMealTypeLabel } from "@/lib/format";
 import { mealSlotBadgeLabel } from "@/lib/mealSlots";
 import StatusPill from "@/components/StatusPill";
 import AppSheet from "@/components/AppSheet";
@@ -453,6 +453,14 @@ export default function Deliveries() {
           />
           <div className="text-xs text-muted-foreground truncate">{nextPending.address}{nextPending.postal_code ? ` · ${nextPending.postal_code}` : ""}</div>
           <div className="text-xs font-semibold text-primary mt-1" data-testid={`next-meals-${nextPending.id}`}>{fmtMealCount(nextPending)}</div>
+          {(() => {
+            const nextMealType = fmtMealTypeLabel(nextPending);
+            return nextMealType ? (
+              <div className="text-[11px] text-muted-foreground mt-0.5" data-testid={`next-meal-type-${nextPending.id}`}>
+                {nextMealType}
+              </div>
+            ) : null;
+          })()}
           <div className="mt-2 flex items-center gap-2">
             <a
               href={mapsUrl(nextPending)}
@@ -595,11 +603,14 @@ export default function Deliveries() {
                       ) : null}
                     </span>
                   </div>
-                  {fmtMealTypeLinesBreakdown(d) ? (
-                    <div className="text-[11px] text-muted-foreground mt-0.5" data-testid={`del-lines-${d.id}`}>
-                      {fmtMealTypeLinesBreakdown(d)}
-                    </div>
-                  ) : null}
+                  {(() => {
+                    const mealTypeLabel = fmtMealTypeLabel(d);
+                    return mealTypeLabel ? (
+                      <div className="text-[11px] text-muted-foreground mt-0.5" data-testid={`del-lines-${d.id}`}>
+                        {mealTypeLabel}
+                      </div>
+                    ) : null;
+                  })()}
                   <div className="text-xs text-muted-foreground truncate mt-0.5">
                     {d.address}{d.apartment ? ` · ${d.apartment}` : ""}{d.postal_code ? ` · ${d.postal_code}` : ""}
                   </div>

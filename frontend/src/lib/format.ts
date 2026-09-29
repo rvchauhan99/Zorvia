@@ -38,19 +38,19 @@ export function fmtMealCount(d: { quantity?: number } | null | undefined) {
   return qty === 1 ? "1 meal" : `${qty} meals`;
 }
 
+type MealTypeLineSource = {
+  meal_type_id?: string;
+  meal_type_name?: string;
+  quantity?: number;
+  meal_type_lines?: Array<{
+    meal_type_id?: string;
+    meal_type_name?: string;
+    quantity?: number;
+  }>;
+};
+
 /** Breakdown when a stop has multiple type×qty lines, e.g. "Regular×2 + Jain×1". */
-export function fmtMealTypeLinesBreakdown(
-  d:
-    | {
-        meal_type_lines?: Array<{
-          meal_type_id?: string;
-          meal_type_name?: string;
-          quantity?: number;
-        }>;
-      }
-    | null
-    | undefined,
-): string {
+export function fmtMealTypeLinesBreakdown(d: MealTypeLineSource | null | undefined): string {
   const lines = d?.meal_type_lines;
   if (!Array.isArray(lines) || lines.length <= 1) return "";
   return lines
@@ -60,6 +60,27 @@ export function fmtMealTypeLinesBreakdown(
       return `${name}×${q}`;
     })
     .join(" + ");
+}
+
+/** Always-visible meal type for ops UIs (single or multi-line stops). */
+export function fmtMealTypeLabel(d: MealTypeLineSource | null | undefined): string {
+  const multi = fmtMealTypeLinesBreakdown(d);
+  if (multi) return multi;
+
+  const lines = d?.meal_type_lines;
+  if (Array.isArray(lines) && lines.length === 1) {
+    const ln = lines[0];
+    const name = (ln?.meal_type_name || ln?.meal_type_id || "").trim();
+    if (name) {
+      const q = Math.max(1, Math.floor(Number(ln?.quantity) || 1));
+      return `${name}×${q}`;
+    }
+  }
+
+  const topName = (d?.meal_type_name || "").trim();
+  if (!topName) return "";
+  const qty = deliveryQty(d);
+  return qty > 1 ? `${topName}×${qty}` : topName;
 }
 
 /** Extra portion badge, e.g. "+2 extra"; empty string when none. */
