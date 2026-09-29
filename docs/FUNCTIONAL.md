@@ -51,7 +51,7 @@ Screen: `/provider/route-planning` — **full-bleed Routes workspace** (Leaflet 
 - Left rail (only scroll): Unassigned first → driver pools; compact stop rows with name + **phone** (`wa.me`); pool header shows **Start: Kitchen** / **Start: {customer}**; pool **View** → `/provider/route-planning/driver/{id}` (map + km/min from pool start + stop list + CSV/**Print**)  
 - Driver detail mobile: map ~36–40vh + list below; header respects safe-area  
 - Driver **Print**: downloads route PDF + opens **driver** WhatsApp (Settings → Team phone) to attach the PDF; customer phones in the PDF/list open **customer** chat  
-- **Deliveries** (`/provider/deliveries`, admin + driver): customer phone on each stop / next card → `wa.me`  
+- **Deliveries** (`/provider/deliveries`, admin + driver): each stop / next card shows customer phone (`wa.me`), meal type, qty, slot, address, and notes  
 - **Kitchen** pack list + Print PDF: name, phone (`wa.me` in UI), CRM notes  
 - Settings → Team: optional staff **phone** (create + blur-save on drivers) for Print→driver WhatsApp; **Remove** soft-deletes staff — drivers pick Unassigned / transfer to existing / create new driver & transfer before removal
 - Map: OSRM road polylines via `POST /route-planning/route-geometry` (distance/duration when available; straight-leg fallback); origin = each pool’s effective start  
