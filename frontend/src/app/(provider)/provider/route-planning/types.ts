@@ -94,6 +94,9 @@ export type RoutePlan = {
   pool_starts?: Record<string, PoolStartDefault>;
   effective_pool_starts?: Record<string, EffectiveStart>;
   pool_start_overrides?: ActiveOverride[];
+  pool_ends?: Record<string, PoolStartDefault>;
+  effective_pool_ends?: Record<string, EffectiveStart>;
+  pool_end_overrides?: ActiveOverride[];
   stops?: Stop[];
   unplaced?: Stop[];
   geocode_failed?: Stop[];
@@ -132,6 +135,8 @@ export type StartSheetState = {
   duration: "today" | "days";
   days: number;
 };
+
+export type EndSheetState = StartSheetState;
 
 export type PageMode = "overview" | "plan";
 

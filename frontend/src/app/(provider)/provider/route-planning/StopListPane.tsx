@@ -71,6 +71,7 @@ type Props = {
   onReorder: (section: PoolSection, orderedIds: string[]) => void;
   onReassign: (customerIds: string[], driverId: string | null) => void;
   onOpenStart: (stop: Stop) => void;
+  onOpenEnd: (stop: Stop) => void;
   onPlace: (stop: Stop) => void;
   onBestFit?: (stop: Stop) => void;
   onBestFitAllUnassigned?: () => void;
@@ -121,6 +122,7 @@ function SortableStopRow({
   onToggle,
   onHighlight,
   onOpenStart,
+  onOpenEnd,
   onPlace,
   onOpenMove,
   onBestFit,
@@ -139,6 +141,7 @@ function SortableStopRow({
   onToggle: () => void;
   onHighlight: () => void;
   onOpenStart: () => void;
+  onOpenEnd: () => void;
   onPlace: () => void;
   onOpenMove: () => void;
   onBestFit?: () => void;
@@ -257,6 +260,17 @@ function SortableStopRow({
               <button
                 type="button"
                 className="w-full text-left px-3 py-2 hover:bg-[#F4F6F8] text-[#0B1220]"
+                data-testid={`route-stop-end-${stop.id}`}
+                onClick={() => {
+                  setMenuOpen(false);
+                  onOpenEnd();
+                }}
+              >
+                Set as end
+              </button>
+              <button
+                type="button"
+                className="w-full text-left px-3 py-2 hover:bg-[#F4F6F8] text-[#0B1220]"
                 data-testid={`route-stop-move-${stop.id}`}
                 onClick={() => {
                   setMenuOpen(false);
@@ -344,6 +358,7 @@ export default function StopListPane({
   onReorder,
   onReassign,
   onOpenStart,
+  onOpenEnd,
   onPlace,
   onBestFit,
   onBestFitAllUnassigned,
@@ -693,6 +708,7 @@ export default function StopListPane({
                           onToggle={() => onToggleStop(stop.id)}
                           onHighlight={() => onHighlight(stop.id)}
                           onOpenStart={() => onOpenStart(stop)}
+                          onOpenEnd={() => onOpenEnd(stop)}
                           onPlace={() => onPlace(stop)}
                           onBestFit={
                             section.key === "unassigned" && onBestFit

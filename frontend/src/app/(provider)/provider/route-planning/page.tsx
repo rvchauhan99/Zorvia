@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth";
 import { canMutateAdmin } from "@/lib/roles";
 import PlanMode from "./PlanMode";
 import StartSheet from "./StartSheet";
+import EndSheet from "./EndSheet";
 import AssignRangeSheet from "./AssignRangeSheet";
 import OptimizeSheet from "./OptimizeSheet";
 import AppSheet from "@/components/AppSheet";
@@ -16,6 +17,7 @@ import type {
   BulkRangeRow,
   CityChip,
   Driver,
+  EndSheetState,
   MealSlot,
   PoolSection,
   RoutePlan,
@@ -56,6 +58,7 @@ export default function RoutePlanningPage() {
   const [selectedCity, setSelectedCity] = useState("all");
   const [planningDate, setPlanningDate] = useState(todayIsoLocal);
   const [startSheet, setStartSheet] = useState<StartSheetState | null>(null);
+  const [endSheet, setEndSheet] = useState<EndSheetState | null>(null);
   const [listFilter, setListFilter] = useState("all");
   const [roadPolylines, setRoadPolylines] = useState<RoutePolyline[]>([]);
 
@@ -320,6 +323,22 @@ export default function RoutePlanningPage() {
     });
   };
 
+  const openEndSheet = (stop: Stop) => {
+    const poolKey = poolKeyForStop(stop);
+    const poolTitle = stop.driver_id
+      ? stop.driver_name || drivers.find((d) => d.id === stop.driver_id)?.name || "Driver"
+      : "Unassigned";
+    setEndSheet({
+      customerId: stop.id,
+      customerName: stop.name || stop.id,
+      poolKey,
+      poolTitle,
+      mode: "temporary",
+      duration: "today",
+      days: 3,
+    });
+  };
+
   const saveStartFromSheet = async () => {
     if (!startSheet) return;
     setBusy(true);
@@ -360,6 +379,78 @@ export default function RoutePlanningPage() {
       }
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || "Could not set pool start");
+      setBusy(false);
+    }
+  };
+
+  const saveEndFromSheet = async () => {
+    if (!endSheet) return;
+    setBusy(true);
+    try {
+      if (endSheet.mode === "default") {
+        await api
+          .delete("/route-planning/pool-end-override", {
+            params: { pool_key: endSheet.poolKey },
+          })
+          .catch(() => undefined);
+        await api.post("/route-planning/pool-end", {
+          pool_key: endSheet.poolKey,
+          type: "customer",
+          customer_id: endSheet.customerId,
+        });
+        toast.success("Pool end saved — optimizing…");
+      } else {
+        await api.post("/route-planning/pool-end-override", {
+          pool_key: endSheet.poolKey,
+          customer_id: endSheet.customerId,
+          mode: endSheet.duration,
+          days: endSheet.duration === "days" ? endSheet.days : undefined,
+          planning_date: planningDate,
+        });
+        toast.success(
+          endSheet.duration === "today"
+            ? "Temporary pool end set — optimizing…"
+            : `Temporary pool end for ${endSheet.days} days — optimizing…`
+        );
+      }
+      const poolKey = endSheet.poolKey;
+      setEndSheet(null);
+      setBusy(false);
+      if (poolKey === "unassigned") {
+        await runOptimize({ quiet: true, unassignedOnly: true, city: null });
+      } else {
+        await runOptimize({ quiet: true, driverIds: [poolKey], city: null });
+      }
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || "Could not set pool end");
+      setBusy(false);
+    }
+  };
+
+  const clearEndFromSheet = async () => {
+    if (!endSheet) return;
+    setBusy(true);
+    try {
+      await api
+        .delete("/route-planning/pool-end-override", {
+          params: { pool_key: endSheet.poolKey },
+        })
+        .catch(() => undefined);
+      await api.post("/route-planning/pool-end", {
+        pool_key: endSheet.poolKey,
+        type: "na",
+      });
+      const poolKey = endSheet.poolKey;
+      setEndSheet(null);
+      toast.success("Pool end cleared (NA) — optimizing…");
+      setBusy(false);
+      if (poolKey === "unassigned") {
+        await runOptimize({ quiet: true, unassignedOnly: true, city: null });
+      } else {
+        await runOptimize({ quiet: true, driverIds: [poolKey], city: null });
+      }
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || "Could not clear pool end");
       setBusy(false);
     }
   };
@@ -609,6 +700,7 @@ export default function RoutePlanningPage() {
         onReorder={(section, ids) => void reorderPool(section, ids)}
         onReassign={(ids, driverId) => void assignDriver(ids, driverId)}
         onOpenStart={openStartSheet}
+        onOpenEnd={openEndSheet}
         onPlace={(stop) => void placeOne(stop.id, stop.driver_id || null)}
         onBestFit={(stop) => setBestFitConfirm({ mode: "one", stop })}
         onBestFitAllUnassigned={() => {
@@ -709,6 +801,15 @@ export default function RoutePlanningPage() {
         onChange={setStartSheet}
         onClose={() => setStartSheet(null)}
         onSave={() => void saveStartFromSheet()}
+      />
+
+      <EndSheet
+        state={endSheet}
+        busy={busy}
+        onChange={setEndSheet}
+        onClose={() => setEndSheet(null)}
+        onSave={() => void saveEndFromSheet()}
+        onClear={() => void clearEndFromSheet()}
       />
 
       <AssignRangeSheet
