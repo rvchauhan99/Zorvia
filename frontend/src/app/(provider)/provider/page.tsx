@@ -110,7 +110,7 @@ export default function ProviderDashboard() {
   }
 
   useEffect(() => {
-    if (!session) return;
+    if (!session?.user_id) return;
     if (isDriver(session)) {
       router.replace("/provider/deliveries");
       return;
@@ -119,7 +119,8 @@ export default function ProviderDashboard() {
     try {
       setDismissedOnboard(localStorage.getItem(ONBOARD_KEY) === "1");
     } catch { /* ignore */ }
-  }, [session, router]);
+    // Identity/role only — avoid double fetch when auth soft-refresh replaces session object
+  }, [session?.user_id, session?.role, router]);
 
   const hasInterac = !!(provider?.interac_email || "").trim();
   const hasCustomers = (summary?.active_customers ?? 0) > 0 || (summary?.pending_customers ?? 0) > 0;
