@@ -1279,6 +1279,7 @@ export default function Customers() {
                     <div className="min-w-0 flex-1">
                       <Link
                         href={`/provider/customers/${c.id}?tab=analysis`}
+                        prefetch={false}
                         data-testid={`customer-link-${c.id}`}
                         onClick={(e) => e.stopPropagation()}
                         className="font-medium hover:text-primary hover:underline"
@@ -1371,7 +1372,7 @@ export default function Customers() {
                   {filtered.map((c) => (
                     <tr key={c.id} data-testid={`customer-row-${c.id}`} className="hover:bg-brand-surface/60 transition-colors group">
                       <td className="px-3 py-2.5">
-                        <Link href={`/provider/customers/${c.id}?tab=analysis`} data-testid={`customer-link-${c.id}`} className="font-medium hover:text-primary hover:underline">
+                        <Link href={`/provider/customers/${c.id}?tab=analysis`} prefetch={false} data-testid={`customer-link-${c.id}`} className="font-medium hover:text-primary hover:underline">
                           {c.name}
                         </Link>
                         <div className="text-xs text-muted-foreground">{c.address} {c.apartment ? `· ${c.apartment}` : ""}</div>
