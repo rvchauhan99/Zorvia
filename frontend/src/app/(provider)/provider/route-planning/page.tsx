@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canMutateAdmin } from "@/lib/roles";
+import { useCancellableLoad } from "@/hooks/useCancellableLoad";
 import PlanMode from "./PlanMode";
 import StartSheet from "./StartSheet";
 import EndSheet from "./EndSheet";
@@ -41,7 +42,8 @@ export default function RoutePlanningPage() {
   const { session } = useAuth();
   const admin = canMutateAdmin(session);
   const [slot, setSlot] = useState<MealSlot>("dinner");
-  const [loading, setLoading] = useState(true);
+  const paintedRef = useRef(false);
+  const { loading, run, isAbortError } = useCancellableLoad(true);
   const [busy, setBusy] = useState(false);
   const [plan, setPlan] = useState<RoutePlan | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -63,23 +65,25 @@ export default function RoutePlanningPage() {
   const [roadPolylines, setRoadPolylines] = useState<RoutePolyline[]>([]);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    const mode = paintedRef.current ? "soft" : "hard";
     try {
-      const params: Record<string, string> = {
-        meal_slot: slot,
-        planning_date: planningDate,
-        city: "all",
-      };
-      const { data } = await api.get<RoutePlan>("/route-planning", { params });
-      setPlan(data);
-      setSelected(new Set());
+      await run(async (signal) => {
+        const params: Record<string, string> = {
+          meal_slot: slot,
+          planning_date: planningDate,
+          city: "all",
+        };
+        const { data } = await api.get<RoutePlan>("/route-planning", { params, signal });
+        setPlan(data);
+        paintedRef.current = true;
+        setSelected(new Set());
+      }, { mode });
     } catch (e: any) {
+      if (isAbortError(e)) return;
       toast.error(e?.response?.data?.detail || "Failed to load route plan");
-      setPlan(null);
-    } finally {
-      setLoading(false);
+      if (mode === "hard") setPlan(null);
     }
-  }, [slot, planningDate]);
+  }, [slot, planningDate, run, isAbortError]);
 
   const loadGeometry = useCallback(async () => {
     try {

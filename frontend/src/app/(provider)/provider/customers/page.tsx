@@ -12,6 +12,7 @@ import { canMutateAdmin, canSeePricing } from "@/lib/roles";
 import { fmtCAD, WEEKDAYS, todayISO } from "@/lib/format";
 import { asPageEnvelope, DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
+import { useCancellableLoad } from "@/hooks/useCancellableLoad";
 import AppSheet from "@/components/AppSheet";
 import { NumericInput } from "@/components/NumericInput";
 import AddExtraMealSheet from "@/components/AddExtraMealSheet";
@@ -344,7 +345,8 @@ export default function Customers() {
     { id: "jain", name: "Jain", price: 12 },
     { id: "fasting", name: "Fasting", price: 12 },
   ]);
-  const [loading, setLoading] = useState(true);
+  const paintedRef = useRef(false);
+  const { loading, run, isAbortError } = useCancellableLoad(true);
   const [debouncedQ, setDebouncedQ] = useState("");
   const [filterDriverId, setFilterDriverId] = useState("");
   const [filterMealTypeId, setFilterMealTypeId] = useState("");
@@ -587,24 +589,26 @@ export default function Customers() {
   }
 
   async function load(opts?: { cursor?: string | null }) {
-    setLoading(true);
+    const mode = paintedRef.current ? "soft" : "hard";
     try {
-      const params = new URLSearchParams();
-      params.set("page_size", String(paging.pageSize));
-      if (filter !== "all") params.set("status", filter);
-      if (debouncedQ) params.set("q", debouncedQ);
-      if (filterDriverId) params.set("driver_id", filterDriverId);
-      if (filterMealTypeId) params.set("meal_type_id", filterMealTypeId);
-      if (filterCity) params.set("city", filterCity);
-      if (opts?.cursor) params.set("cursor", opts.cursor);
-      const { data } = await api.get(`/customers?${params.toString()}`);
-      const page = asPageEnvelope<any>(data);
-      setItems(page.items);
-      paging.applyPageResult(page);
-    } catch {
+      await run(async (signal) => {
+        const params = new URLSearchParams();
+        params.set("page_size", String(paging.pageSize));
+        if (filter !== "all") params.set("status", filter);
+        if (debouncedQ) params.set("q", debouncedQ);
+        if (filterDriverId) params.set("driver_id", filterDriverId);
+        if (filterMealTypeId) params.set("meal_type_id", filterMealTypeId);
+        if (filterCity) params.set("city", filterCity);
+        if (opts?.cursor) params.set("cursor", opts.cursor);
+        const { data } = await api.get(`/customers?${params.toString()}`, { signal });
+        const page = asPageEnvelope<any>(data);
+        setItems(page.items);
+        paintedRef.current = true;
+        paging.applyPageResult(page);
+      }, { mode });
+    } catch (e: unknown) {
+      if (isAbortError(e)) return;
       toast.error("Failed to load customers");
-    } finally {
-      setLoading(false);
     }
   }
 

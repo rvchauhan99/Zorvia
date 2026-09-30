@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -8,6 +8,7 @@ import { canMutateAdmin, canSeePricing } from "@/lib/roles";
 import { fmtCAD, fmtDateTime } from "@/lib/format";
 import { asPageEnvelope, DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
+import { useCancellableLoad } from "@/hooks/useCancellableLoad";
 import StatusPill from "@/components/StatusPill";
 import AppSheet from "@/components/AppSheet";
 import RecordPaymentSheet from "@/components/RecordPaymentSheet";
@@ -23,6 +24,7 @@ export default function Payments() {
   const canMutate = canMutateAdmin(session);
   const showMoney = canSeePricing(session);
   const [items, setItems] = useState<any[]>([]);
+  const paintedRef = useRef(false);
   const [filter, setFilter] = useState("pending");
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
@@ -35,7 +37,7 @@ export default function Payments() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [batchBusy, setBatchBusy] = useState(false);
   const [confirmBatchVerify, setConfirmBatchVerify] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const { loading, run, isAbortError } = useCancellableLoad(true);
   const [recordOpen, setRecordOpen] = useState(false);
   const [verifyFor, setVerifyFor] = useState<any>(null);
   const [verifyBusy, setVerifyBusy] = useState(false);
@@ -57,31 +59,33 @@ export default function Payments() {
 
   const fetchPage = useCallback(
     async (opts: { cursor?: string | null; statusOverride?: string; pageSize?: number } = {}) => {
-      setLoading(true);
+      const mode = paintedRef.current ? "soft" : "hard";
       try {
-        const params = new URLSearchParams();
-        const status = opts.statusOverride ?? filter;
-        if (status !== "all") params.set("status", status);
-        if (debouncedQ) params.set("q", debouncedQ);
-        if (range.start) params.set("start", range.start);
-        if (range.end) params.set("end", range.end);
-        if (customerFilter?.id) params.set("customer_id", customerFilter.id);
-        if (filterCity) params.set("city", filterCity);
-        params.set("limit", String(opts.pageSize ?? paging.pageSize));
-        if (opts.cursor) params.set("cursor", opts.cursor);
+        await run(async (signal) => {
+          const params = new URLSearchParams();
+          const status = opts.statusOverride ?? filter;
+          if (status !== "all") params.set("status", status);
+          if (debouncedQ) params.set("q", debouncedQ);
+          if (range.start) params.set("start", range.start);
+          if (range.end) params.set("end", range.end);
+          if (customerFilter?.id) params.set("customer_id", customerFilter.id);
+          if (filterCity) params.set("city", filterCity);
+          params.set("limit", String(opts.pageSize ?? paging.pageSize));
+          if (opts.cursor) params.set("cursor", opts.cursor);
 
-        const { data } = await api.get(`/payments?${params.toString()}`);
-        const page = asPageEnvelope<any>(data);
-        setItems(page.items);
-        paging.applyPageResult(page);
-        setSelected(new Set());
-      } catch {
+          const { data } = await api.get(`/payments?${params.toString()}`, { signal });
+          const page = asPageEnvelope<any>(data);
+          setItems(page.items);
+          paintedRef.current = true;
+          paging.applyPageResult(page);
+          setSelected(new Set());
+        }, { mode });
+      } catch (e: unknown) {
+        if (isAbortError(e)) return;
         toast.error("Failed to load payments");
-      } finally {
-        setLoading(false);
       }
     },
-    [filter, debouncedQ, range.start, range.end, customerFilter?.id, filterCity, paging.pageSize, paging.applyPageResult],
+    [filter, debouncedQ, range.start, range.end, customerFilter?.id, filterCity, paging.pageSize, paging.applyPageResult, run, isAbortError],
   );
 
   const reloadCurrentPage = useCallback(() => {

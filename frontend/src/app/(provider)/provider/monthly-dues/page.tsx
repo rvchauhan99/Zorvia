@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowClockwise,
@@ -26,6 +26,7 @@ import CursorPaginationBar from "@/components/CursorPaginationBar";
 import CityFilterSelect from "@/components/CityFilterSelect";
 import { type AllowedPageSize } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
+import { useCancellableLoad } from "@/hooks/useCancellableLoad";
 
 type DueRow = {
   customer_id: string;
@@ -317,7 +318,8 @@ export default function MonthlyDuesPage() {
   const router = useRouter();
   const showMoney = canSeePricing(session);
   const canMutate = canMutateAdmin(session);
-  const [loading, setLoading] = useState(true);
+  const paintedRef = useRef(false);
+  const { loading, run, isAbortError } = useCancellableLoad(true);
   const [allowed, setAllowed] = useState(false);
   const [rows, setRows] = useState<DueRow[]>([]);
   const [totals, setTotals] = useState<{ due_amount?: number; overdue_amount?: number; overdue_count?: number; customer_count?: number } | null>(null);
@@ -333,34 +335,37 @@ export default function MonthlyDuesPage() {
   }, []);
 
   const load = useCallback(async (opts: { cursor?: string | null } = {}) => {
-    setLoading(true);
+    const mode = paintedRef.current ? "soft" : "hard";
     try {
-      const params = new URLSearchParams({ page_size: String(paging.pageSize) });
-      if (opts.cursor) params.set("cursor", opts.cursor);
-      if (filterCity) params.set("city", filterCity);
-      const { data } = await api.get(`/reports/monthly-dues?${params.toString()}`);
-      setAllowed(true);
-      setRows(Array.isArray(data?.rows) ? data.rows : []);
-      setTotals(data?.totals || null);
-      paging.applyPageResult({
-        next_cursor: data?.next_cursor ?? null,
-        has_more: Boolean(data?.has_more),
-        total: data?.total,
-      });
+      await run(async (signal) => {
+        const params = new URLSearchParams({ page_size: String(paging.pageSize) });
+        if (opts.cursor) params.set("cursor", opts.cursor);
+        if (filterCity) params.set("city", filterCity);
+        const { data } = await api.get(`/reports/monthly-dues?${params.toString()}`, { signal });
+        setAllowed(true);
+        setRows(Array.isArray(data?.rows) ? data.rows : []);
+        setTotals(data?.totals || null);
+        paintedRef.current = true;
+        paging.applyPageResult({
+          next_cursor: data?.next_cursor ?? null,
+          has_more: Boolean(data?.has_more),
+          total: data?.total,
+        });
+      }, { mode });
     } catch (e: any) {
+      if (isAbortError(e)) return;
       const detail = e?.response?.data?.detail;
       if (e?.response?.status === 400) {
         setAllowed(false);
         setRows([]);
         setTotals(null);
+        paintedRef.current = true;
       } else {
         toast.error(typeof detail === "string" ? detail : "Failed to load customer subscriptions");
       }
-    } finally {
-      setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- paging.applyPageResult is stable
-  }, [paging.pageSize, filterCity]);
+  }, [paging.pageSize, filterCity, run, isAbortError]);
 
   useEffect(() => {
     if (isDriver(session)) {

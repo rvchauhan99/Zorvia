@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
@@ -14,6 +14,7 @@ import {
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canMutateAdmin } from "@/lib/roles";
+import { useCancellableLoad } from "@/hooks/useCancellableLoad";
 import { InlineLoader } from "@/components/loaders";
 import { CustomerWhatsAppContact } from "@/components/CustomerWhatsAppContact";
 import {
@@ -72,7 +73,8 @@ export default function DriverRouteDetailPage() {
     new Date().toISOString().slice(0, 10);
   const city = searchParams.get("city") || "all";
 
-  const [loading, setLoading] = useState(true);
+  const paintedRef = useRef(false);
+  const { loading, run, isAbortError } = useCancellableLoad(true);
   const [plan, setPlan] = useState<RoutePlan | null>(null);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [polyline, setPolyline] = useState<RoutePolyline | null>(null);
@@ -80,33 +82,38 @@ export default function DriverRouteDetailPage() {
   const [printBusy, setPrintBusy] = useState(false);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    const mode = paintedRef.current ? "soft" : "hard";
     try {
-      const { data } = await api.get<RoutePlan>("/route-planning", {
-        params: {
-          meal_slot: slot,
-          planning_date: planningDate,
-          city: "all",
-        },
-      });
-      setPlan(data);
+      await run(async (signal) => {
+        const { data } = await api.get<RoutePlan>("/route-planning", {
+          params: {
+            meal_slot: slot,
+            planning_date: planningDate,
+            city: "all",
+          },
+          signal,
+        });
+        setPlan(data);
 
-      const geomBody: Record<string, string> = { meal_slot: slot };
-      if (city && city !== "all") geomBody.city = city;
-      geomBody.driver_id = isUnassigned ? "unassigned" : driverIdParam;
-      const { data: geom } = await api.post<{
-        polylines?: RoutePolyline[];
-      }>("/route-planning/route-geometry", geomBody);
-      const lines = geom?.polylines || [];
-      setPolyline(lines[0] || null);
+        const geomBody: Record<string, string> = { meal_slot: slot };
+        if (city && city !== "all") geomBody.city = city;
+        geomBody.driver_id = isUnassigned ? "unassigned" : driverIdParam;
+        const { data: geom } = await api.post<{
+          polylines?: RoutePolyline[];
+        }>("/route-planning/route-geometry", geomBody, { signal });
+        const lines = geom?.polylines || [];
+        setPolyline(lines[0] || null);
+        paintedRef.current = true;
+      }, { mode });
     } catch (e: any) {
+      if (isAbortError(e)) return;
       toast.error(e?.response?.data?.detail || "Failed to load driver route");
-      setPlan(null);
-      setPolyline(null);
-    } finally {
-      setLoading(false);
+      if (mode === "hard") {
+        setPlan(null);
+        setPolyline(null);
+      }
     }
-  }, [slot, planningDate, city, driverIdParam, isUnassigned]);
+  }, [slot, planningDate, city, driverIdParam, isUnassigned, run, isAbortError]);
 
   useEffect(() => {
     if (!admin) return;
