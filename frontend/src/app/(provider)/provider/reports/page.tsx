@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canSeePricing } from "@/lib/roles";
@@ -15,6 +15,7 @@ import CityFilterSelect from "@/components/CityFilterSelect";
 import { NumericInput } from "@/components/NumericInput";
 import { DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
+import { useCancellableLoad } from "@/hooks/useCancellableLoad";
 
 function tabButton(active: boolean, label: string, onClick: () => void, testid: string) {
   return (
@@ -67,7 +68,8 @@ export default function Reports() {
   const [dueMonth, setDueMonth] = useState(todayISO().slice(0, 7));
   const [areaPrefix, setAreaPrefix] = useState("");
   const [filterCity, setFilterCity] = useState("");
-  const [loading, setLoading] = useState(false);
+  const paintedRef = useRef(false);
+  const { loading, run, isAbortError } = useCancellableLoad(false);
   const paging = useCursorPagination({ initialPageSize: DEFAULT_PAGE_SIZE });
   const moneyTab = tab === "outstanding" || tab === "customer-credit" || tab === "collections" || tab === "statement";
   const canExport = showMoney || !moneyTab;
@@ -85,6 +87,7 @@ export default function Reports() {
   function selectTab(next: string) {
     setTab(next);
     setData(null);
+    paintedRef.current = false;
     setListQ("");
     setDebouncedQ("");
     setMinAmount("");
@@ -111,66 +114,69 @@ export default function Reports() {
   async function load(opts: { cursor?: string | null } = {}) {
     if (!showMoney && moneyTab) {
       setData({});
+      paintedRef.current = true;
       return;
     }
-    setLoading(true);
+    const mode = paintedRef.current ? "soft" : "hard";
     try {
-      let url;
-      if (tab === "daily") url = `/reports/daily-deliveries${range.start ? `?start=${range.start}&end=${range.end}` : ""}`;
-      else if (tab === "outstanding") url = `/reports/outstanding?${outstandingParams("owed", opts.cursor)}`;
-      else if (tab === "customer-credit") url = `/reports/outstanding?${outstandingParams("credit", opts.cursor)}`;
-      else if (tab === "collections") {
-        if (collectionsView === "due") {
-          const params = new URLSearchParams({ month: dueMonth, due_date: dueDate });
-          if (dueCollectionDay) params.set("collection_day", dueCollectionDay);
-          if (filterCity) params.set("city", filterCity);
-          url = `/reports/payment-due?${params.toString()}`;
-        } else {
-          const params = new URLSearchParams();
-          if (range.start) {
-            params.set("start", range.start);
-            params.set("end", range.end);
+      await run(async (signal) => {
+        let url;
+        if (tab === "daily") url = `/reports/daily-deliveries${range.start ? `?start=${range.start}&end=${range.end}` : ""}`;
+        else if (tab === "outstanding") url = `/reports/outstanding?${outstandingParams("owed", opts.cursor)}`;
+        else if (tab === "customer-credit") url = `/reports/outstanding?${outstandingParams("credit", opts.cursor)}`;
+        else if (tab === "collections") {
+          if (collectionsView === "due") {
+            const params = new URLSearchParams({ month: dueMonth, due_date: dueDate });
+            if (dueCollectionDay) params.set("collection_day", dueCollectionDay);
+            if (filterCity) params.set("city", filterCity);
+            url = `/reports/payment-due?${params.toString()}`;
+          } else {
+            const params = new URLSearchParams();
+            if (range.start) {
+              params.set("start", range.start);
+              params.set("end", range.end);
+            }
+            if (filterCity) params.set("city", filterCity);
+            const qs = params.toString();
+            url = `/reports/collections${qs ? `?${qs}` : ""}`;
           }
-          if (filterCity) params.set("city", filterCity);
-          const qs = params.toString();
-          url = `/reports/collections${qs ? `?${qs}` : ""}`;
         }
-      }
-      else if (tab === "active") url = "/reports/active-customers";
-      else if (tab === "statement") {
-        const params = new URLSearchParams({ month: statementMonth, page_size: String(paging.pageSize) });
-        if (debouncedQ) params.set("q", debouncedQ);
-        if (statementActivityOnly) params.set("activity_only", "true");
-        if (filterCity) params.set("city", filterCity);
-        if (opts.cursor) params.set("cursor", opts.cursor);
-        url = `/reports/statement?${params.toString()}`;
-      } else {
-        const params = new URLSearchParams({ page_size: String(paging.pageSize) });
-        if (areaPrefix.trim()) params.set("area", areaPrefix.trim());
-        if (filterCity) params.set("city", filterCity);
-        if (opts.cursor) params.set("cursor", opts.cursor);
-        url = `/reports/area-summary?${params.toString()}`;
-      }
-      const { data: payload } = await api.get(url);
-      setData(payload);
-      if (tab === "outstanding" || tab === "customer-credit") {
-        paging.applyPageResult({
-          next_cursor: payload.next_cursor ?? null,
-          has_more: Boolean(payload.has_more),
-          total: payload.row_count,
-        });
-      } else if (tab === "statement" || tab === "area") {
-        paging.applyPageResult({
-          next_cursor: payload.next_cursor ?? null,
-          has_more: Boolean(payload.has_more),
-          total: payload.total,
-        });
-      }
-    } catch {
+        else if (tab === "active") url = "/reports/active-customers";
+        else if (tab === "statement") {
+          const params = new URLSearchParams({ month: statementMonth, page_size: String(paging.pageSize) });
+          if (debouncedQ) params.set("q", debouncedQ);
+          if (statementActivityOnly) params.set("activity_only", "true");
+          if (filterCity) params.set("city", filterCity);
+          if (opts.cursor) params.set("cursor", opts.cursor);
+          url = `/reports/statement?${params.toString()}`;
+        } else {
+          const params = new URLSearchParams({ page_size: String(paging.pageSize) });
+          if (areaPrefix.trim()) params.set("area", areaPrefix.trim());
+          if (filterCity) params.set("city", filterCity);
+          if (opts.cursor) params.set("cursor", opts.cursor);
+          url = `/reports/area-summary?${params.toString()}`;
+        }
+        const { data: payload } = await api.get(url, { signal });
+        setData(payload);
+        paintedRef.current = true;
+        if (tab === "outstanding" || tab === "customer-credit") {
+          paging.applyPageResult({
+            next_cursor: payload.next_cursor ?? null,
+            has_more: Boolean(payload.has_more),
+            total: payload.row_count,
+          });
+        } else if (tab === "statement" || tab === "area") {
+          paging.applyPageResult({
+            next_cursor: payload.next_cursor ?? null,
+            has_more: Boolean(payload.has_more),
+            total: payload.total,
+          });
+        }
+      }, { mode });
+    } catch (e: unknown) {
+      if (isAbortError(e)) return;
       toast.error("Failed to load report");
-      setData(null);
-    } finally {
-      setLoading(false);
+      if (mode === "hard") setData(null);
     }
   }
 

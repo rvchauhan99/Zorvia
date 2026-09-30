@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useTransition } from "react";
+import React, { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { ArrowRight, ChartLine, Receipt, Users } from "@phosphor-icons/react";
 import { toast } from "sonner";
@@ -19,6 +19,7 @@ import { AgingChart } from "@/components/analytics/AgingChart";
 import { AreaChart } from "@/components/analytics/AreaChart";
 import { KpiSkeleton, SectionSkeleton } from "@/components/loaders";
 import { todayISO } from "@/lib/format";
+import { useCancellableLoad } from "@/hooks/useCancellableLoad";
 
 function percent(value?: number) {
   return `${Number(value || 0).toFixed(1)}%`;
@@ -99,7 +100,8 @@ export default function AnalysisPage() {
   const [mealSlot, setMealSlot] = useState<MealSlotFilter>("all");
   const [filterCity, setFilterCity] = useState("");
   const [data, setData] = useState<BusinessInsights | null>(null);
-  const [loading, setLoading] = useState(true);
+  const paintedRef = useRef(false);
+  const { loading, run, isAbortError } = useCancellableLoad(true);
   const [isPending, startTransition] = useTransition();
 
   async function load(opts?: {
@@ -118,16 +120,19 @@ export default function AnalysisPage() {
       toast.error("Choose From and To dates for a custom range");
       return;
     }
-    setLoading(true);
+    const mode = paintedRef.current ? "soft" : "hard";
     try {
-      const { data } = await api.get<BusinessInsights>("/reports/business-insights", {
-        params: insightsParams({ period: nextPeriod, start, end, meal_slot: slot, city }),
-      });
-      setData(data);
-    } catch (e) {
+      await run(async (signal) => {
+        const { data } = await api.get<BusinessInsights>("/reports/business-insights", {
+          params: insightsParams({ period: nextPeriod, start, end, meal_slot: slot, city }),
+          signal,
+        });
+        setData(data);
+        paintedRef.current = true;
+      }, { mode });
+    } catch (e: unknown) {
+      if (isAbortError(e)) return;
       toast.error("Failed to load analysis");
-    } finally {
-      setLoading(false);
     }
   }
 

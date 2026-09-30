@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -22,6 +22,8 @@ import { CustomerWhatsAppContact } from "@/components/CustomerWhatsAppContact";
 import { markDeliveryWithProof } from "@/lib/deliveries";
 import { asPageEnvelope, OPS_DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
+import { useCancellableLoad } from "@/hooks/useCancellableLoad";
+import { useTabVisibleRefresh } from "@/hooks/useTabVisibleRefresh";
 import { ArrowLeft, ArrowRight, CheckCircle, XCircle, Prohibit, CaretUp, CaretDown, MapPin, Plus } from "@phosphor-icons/react";
 
 const OFFLINE_QUEUE_KEY = "tiffin_delivery_status_queue";
@@ -65,10 +67,11 @@ export default function Deliveries() {
   const { session } = useAuth();
   const canMutate = canMutateDeliveries(session);
   const canAddExtra = canMutateAdmin(session);
-  const isDriver = sessionIsDriver(session);
+  const isDriver = useMemo(() => sessionIsDriver(session), [session]);
   const [date, setDate] = useState(todayISO());
   const [items, setItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const paintedRef = useRef(false);
+  const { loading, run, isAbortError } = useCancellableLoad(true);
   const [filter, setFilter] = useState("pending");
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
@@ -97,50 +100,52 @@ export default function Deliveries() {
   }, [q]);
 
   const fetchPage = useCallback(async (opts: { cursor?: string | null; silent?: boolean; pageSize?: number } = {}) => {
-    if (!opts.silent) setLoading(true);
+    const mode = opts.silent ? "silent" : paintedRef.current ? "soft" : "hard";
     try {
-      const params: Record<string, string> = {
-        date,
-        page_size: String(opts.pageSize ?? paging.pageSize),
-      };
-      if (debouncedQ) params.q = debouncedQ;
-      if (!isDriver && driverId) params.driver_id = driverId;
-      if (mealSlot && mealSlot !== "all") params.meal_slot = mealSlot;
-      if (filterMealTypeId) params.meal_type_id = filterMealTypeId;
-      if (filterCity) params.city = filterCity;
-      if (filter && filter !== "all") params.status = filter;
-      if (opts.cursor) params.cursor = opts.cursor;
-      const sumParams: Record<string, string> = { date };
-      if (debouncedQ) sumParams.q = debouncedQ;
-      if (!isDriver && driverId) sumParams.driver_id = driverId;
-      if (mealSlot && mealSlot !== "all") sumParams.meal_slot = mealSlot;
-      if (filterMealTypeId) sumParams.meal_type_id = filterMealTypeId;
-      if (filterCity) sumParams.city = filterCity;
+      await run(async (signal) => {
+        const params: Record<string, string> = {
+          date,
+          page_size: String(opts.pageSize ?? paging.pageSize),
+        };
+        if (debouncedQ) params.q = debouncedQ;
+        if (!isDriver && driverId) params.driver_id = driverId;
+        if (mealSlot && mealSlot !== "all") params.meal_slot = mealSlot;
+        if (filterMealTypeId) params.meal_type_id = filterMealTypeId;
+        if (filterCity) params.city = filterCity;
+        if (filter && filter !== "all") params.status = filter;
+        if (opts.cursor) params.cursor = opts.cursor;
+        const sumParams: Record<string, string> = { date };
+        if (debouncedQ) sumParams.q = debouncedQ;
+        if (!isDriver && driverId) sumParams.driver_id = driverId;
+        if (mealSlot && mealSlot !== "all") sumParams.meal_slot = mealSlot;
+        if (filterMealTypeId) sumParams.meal_type_id = filterMealTypeId;
+        if (filterCity) sumParams.city = filterCity;
 
-      const [{ data }, sumRes] = await Promise.all([
-        api.get(`/deliveries`, { params }),
-        api.get(`/deliveries/summary`, { params: sumParams }).catch(() => ({ data: null })),
-      ]);
-      const page = asPageEnvelope<any>(data);
-      setItems(page.items);
-      paging.applyPageResult(page);
-      if (sumRes?.data) {
-        setSummary({
-          pending: Number(sumRes.data.pending) || 0,
-          delivered: Number(sumRes.data.delivered) || 0,
-          missed: Number(sumRes.data.missed) || 0,
-          cancelled: Number(sumRes.data.cancelled) || 0,
-          paused: Number(sumRes.data.paused) || 0,
-          total: Number(sumRes.data.total) || 0,
-          meals: Number(sumRes.data.meals) || 0,
-        });
-      }
-    } catch {
+        const [{ data }, sumRes] = await Promise.all([
+          api.get(`/deliveries`, { params, signal }),
+          api.get(`/deliveries/summary`, { params: sumParams, signal }).catch(() => ({ data: null })),
+        ]);
+        const page = asPageEnvelope<any>(data);
+        setItems(page.items);
+        paintedRef.current = true;
+        paging.applyPageResult(page);
+        if (sumRes?.data) {
+          setSummary({
+            pending: Number(sumRes.data.pending) || 0,
+            delivered: Number(sumRes.data.delivered) || 0,
+            missed: Number(sumRes.data.missed) || 0,
+            cancelled: Number(sumRes.data.cancelled) || 0,
+            paused: Number(sumRes.data.paused) || 0,
+            total: Number(sumRes.data.total) || 0,
+            meals: Number(sumRes.data.meals) || 0,
+          });
+        }
+      }, { mode });
+    } catch (e: unknown) {
+      if (isAbortError(e)) return;
       if (!opts.silent) toast.error("Failed to load deliveries");
-    } finally {
-      if (!opts.silent) setLoading(false);
     }
-  }, [date, debouncedQ, driverId, mealSlot, filterMealTypeId, filterCity, isDriver, filter, paging.pageSize, paging.applyPageResult]);
+  }, [date, debouncedQ, driverId, mealSlot, filterMealTypeId, filterCity, isDriver, filter, paging.pageSize, paging.applyPageResult, run, isAbortError]);
 
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -184,21 +189,12 @@ export default function Deliveries() {
     return () => { cancelled = true; };
   }, [isDriver]);
 
-  // Live board: poll every 30s while tab is visible
-  useEffect(() => {
-    const tick = () => {
-      if (!document.hidden) load(true);
-    };
-    const id = setInterval(tick, 30000);
-    const onVis = () => {
-      if (!document.hidden) load(true);
-    };
-    document.addEventListener("visibilitychange", onVis);
-    return () => {
-      clearInterval(id);
-      document.removeEventListener("visibilitychange", onVis);
-    };
-  }, [load]);
+  useTabVisibleRefresh(
+    useCallback(() => {
+      void load(true);
+    }, [load]),
+    { intervalMs: 30000 },
+  );
 
   const flushQueue = useCallback(async () => {
     const q = readQueue();

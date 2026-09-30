@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Printer,
@@ -26,6 +26,8 @@ import CityFilterSelect from "@/components/CityFilterSelect";
 import { CustomerWhatsAppContact } from "@/components/CustomerWhatsAppContact";
 import { OPS_DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
+import { useCancellableLoad } from "@/hooks/useCancellableLoad";
+import { useTabVisibleRefresh } from "@/hooks/useTabVisibleRefresh";
 
 type SlotFilter = "all" | "lunch" | "dinner";
 
@@ -97,7 +99,7 @@ function SlotBadge({ slot }: { slot: string }) {
 
 export default function KitchenPage() {
   const { session } = useAuth();
-  const isDriver = sessionIsDriver(session);
+  const isDriver = useMemo(() => sessionIsDriver(session), [session]);
   const [date, setDate] = useState(todayISO());
   const [slotFilter, setSlotFilter] = useState<SlotFilter>("all");
   const [q, setQ] = useState("");
@@ -106,7 +108,9 @@ export default function KitchenPage() {
   const [filterCity, setFilterCity] = useState("");
   const [drivers, setDrivers] = useState<{ id: string; name: string }[]>([]);
   const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const hasPaintedRef = useRef(false);
+  hasPaintedRef.current = data != null;
+  const { loading, run, isAbortError } = useCancellableLoad(true);
   const [printing, setPrinting] = useState(false);
   const paging = useCursorPagination({ initialPageSize: OPS_DEFAULT_PAGE_SIZE });
 
@@ -116,34 +120,39 @@ export default function KitchenPage() {
   }, [q]);
 
   const load = useCallback(
-    async (opts: { cursor?: string | null } = {}) => {
-      setLoading(true);
+    async (opts: { cursor?: string | null; silent?: boolean } = {}) => {
+      const mode = opts.silent ? "silent" : hasPaintedRef.current ? "soft" : "hard";
       try {
-        const params: Record<string, string> = {
-          date,
-          page_size: String(paging.pageSize),
-        };
-        if (debouncedQ) params.q = debouncedQ;
-        if (!isDriver && driverId) params.driver_id = driverId;
-        if (slotFilter !== "all") params.meal_slot = slotFilter;
-        if (filterCity) params.city = filterCity;
-        if (opts.cursor) params.cursor = opts.cursor;
-        const { data: summary } = await api.get(`/reports/kitchen-summary`, { params });
-        setData(summary);
-        paging.applyPageResult({
-          next_cursor: summary?.next_cursor ?? null,
-          has_more: Boolean(summary?.has_more),
-          total: summary?.total,
-        });
-      } catch (e: any) {
-        toast.error(e?.response?.data?.detail || "Failed to load kitchen plan");
-        setData(null);
-      } finally {
-        setLoading(false);
+        await run(async (signal) => {
+          const params: Record<string, string> = {
+            date,
+            page_size: String(paging.pageSize),
+          };
+          if (debouncedQ) params.q = debouncedQ;
+          if (!isDriver && driverId) params.driver_id = driverId;
+          if (slotFilter !== "all") params.meal_slot = slotFilter;
+          if (filterCity) params.city = filterCity;
+          if (opts.cursor) params.cursor = opts.cursor;
+          const { data: summary } = await api.get(`/reports/kitchen-summary`, {
+            params,
+            signal,
+          });
+          setData(summary);
+          paging.applyPageResult({
+            next_cursor: summary?.next_cursor ?? null,
+            has_more: Boolean(summary?.has_more),
+            total: summary?.total,
+          });
+        }, { mode });
+      } catch (e: unknown) {
+        if (isAbortError(e)) return;
+        const err = e as { response?: { data?: { detail?: string } } };
+        toast.error(err?.response?.data?.detail || "Failed to load kitchen plan");
+        if (mode === "hard") setData(null);
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps
     },
-    [date, debouncedQ, driverId, slotFilter, filterCity, isDriver, paging.pageSize]
+    [date, debouncedQ, driverId, slotFilter, filterCity, isDriver, paging.pageSize, run, isAbortError]
   );
 
   useEffect(() => {
@@ -152,16 +161,13 @@ export default function KitchenPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, debouncedQ, driverId, slotFilter, filterCity, isDriver, paging.pageSize]);
 
-  useEffect(() => {
-    const handleVisibility = () => {
-      if (document.visibilityState !== "visible") return;
+  useTabVisibleRefresh(
+    useCallback(() => {
       paging.resetToFirstPage();
-      load({ cursor: null });
-    };
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => document.removeEventListener("visibilitychange", handleVisibility);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [load]);
+      load({ cursor: null, silent: true });
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [load]),
+  );
 
   useEffect(() => {
     if (isDriver) return;

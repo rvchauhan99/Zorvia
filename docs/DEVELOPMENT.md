@@ -1,6 +1,6 @@
 # MealHQ frontends — Development
 
-**Last updated:** 2026-09-20  
+**Last updated:** 2026-10-01  
 Workspace: [MealHQ.code-workspace](../../MealHQ.code-workspace) · API map: sibling `mealhq-api/docs/WORKSPACE.md`
 
 ## Ports
@@ -28,3 +28,15 @@ Start the API from a sibling clone of **mealhq-api** (see that repo’s `docs/DE
 - `NEXT_PUBLIC_FIREBASE_*` — Firebase client (`mealhq-ca`)
 
 Vercel: [DEPLOY_VERCEL.md](./DEPLOY_VERCEL.md).
+
+## Provider client fetch lifecycle
+
+List/report pages that refetch on filters, visibility, or poll must use the shared hooks — do **not** embed per-page `AbortController` / seq / soft-load blocks.
+
+| Hook | Role |
+|------|------|
+| `useCancellableLoad` | `run(executor, { mode })` with `hard` \| `soft` \| `silent`; pass `signal` into `api.get` / `api.post`; full-page spinner only for `hard` |
+| `useAbortableRequest` | Low-level ticket API (prefer `useCancellableLoad` in pages) |
+| `useTabVisibleRefresh` | Visibility (+ optional `intervalMs`) silent refresh |
+
+Mode rule: `silent` for poll/visibility; `soft` after data has painted; `hard` on first empty load. Ignore abort errors in UI toasts. Unmount aborts in-flight work.
