@@ -40,6 +40,7 @@ Detail: API `CYCLE_SUBSCRIPTION.md` / `MONTHLY_BILLING.md`.
 - Follow [design_guidelines.json](../design_guidelines.json)
 - WhatsApp product UI gated by backend `WHATSAPP_FEATURES_ENABLED`
 - Do **not** invent Phase 2: notification inbox UI, WhatsApp chat inbox
+- Provider shell: prefer Shell-owned subscription + auth session; avoid idle `Link` prefetch/`_rsc` storms (`prefetch={false}` on More/CTAs) so dashboard loads stay lean
 
 ## 5. Route planning UI
 

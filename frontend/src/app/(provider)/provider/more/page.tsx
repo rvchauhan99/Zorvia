@@ -45,7 +45,7 @@ export default function More() {
     api.get("/providers/me/activity", { params: { limit: 15 } })
       .then(({ data }) => setActivity(Array.isArray(data) ? data : []))
       .catch(() => setActivity([]));
-  }, [session, router]);
+  }, [session?.user_id, session?.role, router]);
 
   return (
     <div className="flex flex-col gap-3 sm:gap-4 animate-fade-in-up">
@@ -56,7 +56,7 @@ export default function More() {
       <ul className="card-tinted divide-y divide-brand-border overflow-hidden">
         {items.map((it) => (
           <li key={it.to}>
-            <Link data-testid={it.testid} href={it.to} className="flex items-center gap-3 p-3.5 sm:p-4 hover:bg-brand-surface transition-colors cursor-pointer">
+            <Link data-testid={it.testid} href={it.to} prefetch={false} className="flex items-center gap-3 p-3.5 sm:p-4 hover:bg-brand-surface transition-colors cursor-pointer">
               <it.icon size={22} />
               <span className="font-medium">{it.label}</span>
               <ArrowRight size={16} className="ml-auto text-muted-foreground" />

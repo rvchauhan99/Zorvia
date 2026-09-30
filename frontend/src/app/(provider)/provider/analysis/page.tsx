@@ -63,6 +63,7 @@ function TopList({
                 {row.customer_id ? (
                   <Link
                     href={`/provider/customers/${row.customer_id}?tab=analysis`}
+                    prefetch={false}
                     className="font-medium truncate block hover:text-primary hover:underline"
                     data-testid={`analysis-customer-${row.customer_id}`}
                   >
@@ -290,13 +291,13 @@ export default function AnalysisPage() {
               <p className="text-sm text-muted-foreground">Use detailed reports for CSV and monthly statement workflows.</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Link href="/provider/reports" className="pill-btn btn-outline gap-2" data-testid="analysis-open-reports">
+              <Link href="/provider/reports" prefetch={false} className="pill-btn btn-outline gap-2" data-testid="analysis-open-reports">
                 Reports <ArrowRight size={16} />
               </Link>
-              <Link href="/provider/payments" className="pill-btn btn-primary gap-2" data-testid="analysis-open-payments">
+              <Link href="/provider/payments" prefetch={false} className="pill-btn btn-primary gap-2" data-testid="analysis-open-payments">
                 Payments <Receipt size={16} />
               </Link>
-              <Link href="/provider/customers" className="pill-btn btn-outline gap-2" data-testid="analysis-open-customers">
+              <Link href="/provider/customers" prefetch={false} className="pill-btn btn-outline gap-2" data-testid="analysis-open-customers">
                 Customers <Users size={16} />
               </Link>
             </div>

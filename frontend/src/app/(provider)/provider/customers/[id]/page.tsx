@@ -171,16 +171,14 @@ export default function CustomerDetail() {
 
   async function load() {
     try {
-      const [{ data }, enabled, provRes, weekRes] = await Promise.all([
+      const [{ data }, enabled, provRes] = await Promise.all([
         api.get(`/customers/${id}`),
         fetchWhatsappFeaturesEnabled(),
         api.get("/providers/me").catch(() => ({ data: null })),
-        api.get<MenuWeek>(`/customers/${id}/menu-choices`).catch(() => ({ data: null })),
       ]);
       setC(data);
       setNotesDraft(data.notes || "");
       setWaEnabled(enabled);
-      setMenuWeek(weekRes?.data?.enabled ? weekRes.data : null);
       const types = Array.isArray(provRes?.data?.meal_types)
         ? provRes.data.meal_types.map((t: any) => ({
             id: String(t.id),
@@ -192,6 +190,15 @@ export default function CustomerDetail() {
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || "Customer not found");
       router.push("/provider/customers");
+    }
+  }
+
+  async function loadMenuChoices() {
+    try {
+      const { data } = await api.get<MenuWeek>(`/customers/${id}/menu-choices`);
+      setMenuWeek(data?.enabled ? data : null);
+    } catch {
+      setMenuWeek(null);
     }
   }
 
@@ -308,6 +315,12 @@ export default function CustomerDetail() {
   useEffect(() => {
     if (id) load();
   }, [id]);
+
+  useEffect(() => {
+    if (tab === "menu" && id) {
+      void loadMenuChoices();
+    }
+  }, [tab, id]);
 
   useEffect(() => {
     const raw = searchParams.get("tab");
@@ -451,9 +464,7 @@ export default function CustomerDetail() {
         {tabBtn(tab === "deliveries", "Deliveries", () => selectTab("deliveries"), "ctab-deliveries")}
         {tabBtn(tab === "payments", "Payment history", () => selectTab("payments"), "ctab-payments")}
         {tabBtn(tab === "pauses", "Pauses", () => selectTab("pauses"), "ctab-pauses")}
-        {menuWeek?.enabled
-          ? tabBtn(tab === "menu", "Menu choices", () => selectTab("menu"), "ctab-menu")
-          : null}
+        {tabBtn(tab === "menu", "Menu choices", () => selectTab("menu"), "ctab-menu")}
         {tabBtn(tab === "notes", "Notes", () => selectTab("notes"), "ctab-notes")}
       </div>
 
@@ -1113,7 +1124,8 @@ export default function CustomerDetail() {
         </div>
       ) : null}
 
-      {tab === "menu" && menuWeek ? (
+      {tab === "menu" ? (
+        menuWeek?.enabled ? (
         <div className="card-tinted p-3 flex flex-col gap-3" data-testid="customer-menu-choices">
           <div className="flex items-center gap-2">
             <ForkKnife size={16} />
@@ -1128,6 +1140,11 @@ export default function CustomerDetail() {
             helpText={`What ${c.name} gets each day. Their picks repeat every week until changed.`}
           />
         </div>
+        ) : (
+          <div className="card-tinted p-4 text-sm text-muted-foreground" data-testid="customer-menu-choices-empty">
+            Menu choices are not enabled for this kitchen yet.
+          </div>
+        )
       ) : null}
 
       {tab === "notes" ? (

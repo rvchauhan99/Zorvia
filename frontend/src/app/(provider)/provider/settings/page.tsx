@@ -85,10 +85,9 @@ export default function Settings() {
     "h-11 px-4 rounded-xl bg-white border border-brand-border focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all w-full text-sm";
 
   async function load() {
-    const [{ data: p }, { data: s }, { data: me }, enabled] = await Promise.all([
+    const [{ data: p }, { data: s }, enabled] = await Promise.all([
       api.get("/providers/me"),
       api.get("/providers/me/staff"),
-      api.get("/auth/me"),
       fetchWhatsappFeaturesEnabled(),
     ]);
     setProv({
@@ -97,8 +96,16 @@ export default function Settings() {
       country: (p?.country || "").trim() || "CA",
     });
     setStaff(s);
-    setHasPassword(!!me?.has_password);
     setWaEnabled(enabled);
+  }
+
+  async function loadPasswordMeta() {
+    try {
+      const { data: me } = await api.get("/auth/me");
+      setHasPassword(!!me?.has_password);
+    } catch {
+      setHasPassword(true);
+    }
   }
 
   useEffect(() => {
@@ -108,7 +115,13 @@ export default function Settings() {
       return;
     }
     load().catch(() => toast.error("Failed to load settings"));
-  }, [ready, session, router]);
+  }, [ready, session?.user_id, session?.role, router]);
+
+  useEffect(() => {
+    if (activeTab === "team" && ready && canMutateAdmin(session)) {
+      void loadPasswordMeta();
+    }
+  }, [activeTab, ready, session?.user_id, session?.role]);
 
   if (!prov) return <PageLoader testid="settings-loader" />;
 

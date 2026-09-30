@@ -9,6 +9,7 @@ import { Check, Sparkle, Warning, X, Copy } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth";
 import { canMutateAdmin } from "@/lib/roles";
 import { SUBSCRIPTION_REFRESH_EVENT } from "@/lib/subscription-events";
+import { useProviderSubscription } from "@/lib/provider-subscription";
 import ImageSourceField from "@/components/ImageSourceField";
 import AppSheet from "@/components/AppSheet";
 
@@ -17,6 +18,7 @@ type CheckoutBanner =
   | { kind: "cancel" };
 
 function SubscriptionInner() {
+  const { sub: shellSub } = useProviderSubscription();
   const [data, setData] = useState<any>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [checkoutBanner, setCheckoutBanner] = useState<CheckoutBanner | null>(null);
@@ -29,6 +31,8 @@ function SubscriptionInner() {
   const { session, ready } = useAuth();
   const checkoutHandled = useRef(false);
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sessionUserId = session?.user_id;
+  const sessionRole = session?.role;
 
   const load = useCallback(async () => {
     const { data: sub } = await api.get("/providers/me/subscription");
@@ -36,14 +40,23 @@ function SubscriptionInner() {
     return sub;
   }, []);
 
+  const syncShell = useCallback(() => {
+    window.dispatchEvent(new Event(SUBSCRIPTION_REFRESH_EVENT));
+  }, []);
+
+  // Prefer Shell subscription (already loaded) — never duplicate mount XHR
   useEffect(() => {
     if (!ready) return;
     if (!canMutateAdmin(session)) {
       router.replace("/provider");
       return;
     }
-    load();
-  }, [ready, session, router, load]);
+    if (shellSub) setData(shellSub);
+  }, [ready, sessionUserId, sessionRole, router, shellSub, session]);
+
+  useEffect(() => {
+    if (shellSub) setData(shellSub);
+  }, [shellSub]);
 
   useEffect(() => {
     return () => {
@@ -79,7 +92,7 @@ function SubscriptionInner() {
         try {
           const sub = await load();
           if (sub?.status === "active") {
-            window.dispatchEvent(new Event(SUBSCRIPTION_REFRESH_EVENT));
+            syncShell();
             setCheckoutBanner({
               kind: "success",
               phase: "active",
@@ -101,6 +114,7 @@ function SubscriptionInner() {
       if (!cancelled) {
         try {
           await load();
+          syncShell();
         } catch {
           /* ignore */
         }
@@ -114,7 +128,7 @@ function SubscriptionInner() {
     return () => {
       cancelled = true;
     };
-  }, [ready, session, searchParams, router, load]);
+  }, [ready, sessionUserId, sessionRole, searchParams, router, load, syncShell, session]);
 
   async function activate(planId: string) {
     if (data?.billing_provider === "manual") {

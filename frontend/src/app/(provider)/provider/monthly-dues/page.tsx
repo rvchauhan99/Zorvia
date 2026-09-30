@@ -370,7 +370,7 @@ export default function MonthlyDuesPage() {
     paging.resetToFirstPage();
     void load({ cursor: null });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset+fetch on filter identity
-  }, [session, router, load]);
+  }, [session?.user_id, session?.role, router, load]);
 
   const reloadCurrentPage = useCallback(() => {
     const c = paging.currentPageIndex > 0 ? paging.cursorHistory[paging.currentPageIndex - 1] ?? null : null;

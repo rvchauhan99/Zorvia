@@ -10,6 +10,7 @@ import { isAdmin, isDriver as roleIsDriver, canMutateAdmin, staffRole } from "@/
 import NotificationBell from "@/components/NotificationBell";
 import { PageLoader } from "@/components/loaders";
 import { SUBSCRIPTION_REFRESH_EVENT } from "@/lib/subscription-events";
+import { ProviderSubscriptionProvider } from "@/lib/provider-subscription";
 
 const allItems = [
   { to: "/provider", label: "Dashboard", icon: House, testid: "nav-dashboard", end: true },
@@ -212,6 +213,7 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
           : null;
 
   return (
+    <ProviderSubscriptionProvider sub={sub} refreshSub={loadSub}>
     <div
       className={`min-h-dvh text-foreground overflow-x-hidden ${
         isRoutePlanningWorkspace ? "bg-[#F4F6F8] h-dvh overflow-hidden" : "bg-brand-cream"
@@ -454,5 +456,6 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
         ) : null}
       </nav>
     </div>
+    </ProviderSubscriptionProvider>
   );
 }

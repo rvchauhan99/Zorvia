@@ -41,6 +41,7 @@ function ProviderMenuInner() {
   const canMutate = canMutateAdmin(session);
   const [waEnabled, setWaEnabled] = useState(false);
   const [configured, setConfigured] = useState<boolean | null>(null);
+  const [seedPlan, setSeedPlan] = useState<MenuPlan | null>(null);
   const [planVersion, setPlanVersion] = useState(0);
   const [tab, setTab] = useState<Tab>(() => resolveTab(searchParams.get("tab"), null));
 
@@ -49,15 +50,20 @@ function ProviderMenuInner() {
   }, []);
 
   useEffect(() => {
+    // Single /menu-plan bootstrap for tab chips + seed WeeklyMenuTab (no double fetch)
     let cancelled = false;
     void api
       .get<MenuPlan>("/menu-plan")
       .then(({ data }) => {
         if (cancelled) return;
         setConfigured(!!data?.configured);
+        setSeedPlan(data);
       })
       .catch(() => {
-        if (!cancelled) setConfigured(false);
+        if (!cancelled) {
+          setConfigured(false);
+          setSeedPlan(null);
+        }
       });
     return () => {
       cancelled = true;
@@ -87,6 +93,9 @@ function ProviderMenuInner() {
   };
 
   const refreshConfigured = () => setPlanVersion((v) => v + 1);
+  const handlePlanConfigured = (isConfigured: boolean) => {
+    setConfigured(isConfigured);
+  };
 
   return (
     <div className="flex flex-col gap-3 animate-fade-in-up" data-testid="provider-menu-page">
@@ -132,11 +141,19 @@ function ProviderMenuInner() {
         <ItemsTab canMutate={canMutate} onItemsChanged={() => setPlanVersion((v) => v + 1)} />
       ) : null}
       {tab === "plan" ? (
-        <WeeklyMenuTab
-          key={planVersion}
-          canMutate={canMutate}
-          onPlanConfiguredChange={refreshConfigured}
-        />
+        configured === null ? (
+          <div className="text-sm text-muted-foreground py-8 text-center" data-testid="menu-plan-bootstrapping">
+            Loading weekly menu…
+          </div>
+        ) : (
+          <WeeklyMenuTab
+            key={planVersion}
+            canMutate={canMutate}
+            initialPlan={seedPlan}
+            onPlanConfiguredChange={refreshConfigured}
+            onConfiguredKnown={handlePlanConfigured}
+          />
+        )
       ) : null}
     </div>
   );
