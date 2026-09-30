@@ -25,6 +25,7 @@ function NavItem({ to, label, icon: Icon, testid, end, pathname, badge }: any) {
   return (
     <Link
       href={to}
+      prefetch={false}
       data-testid={testid}
       className={`relative flex flex-col items-center justify-center gap-1 min-w-[60px] min-h-[44px] py-1.5 text-[11px] font-medium transition-colors duration-150 ${
         isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
@@ -58,17 +59,19 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
   const pathname = usePathname();
   const [sub, setSub] = useState<any>(null);
   const [badges, setBadges] = useState({ pendingPayments: 0, pendingCustomers: 0 });
-  const [isDesktop, setIsDesktop] = useState(false);
+  // unknown until matchMedia runs — avoids mounting both mobile + desktop NotificationBells
+  const [viewport, setViewport] = useState<"unknown" | "desktop" | "mobile">("unknown");
   const [monthlyBillingNav, setMonthlyBillingNav] = useState(false);
 
   const role = staffRole(session);
   const isDriver = roleIsDriver(session);
   const canMutate = canMutateAdmin(session);
+  const sessionUserType = session?.user_type;
   const isRoutePlanningWorkspace = pathname.startsWith("/provider/route-planning");
 
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 1024px)");
-    const apply = () => setIsDesktop(mq.matches);
+    const apply = () => setViewport(mq.matches ? "desktop" : "mobile");
     apply();
     mq.addEventListener("change", apply);
     return () => mq.removeEventListener("change", apply);
@@ -114,13 +117,13 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
   }, [ready, session, router, isDriver, pathname]);
 
   const loadSub = useCallback(() => {
-    if (session?.user_type === "provider" && canMutate) {
+    if (sessionUserType === "provider" && canMutate) {
       api.get("/providers/me/subscription").then(({ data }) => setSub(data)).catch(() => {});
     }
-  }, [session, canMutate]);
+  }, [sessionUserType, canMutate]);
 
   const loadBadges = useCallback(() => {
-    if (session?.user_type !== "provider" || isDriver) return;
+    if (sessionUserType !== "provider" || isDriver) return;
     api.get("/providers/me/nav-badges")
       .then(({ data }) => {
         setBadges({
@@ -129,14 +132,14 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
         });
       })
       .catch(() => {});
-  }, [session, isDriver]);
+  }, [sessionUserType, isDriver]);
 
   const loadBillingNav = useCallback(() => {
-    if (session?.user_type !== "provider" || isDriver) return;
+    if (sessionUserType !== "provider" || isDriver) return;
     // Always show Customer subscriptions — kitchens may use per-customer monthly overrides
     // even when the kitchen default is per-meal.
     setMonthlyBillingNav(true);
-  }, [session, isDriver]);
+  }, [sessionUserType, isDriver]);
 
   useEffect(() => {
     loadSub();
@@ -232,7 +235,7 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
             {role !== "admin" ? <div className="text-[10px] uppercase tracking-wider text-muted-foreground mt-0.5">{role}</div> : null}
           </div>
           <div className="hidden lg:block">
-            {isDesktop ? <NotificationBell testid="provider-notification-bell" /> : null}
+            {viewport === "desktop" ? <NotificationBell testid="provider-notification-bell" /> : null}
           </div>
         </div>
         <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col gap-1">
@@ -246,6 +249,7 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
               <Link
                 key={it.to}
                 href={it.to}
+                prefetch={false}
                 data-testid={`side-${it.testid}`}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors duration-150 ${
                   isActive ? "bg-brand-surface text-primary" : "text-foreground hover:bg-brand-surface"
@@ -262,6 +266,7 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
               {canMutate ? (
                 <Link
                   href="/provider/route-planning"
+                  prefetch={false}
                   data-testid="side-nav-route-planning"
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors duration-150 ${
                     pathname.startsWith("/provider/route-planning") ? "bg-brand-surface text-primary" : "text-foreground hover:bg-brand-surface"
@@ -273,6 +278,7 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
               {canMutate ? (
                 <Link
                   href="/provider/menu"
+                  prefetch={false}
                   data-testid="side-nav-menu"
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors duration-150 ${
                     pathname.startsWith("/provider/menu") ? "bg-brand-surface text-primary" : "text-foreground hover:bg-brand-surface"
@@ -283,6 +289,7 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
               ) : null}
               <Link
                 href="/provider/analysis"
+                prefetch={false}
                 data-testid="side-nav-analysis"
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors duration-150 ${
                   pathname.startsWith("/provider/analysis") ? "bg-brand-surface text-primary" : "text-foreground hover:bg-brand-surface"
@@ -292,6 +299,7 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
               </Link>
               <Link
                 href="/provider/reports"
+                prefetch={false}
                 data-testid="side-nav-reports"
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors duration-150 ${
                   pathname.startsWith("/provider/reports") ? "bg-brand-surface text-primary" : "text-foreground hover:bg-brand-surface"
@@ -302,6 +310,7 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
               {monthlyBillingNav ? (
                 <Link
                   href="/provider/monthly-dues"
+                  prefetch={false}
                   data-testid="side-nav-monthly-dues"
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors duration-150 ${
                     pathname.startsWith("/provider/monthly-dues") ? "bg-brand-surface text-primary" : "text-foreground hover:bg-brand-surface"
@@ -313,6 +322,7 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
               {canMutate ? (
                 <Link
                   href="/provider/subscription"
+                  prefetch={false}
                   data-testid="side-nav-subscription"
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors duration-150 ${
                     pathname.startsWith("/provider/subscription") ? "bg-brand-surface text-primary" : "text-foreground hover:bg-brand-surface"
@@ -324,6 +334,7 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
               {canMutate ? (
                 <Link
                   href="/provider/settings"
+                  prefetch={false}
                   data-testid="side-nav-settings"
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors duration-150 ${
                     pathname.startsWith("/provider/settings") ? "bg-brand-surface text-primary" : "text-foreground hover:bg-brand-surface"
@@ -362,7 +373,7 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
               data-testid="provider-brand-logo-mobile"
             />
             <div className="lg:hidden">
-              {!isDesktop ? <NotificationBell testid="provider-notification-bell-mobile" /> : null}
+              {viewport === "mobile" ? <NotificationBell testid="provider-notification-bell-mobile" /> : null}
             </div>
           </div>
         ) : null}

@@ -47,6 +47,29 @@ function sessionFromMe(
   };
 }
 
+function sessionsEqual(a: UserSession | null, b: UserSession | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.user_id === b.user_id &&
+    a.user_type === b.user_type &&
+    a.tenant_id === b.tenant_id &&
+    a.display_name === b.display_name &&
+    a.email === b.email &&
+    (a.phone || "") === (b.phone || "") &&
+    a.role === b.role &&
+    Boolean(a.must_change_password) === Boolean(b.must_change_password) &&
+    (a.access_token || "") === (b.access_token || "")
+  );
+}
+
+function applySession(
+  setSession: React.Dispatch<React.SetStateAction<UserSession | null>>,
+  next: UserSession | null
+) {
+  setSession((prev) => (sessionsEqual(prev, next) ? prev : next));
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<UserSession | null>(null);
   const [ready, setReady] = useState(false);
@@ -58,7 +81,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const existing = getSession();
       const next = sessionFromMe(data, existing);
       saveSession(next);
-      setSession(getSession() || next);
+      applySession(setSession, getSession() || next);
       return data;
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status;
@@ -76,7 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const existing = getSession();
       // Paint immediately from localStorage — soft-refresh /auth/me in background
       if (existing && !cancelled) {
-        setSession(existing);
+        applySession(setSession, existing);
         setReady(true);
       }
       try {
@@ -84,7 +107,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (cancelled) return;
         const next = sessionFromMe(data, existing);
         saveSession(next);
-        setSession(getSession() || next);
+        // Preserve object identity when /auth/me matches localStorage — avoids remount cascades
+        applySession(setSession, getSession() || next);
       } catch (err: unknown) {
         const status = (err as { response?: { status?: number } })?.response?.status;
         if (status === 401) {
