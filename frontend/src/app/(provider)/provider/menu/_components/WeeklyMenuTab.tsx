@@ -62,17 +62,25 @@ function groupError(group: MenuPlanGroup): string | null {
 
 export default function WeeklyMenuTab({
   canMutate,
+  initialPlan = null,
   onPlanConfiguredChange,
+  onConfiguredKnown,
 }: {
   canMutate: boolean;
+  initialPlan?: MenuPlan | null;
   onPlanConfiguredChange?: () => void;
+  onConfiguredKnown?: (configured: boolean) => void;
 }) {
-  const [plan, setPlan] = useState<MenuPlan | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [entries, setEntries] = useState<MenuPlanEntry[]>([]);
-  const [splitBySlot, setSplitBySlot] = useState(false);
-  const [baseline, setBaseline] = useState("");
-  const [mealTypeId, setMealTypeId] = useState("");
+  const [plan, setPlan] = useState<MenuPlan | null>(initialPlan);
+  const [loading, setLoading] = useState(!initialPlan);
+  const [entries, setEntries] = useState<MenuPlanEntry[]>(initialPlan?.entries || []);
+  const [splitBySlot, setSplitBySlot] = useState(!!initialPlan?.split_by_slot);
+  const [baseline, setBaseline] = useState(
+    initialPlan
+      ? JSON.stringify({ s: !!initialPlan.split_by_slot, e: initialPlan.entries || [] })
+      : "",
+  );
+  const [mealTypeId, setMealTypeId] = useState(initialPlan?.meal_types?.[0]?.id || "");
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState<{ weekday: number; slot: MenuPlanSlot } | null>(null);
   const [draft, setDraft] = useState<MenuPlanEntry | null>(null);
@@ -84,10 +92,8 @@ export default function WeeklyMenuTab({
   const [viewingImage, setViewingImage] = useState<string | null>(null);
   const imageRef = useRef<HTMLInputElement>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { data } = await api.get<MenuPlan>("/menu-plan");
+  const applyPlan = useCallback(
+    (data: MenuPlan) => {
       setPlan(data);
       setEntries(data.entries || []);
       setSplitBySlot(!!data.split_by_slot);
@@ -95,16 +101,32 @@ export default function WeeklyMenuTab({
       setMealTypeId((prev) =>
         prev && data.meal_types.some((t) => t.id === prev) ? prev : data.meal_types[0]?.id || "",
       );
+      onConfiguredKnown?.(!!data?.configured);
+    },
+    [onConfiguredKnown],
+  );
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data } = await api.get<MenuPlan>("/menu-plan");
+      applyPlan(data);
     } catch {
       toast.error("Failed to load the weekly menu");
+      onConfiguredKnown?.(false);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [applyPlan, onConfiguredKnown]);
 
   useEffect(() => {
+    if (initialPlan) {
+      applyPlan(initialPlan);
+      setLoading(false);
+      return;
+    }
     void load();
-  }, [load]);
+  }, [initialPlan, applyPlan, load]);
 
   const items = plan?.items || [];
   const itemsById = useMemo(() => {

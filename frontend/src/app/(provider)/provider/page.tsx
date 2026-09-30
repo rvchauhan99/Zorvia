@@ -316,7 +316,7 @@ export default function ProviderDashboard() {
                 <li key={d.id} data-testid={`dashboard-del-${d.id}`} className="py-3 flex flex-col gap-2 sm:flex-row sm:items-center">
                   <div className="flex-1 min-w-0">
                     {d.customer_id ? (
-                      <Link href={`/provider/customers/${d.customer_id}`} className="font-medium truncate block hover:text-primary hover:underline" data-testid={`dashboard-customer-${d.customer_id}`}>
+                      <Link href={`/provider/customers/${d.customer_id}`} prefetch={false} className="font-medium truncate block hover:text-primary hover:underline" data-testid={`dashboard-customer-${d.customer_id}`}>
                         {d.customer_name}
                       </Link>
                     ) : (
@@ -358,6 +358,7 @@ export default function ProviderDashboard() {
           {!deliveriesLoading && todayDeliveries.length > 0 ? (
             <Link
               href="/provider/deliveries"
+              prefetch={false}
               data-testid="dashboard-view-all-deliveries"
               className="mt-3 inline-flex items-center gap-1 text-sm text-primary hover:underline"
             >

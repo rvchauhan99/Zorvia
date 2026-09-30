@@ -58,7 +58,7 @@ export default function WhatsAppCreditPage() {
     return () => {
       cancelled = true;
     };
-  }, [ready, session, router, load]);
+  }, [ready, session?.user_id, session?.role, router, load]);
 
   if (checking) {
     return (
