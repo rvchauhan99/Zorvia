@@ -110,9 +110,6 @@ export default function SearchableSelect({
 
   function openChange() {
     if (disabled) return;
-    if (allowEmpty) {
-      onChange("");
-    }
     setQ("");
     setOpen(true);
   }
