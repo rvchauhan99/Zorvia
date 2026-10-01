@@ -35,8 +35,17 @@ List/report pages that refetch on filters, visibility, or poll must use the shar
 
 | Hook | Role |
 |------|------|
-| `useCancellableLoad` | `run(executor, { mode })` with `hard` \| `soft` \| `silent`; pass `signal` into `api.get` / `api.post`; full-page spinner only for `hard` |
+| `useCancellableLoad` | `run(executor, { mode })` with `hard` \| `soft` \| `silent`; pass `signal` into `api.get` / `api.post`; exports `loading` + `painted` |
 | `useAbortableRequest` | Low-level ticket API (prefer `useCancellableLoad` in pages) |
-| `useTabVisibleRefresh` | Visibility (+ optional `intervalMs`) silent refresh |
+| `useTabVisibleRefresh` | Visibility (+ optional `intervalMs`) silent refresh — only after first paint |
 
-Mode rule: `silent` for poll/visibility; `soft` after data has painted; `hard` on first empty load. Ignore abort errors in UI toasts. Unmount aborts in-flight work.
+Mode rules:
+
+- `hard` on first empty load (owns the full-page spinner until success or a real error).
+- `soft` after data has painted (filter changes); `silent` for poll/visibility.
+- Soft/silent **must not** clear the hard spinner or flash an empty list when they supersede an in-flight hard load. Aborted/superseded tickets are no-ops; keep prior `items` until the current ticket settles.
+- Empty copy only when `!loading && painted && items.length === 0`.
+- Coalesce filter-triggered fetches (~75ms) so Strict Mode / rapid dep churn does not thrash.
+- Ignore abort errors in UI toasts. Unmount aborts in-flight work.
+
+Canceled Network rows are expected when a newer fetch supersedes an older one; that is not an API failure.

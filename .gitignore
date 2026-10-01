@@ -19,9 +19,11 @@ node_modules/
 # Testing
 /coverage
 test_result.md
+# Local QA artifacts — keep folder via .gitkeep only (never push report dumps)
+test_reports/**
+!test_reports/**/.gitkeep
 test_reports/iteration_*.json
 test_reports/pytest/*.xml
-!test_reports/**/.gitkeep
 
 # Next.js
 /.next/

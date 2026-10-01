@@ -64,7 +64,7 @@ export default function More() {
           </li>
         ))}
         <li>
-          <button data-testid="more-logout" onClick={() => { void logout().then(() => router.push("/login")); }} className="w-full flex items-center gap-3 p-3.5 sm:p-4 hover:bg-destructive/10 transition-colors text-left cursor-pointer text-destructive">
+          <button data-testid="more-logout" onClick={() => { void logout().then(() => router.push("/login")); }} className="w-full flex items-center gap-3 p-3.5 sm:p-4 hover:bg-destructive/10 transition-colors text-left cursor-pointer text-destructive scroll-mb-24">
             <SignOut size={22} />
             <span className="font-medium">Sign out</span>
           </button>

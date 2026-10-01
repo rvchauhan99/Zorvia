@@ -26,6 +26,7 @@ export default function WhatsAppCreditPage() {
   const [screenshot, setScreenshot] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [checking, setChecking] = useState(true);
+  const [waEnabled, setWaEnabled] = useState(true);
   const router = useRouter();
   const { session, ready } = useAuth();
 
@@ -49,9 +50,11 @@ export default function WhatsAppCreditPage() {
       const enabled = await fetchWhatsappFeaturesEnabled();
       if (cancelled) return;
       if (!enabled) {
-        router.replace("/provider/menu");
+        setWaEnabled(false);
+        setChecking(false);
         return;
       }
+      setWaEnabled(true);
       setChecking(false);
       load().catch(() => toast.error("Failed to load WhatsApp credit"));
     })();
@@ -64,6 +67,52 @@ export default function WhatsAppCreditPage() {
     return (
       <div className="p-8 text-sm text-muted-foreground" data-testid="wa-credit-loading">
         Loading…
+      </div>
+    );
+  }
+
+  if (!waEnabled) {
+    return (
+      <div className="flex flex-col gap-4 sm:gap-5 animate-fade-in-up p-4 sm:p-6" data-testid="wa-credit-disabled">
+        <div>
+          <span className="label-overline">Billing</span>
+          <h1 className="font-display font-black text-2xl sm:text-3xl mt-0.5 sm:mt-1 flex items-center gap-2">
+            <WhatsappLogo size={28} weight="duotone" className="text-muted-foreground" />
+            WhatsApp credit
+          </h1>
+        </div>
+        <div
+          className="rounded-xl border border-border bg-muted/40 p-5 sm:p-6 flex flex-col gap-3 max-w-lg"
+          data-testid="wa-credit-disabled-panel"
+        >
+          <div className="flex items-start gap-3">
+            <Warning size={22} className="text-amber-600 shrink-0 mt-0.5" weight="fill" />
+            <div className="flex flex-col gap-1">
+              <p className="font-semibold text-sm sm:text-base">WhatsApp messaging is not available yet</p>
+              <p className="text-sm text-muted-foreground">
+                Meta Business verification is still pending for this kitchen. Credit top-up and menu shares
+                will unlock once WhatsApp features are enabled.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 pt-1">
+            <Link
+              href="/provider/more"
+              className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+              data-testid="wa-credit-back-more"
+            >
+              Back to More
+            </Link>
+            <span className="text-muted-foreground text-sm">·</span>
+            <Link
+              href="/provider/settings"
+              className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+              data-testid="wa-credit-back-settings"
+            >
+              Settings
+            </Link>
+          </div>
+        </div>
       </div>
     );
   }
