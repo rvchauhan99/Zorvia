@@ -921,7 +921,7 @@ export default function CustomerDetail() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          {d.delivery_image_url ? (
+                          {d.delivery_image_url || d.has_delivery_image ? (
                             <DeliveryProofThumbButton delivery={d} onView={setViewingProof} compact />
                           ) : null}
                           <StatusPill status={d.status} />

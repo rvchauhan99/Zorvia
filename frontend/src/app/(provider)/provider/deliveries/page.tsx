@@ -91,6 +91,7 @@ export default function Deliveries() {
   const [summary, setSummary] = useState<Record<string, number>>({
     pending: 0, delivered: 0, missed: 0, cancelled: 0, paused: 0, total: 0, meals: 0,
   });
+  const [listError, setListError] = useState(false);
   const paging = useCursorPagination({ initialPageSize: OPS_DEFAULT_PAGE_SIZE });
 
   useEffect(() => {
@@ -98,8 +99,8 @@ export default function Deliveries() {
     return () => clearTimeout(t);
   }, [q]);
 
-  const fetchPage = useCallback(async (opts: { cursor?: string | null; silent?: boolean; pageSize?: number } = {}) => {
-    const mode = opts.silent ? "silent" : paintedRef.current ? "soft" : "hard";
+  const fetchPage = useCallback(async (opts: { cursor?: string | null; silent?: boolean; pageSize?: number; hard?: boolean } = {}) => {
+    const mode = opts.silent ? "silent" : opts.hard || !paintedRef.current ? "hard" : "soft";
     try {
       const result = await run(async (signal) => {
         const params: Record<string, string> = {
@@ -130,6 +131,7 @@ export default function Deliveries() {
         };
       }, { mode });
       if (!result) return;
+      setListError(false);
       setItems(result.page.items);
       paging.applyPageResult(result.page);
       if (result.summary) {
@@ -145,6 +147,7 @@ export default function Deliveries() {
       }
     } catch (e: unknown) {
       if (isAbortError(e)) return;
+      setListError(true);
       if (!opts.silent) toast.error("Failed to load deliveries");
     }
   }, [date, debouncedQ, driverId, mealSlot, filterMealTypeId, filterCity, isDriver, filter, paging.pageSize, paging.applyPageResult, paintedRef, run, isAbortError]);
@@ -153,7 +156,7 @@ export default function Deliveries() {
   useEffect(() => {
     paging.resetToFirstPage();
     const t = setTimeout(() => {
-      fetchPage({ cursor: null });
+      fetchPage({ cursor: null, hard: true });
     }, 75);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset+fetch on filter identity
@@ -560,6 +563,10 @@ export default function Deliveries() {
       <div className="card-tinted overflow-hidden">
         {loading ? (
           <InlineLoader testid="deliveries-loading" />
+        ) : listError && filtered.length === 0 ? (
+          <div className="p-4 text-center text-muted-foreground text-sm" data-testid="deliveries-load-error">
+            Couldn&apos;t load deliveries for {fmtDate(date)}. The counts above are still from the last successful load.
+          </div>
         ) : filtered.length === 0 ? (
           <div className="p-4 text-center text-muted-foreground text-sm">
             {!hasInputFilter && filter === "all"
@@ -708,7 +715,7 @@ export default function Deliveries() {
                   </div>
                 ) : (
                   <div className="flex items-center gap-2 flex-wrap justify-end">
-                    {d.delivery_image_url ? (
+                    {d.delivery_image_url || d.has_delivery_image ? (
                       <DeliveryProofThumbButton delivery={d} onView={setViewingProof} />
                     ) : null}
                     <StatusPill status={d.status} />
