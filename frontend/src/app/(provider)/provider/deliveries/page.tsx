@@ -70,7 +70,7 @@ export default function Deliveries() {
   const isDriver = useMemo(() => sessionIsDriver(session), [session]);
   const [date, setDate] = useState(todayISO());
   const [items, setItems] = useState<any[]>([]);
-  const { loading, painted, paintedRef, run, isAbortError } = useCancellableLoad(true);
+  const { loading, paintedRef, run, isAbortError } = useCancellableLoad(true);
   const [filter, setFilter] = useState("pending");
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
@@ -549,7 +549,7 @@ export default function Deliveries() {
       </div>
 
       <div className="card-tinted overflow-hidden">
-        {loading || !painted ? (
+        {loading ? (
           <InlineLoader testid="deliveries-loading" />
         ) : filtered.length === 0 ? (
           <div className="p-4 text-center text-muted-foreground text-sm">
