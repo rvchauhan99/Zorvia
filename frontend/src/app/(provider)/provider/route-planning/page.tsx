@@ -252,16 +252,49 @@ export default function RoutePlanningPage() {
         } else if (opts?.driverIds?.length) {
           body.driver_ids = opts.driverIds
         }
-        const { data } = await api.post("/route-planning/optimize", body, { timeout: 0 })
+        const { data, status } = await api.post("/route-planning/optimize", body, {
+          timeout: 0,
+          validateStatus: (s: number) => (s >= 200 && s < 300) || s === 202,
+        })
+        let result: any = null
+        if (status === 202 || data?.job_id) {
+          const jobId = data.job_id as string
+          const deadline = Date.now() + 15 * 60 * 1000
+          while (Date.now() < deadline) {
+            await new Promise((r) => setTimeout(r, 1500))
+            const { data: job } = await api.get(
+              `/route-planning/optimize/jobs/${jobId}`,
+              { timeout: 30000 }
+            )
+            if (job?.status === "done") {
+              result = job.result
+              break
+            }
+            if (job?.status === "failed") {
+              throw Object.assign(new Error(job.error || "Optimize failed"), {
+                response: { data: { detail: job.error || "Optimize failed" } },
+              })
+            }
+          }
+          if (!result) {
+            throw Object.assign(new Error("Optimize timed out waiting for worker"), {
+              response: {
+                data: { detail: "Optimize timed out waiting for worker" },
+              },
+            })
+          }
+        } else {
+          result = data
+        }
         if (opts?.fullRebalance) {
-          const n = data?.assigned ?? data?.ordered_ids?.length ?? 0
-          const d = (data?.drivers || []).length || (data?.ranges || []).length
+          const n = result?.assigned ?? result?.ordered_ids?.length ?? 0
+          const d = (result?.drivers || []).length || (result?.ranges || []).length
           toast.success(`Rebalanced ${n} stops across ${d} driver${d === 1 ? "" : "s"}`)
         } else {
-          const n = data?.ordered_ids?.length ?? 0
-          const skip = data?.skipped?.length ? ` (${data.skipped.length} skipped)` : ""
-          const dup = Array.isArray(data?.duplicate_coord_groups)
-            ? data.duplicate_coord_groups.length
+          const n = result?.ordered_ids?.length ?? 0
+          const skip = result?.skipped?.length ? ` (${result.skipped.length} skipped)` : ""
+          const dup = Array.isArray(result?.duplicate_coord_groups)
+            ? result.duplicate_coord_groups.length
             : 0
           const dupWarn = dup
             ? ` · ${dup} duplicate-coordinate cluster${dup === 1 ? "" : "s"}`
