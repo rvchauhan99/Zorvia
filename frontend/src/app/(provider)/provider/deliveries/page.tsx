@@ -101,7 +101,7 @@ export default function Deliveries() {
   const fetchPage = useCallback(async (opts: { cursor?: string | null; silent?: boolean; pageSize?: number } = {}) => {
     const mode = opts.silent ? "silent" : paintedRef.current ? "soft" : "hard";
     try {
-      await run(async (signal) => {
+      const result = await run(async (signal) => {
         const params: Record<string, string> = {
           date,
           page_size: String(opts.pageSize ?? paging.pageSize),
@@ -124,21 +124,25 @@ export default function Deliveries() {
           api.get(`/deliveries`, { params, signal }),
           api.get(`/deliveries/summary`, { params: sumParams, signal }).catch(() => ({ data: null })),
         ]);
-        const page = asPageEnvelope<any>(data);
-        setItems(page.items);
-        paging.applyPageResult(page);
-        if (sumRes?.data) {
-          setSummary({
-            pending: Number(sumRes.data.pending) || 0,
-            delivered: Number(sumRes.data.delivered) || 0,
-            missed: Number(sumRes.data.missed) || 0,
-            cancelled: Number(sumRes.data.cancelled) || 0,
-            paused: Number(sumRes.data.paused) || 0,
-            total: Number(sumRes.data.total) || 0,
-            meals: Number(sumRes.data.meals) || 0,
-          });
-        }
+        return {
+          page: asPageEnvelope<any>(data),
+          summary: sumRes?.data ?? null,
+        };
       }, { mode });
+      if (!result) return;
+      setItems(result.page.items);
+      paging.applyPageResult(result.page);
+      if (result.summary) {
+        setSummary({
+          pending: Number(result.summary.pending) || 0,
+          delivered: Number(result.summary.delivered) || 0,
+          missed: Number(result.summary.missed) || 0,
+          cancelled: Number(result.summary.cancelled) || 0,
+          paused: Number(result.summary.paused) || 0,
+          total: Number(result.summary.total) || 0,
+          meals: Number(result.summary.meals) || 0,
+        });
+      }
     } catch (e: unknown) {
       if (isAbortError(e)) return;
       if (!opts.silent) toast.error("Failed to load deliveries");
@@ -368,21 +372,26 @@ export default function Deliveries() {
   }
 
   function shiftDay(delta: number) {
-    const d = new Date(date + "T00:00:00");
+    const [y, m, day] = date.split("-").map(Number);
+    const d = new Date(y, (m || 1) - 1, day || 1);
     d.setDate(d.getDate() + delta);
-    setDate(d.toISOString().slice(0, 10));
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    setDate(iso);
   }
 
   const counts = summary;
-  const filtered = items;
+  const filtered = filter === "all"
+    ? items
+    : items.filter((d) => (d.status || "pending") === filter);
 
   const today = todayISO();
   const isFutureDate = date > today;
   const canMarkStatuses = canMutate && !isFutureDate;
 
-  const nextPending = canMarkStatuses ? items.find((d) => d.status === "pending") : undefined;
+  const nextPending = canMarkStatuses ? filtered.find((d) => d.status === "pending") : undefined;
 
   const mealsToday = summary.meals || 0;
+  const hasInputFilter = Boolean(q.trim()) || Boolean(driverId) || mealSlot !== "all" || Boolean(filterMealTypeId) || Boolean(filterCity);
 
   const statusFilters = [
     { k: "all", label: "All", count: counts.total || 0 },
@@ -553,11 +562,11 @@ export default function Deliveries() {
           <InlineLoader testid="deliveries-loading" />
         ) : filtered.length === 0 ? (
           <div className="p-4 text-center text-muted-foreground text-sm">
-            {items.length === 0
+            {!hasInputFilter && filter === "all"
               ? `No deliveries for ${fmtDate(date)}. Nothing scheduled.`
-              : filter === "pending"
+              : !hasInputFilter && filter === "pending"
                 ? `No pending deliveries for ${fmtDate(date)}.`
-                : `No ${filter === "all" ? "" : `${filter} `}deliveries for ${fmtDate(date)}. Try a different filter or search.`}
+                : `No ${filter === "all" ? "matching" : filter} deliveries for ${fmtDate(date)}. Try a different filter or search.`}
           </div>
         ) : (
           <ul className="divide-y divide-brand-border">

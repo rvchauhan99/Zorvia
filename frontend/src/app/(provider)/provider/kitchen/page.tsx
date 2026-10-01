@@ -110,7 +110,7 @@ export default function KitchenPage() {
   const [data, setData] = useState<any>(null);
   const hasPaintedRef = useRef(false);
   hasPaintedRef.current = data != null;
-  const { loading, run, isAbortError } = useCancellableLoad(true);
+  const { loading, setLoading, run, isAbortError } = useCancellableLoad(true);
   const [printing, setPrinting] = useState(false);
   const paging = useCursorPagination({ initialPageSize: OPS_DEFAULT_PAGE_SIZE });
 
@@ -146,6 +146,7 @@ export default function KitchenPage() {
         }, { mode });
       } catch (e: unknown) {
         if (isAbortError(e)) return;
+        setLoading(false);
         const err = e as { response?: { data?: { detail?: string } } };
         toast.error(err?.response?.data?.detail || "Failed to load kitchen plan");
         if (mode === "hard") setData(null);
