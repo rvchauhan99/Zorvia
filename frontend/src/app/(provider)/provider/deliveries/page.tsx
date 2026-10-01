@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -70,8 +70,7 @@ export default function Deliveries() {
   const isDriver = useMemo(() => sessionIsDriver(session), [session]);
   const [date, setDate] = useState(todayISO());
   const [items, setItems] = useState<any[]>([]);
-  const paintedRef = useRef(false);
-  const { loading, run, isAbortError } = useCancellableLoad(true);
+  const { loading, painted, paintedRef, run, isAbortError } = useCancellableLoad(true);
   const [filter, setFilter] = useState("pending");
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
@@ -127,7 +126,6 @@ export default function Deliveries() {
         ]);
         const page = asPageEnvelope<any>(data);
         setItems(page.items);
-        paintedRef.current = true;
         paging.applyPageResult(page);
         if (sumRes?.data) {
           setSummary({
@@ -145,12 +143,15 @@ export default function Deliveries() {
       if (isAbortError(e)) return;
       if (!opts.silent) toast.error("Failed to load deliveries");
     }
-  }, [date, debouncedQ, driverId, mealSlot, filterMealTypeId, filterCity, isDriver, filter, paging.pageSize, paging.applyPageResult, run, isAbortError]);
+  }, [date, debouncedQ, driverId, mealSlot, filterMealTypeId, filterCity, isDriver, filter, paging.pageSize, paging.applyPageResult, paintedRef, run, isAbortError]);
 
-  // Reset to page 1 when filters change
+  // Coalesce filter-triggered fetches (Strict Mode / rapid dep churn)
   useEffect(() => {
     paging.resetToFirstPage();
-    fetchPage({ cursor: null });
+    const t = setTimeout(() => {
+      fetchPage({ cursor: null });
+    }, 75);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset+fetch on filter identity
   }, [date, debouncedQ, driverId, mealSlot, filterMealTypeId, filterCity, filter, paging.pageSize]);
 
@@ -191,8 +192,9 @@ export default function Deliveries() {
 
   useTabVisibleRefresh(
     useCallback(() => {
+      if (!paintedRef.current) return;
       void load(true);
-    }, [load]),
+    }, [load, paintedRef]),
     { intervalMs: 30000 },
   );
 
@@ -547,7 +549,7 @@ export default function Deliveries() {
       </div>
 
       <div className="card-tinted overflow-hidden">
-        {loading ? (
+        {loading || !painted ? (
           <InlineLoader testid="deliveries-loading" />
         ) : filtered.length === 0 ? (
           <div className="p-4 text-center text-muted-foreground text-sm">

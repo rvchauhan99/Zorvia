@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -24,7 +24,7 @@ export default function Payments() {
   const canMutate = canMutateAdmin(session);
   const showMoney = canSeePricing(session);
   const [items, setItems] = useState<any[]>([]);
-  const paintedRef = useRef(false);
+  const { loading, painted, paintedRef, run, isAbortError } = useCancellableLoad(true);
   const [filter, setFilter] = useState("pending");
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
@@ -37,7 +37,6 @@ export default function Payments() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [batchBusy, setBatchBusy] = useState(false);
   const [confirmBatchVerify, setConfirmBatchVerify] = useState(false);
-  const { loading, run, isAbortError } = useCancellableLoad(true);
   const [recordOpen, setRecordOpen] = useState(false);
   const [verifyFor, setVerifyFor] = useState<any>(null);
   const [verifyBusy, setVerifyBusy] = useState(false);
@@ -76,7 +75,6 @@ export default function Payments() {
           const { data } = await api.get(`/payments?${params.toString()}`, { signal });
           const page = asPageEnvelope<any>(data);
           setItems(page.items);
-          paintedRef.current = true;
           paging.applyPageResult(page);
           setSelected(new Set());
         }, { mode });
@@ -85,7 +83,7 @@ export default function Payments() {
         toast.error("Failed to load payments");
       }
     },
-    [filter, debouncedQ, range.start, range.end, customerFilter?.id, filterCity, paging.pageSize, paging.applyPageResult, run, isAbortError],
+    [filter, debouncedQ, range.start, range.end, customerFilter?.id, filterCity, paging.pageSize, paging.applyPageResult, paintedRef, run, isAbortError],
   );
 
   const reloadCurrentPage = useCallback(() => {
@@ -93,10 +91,11 @@ export default function Payments() {
     fetchPage({ cursor: c });
   }, [paging.currentPageIndex, paging.cursorHistory, fetchPage]);
 
-  // When filters or page size change, reset pagination
+  // When filters or page size change, reset pagination (coalesce rapid churn)
   useEffect(() => {
     paging.resetToFirstPage();
-    fetchPage({ cursor: null });
+    const t = window.setTimeout(() => fetchPage({ cursor: null }), 75);
+    return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset+fetch on filter identity
   }, [filter, debouncedQ, range.start, range.end, customerFilter?.id, filterCity, paging.pageSize]);
 
@@ -383,7 +382,7 @@ export default function Payments() {
 
       {/* ── DATATABLE ── */}
       <div className="card-tinted overflow-hidden flex flex-col">
-        {loading ? (
+        {loading || !painted ? (
           <div className="p-4">
             <InlineLoader testid="payments-loading" label="Loading payments…" />
           </div>
