@@ -12,7 +12,7 @@ import { canMutateAdmin, canSeePricing } from "@/lib/roles";
 import { fmtCAD, WEEKDAYS, todayISO } from "@/lib/format";
 import { asPageEnvelope, DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
-import { useCancellableLoad } from "@/hooks/useCancellableLoad";
+import { useQueryLoad } from "@/hooks/useQueryLoad";
 import AppSheet from "@/components/AppSheet";
 import { NumericInput } from "@/components/NumericInput";
 import AddExtraMealSheet from "@/components/AddExtraMealSheet";
@@ -346,7 +346,7 @@ export default function Customers() {
     { id: "fasting", name: "Fasting", price: 12 },
   ]);
   const paintedRef = useRef(false);
-  const { loading, run, isAbortError } = useCancellableLoad(true);
+  const { loading, run, isAbortError } = useQueryLoad(true);
   const [debouncedQ, setDebouncedQ] = useState("");
   const [filterDriverId, setFilterDriverId] = useState("");
   const [filterMealTypeId, setFilterMealTypeId] = useState("");
@@ -590,8 +590,9 @@ export default function Customers() {
 
   async function load(opts?: { cursor?: string | null }) {
     const mode = paintedRef.current ? "soft" : "hard";
+    const key = `customers:${filter}:${debouncedQ}:${filterDriverId}:${filterMealTypeId}:${filterCity}:${paging.pageSize}:${opts?.cursor ?? ""}`;
     try {
-      await run(async (signal) => {
+      const page = await run(async (signal) => {
         const params = new URLSearchParams();
         params.set("page_size", String(paging.pageSize));
         if (filter !== "all") params.set("status", filter);
@@ -601,11 +602,12 @@ export default function Customers() {
         if (filterCity) params.set("city", filterCity);
         if (opts?.cursor) params.set("cursor", opts.cursor);
         const { data } = await api.get(`/customers?${params.toString()}`, { signal });
-        const page = asPageEnvelope<any>(data);
-        setItems(page.items);
-        paintedRef.current = true;
-        paging.applyPageResult(page);
-      }, { mode });
+        return asPageEnvelope<any>(data);
+      }, { mode, key });
+      if (page === undefined) return;
+      setItems(page.items);
+      paintedRef.current = true;
+      paging.applyPageResult(page);
     } catch (e: unknown) {
       if (isAbortError(e)) return;
       toast.error("Failed to load customers");

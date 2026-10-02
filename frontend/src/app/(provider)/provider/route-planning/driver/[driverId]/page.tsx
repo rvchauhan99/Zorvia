@@ -14,7 +14,7 @@ import {
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canMutateAdmin } from "@/lib/roles";
-import { useCancellableLoad } from "@/hooks/useCancellableLoad";
+import { useQueryLoad } from "@/hooks/useQueryLoad";
 import { InlineLoader } from "@/components/loaders";
 import { CustomerWhatsAppContact } from "@/components/CustomerWhatsAppContact";
 import {
@@ -74,7 +74,7 @@ export default function DriverRouteDetailPage() {
   const city = searchParams.get("city") || "all";
 
   const paintedRef = useRef(false);
-  const { loading, run, isAbortError } = useCancellableLoad(true);
+  const { loading, run, isAbortError } = useQueryLoad(true);
   const [plan, setPlan] = useState<RoutePlan | null>(null);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [polyline, setPolyline] = useState<RoutePolyline | null>(null);
@@ -83,8 +83,9 @@ export default function DriverRouteDetailPage() {
 
   const load = useCallback(async () => {
     const mode = paintedRef.current ? "soft" : "hard";
+    const key = `driver-route:${driverIdParam}:${slot}:${planningDate}:${city}`;
     try {
-      await run(async (signal) => {
+      const result = await run(async (signal) => {
         const { data } = await api.get<RoutePlan>("/route-planning", {
           params: {
             meal_slot: slot,
@@ -93,8 +94,6 @@ export default function DriverRouteDetailPage() {
           },
           signal,
         });
-        setPlan(data);
-
         const geomBody: Record<string, string> = { meal_slot: slot };
         if (city && city !== "all") geomBody.city = city;
         geomBody.driver_id = isUnassigned ? "unassigned" : driverIdParam;
@@ -102,9 +101,12 @@ export default function DriverRouteDetailPage() {
           polylines?: RoutePolyline[];
         }>("/route-planning/route-geometry", geomBody, { signal });
         const lines = geom?.polylines || [];
-        setPolyline(lines[0] || null);
-        paintedRef.current = true;
-      }, { mode });
+        return { plan: data, polyline: lines[0] || null };
+      }, { mode, key });
+      if (result === undefined) return;
+      setPlan(result.plan);
+      setPolyline(result.polyline);
+      paintedRef.current = true;
     } catch (e: any) {
       if (isAbortError(e)) return;
       toast.error(e?.response?.data?.detail || "Failed to load driver route");

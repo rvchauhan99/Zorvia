@@ -26,7 +26,7 @@ import CityFilterSelect from "@/components/CityFilterSelect";
 import { CustomerWhatsAppContact } from "@/components/CustomerWhatsAppContact";
 import { OPS_DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
-import { useCancellableLoad } from "@/hooks/useCancellableLoad";
+import { useQueryLoad } from "@/hooks/useQueryLoad";
 import { useTabVisibleRefresh } from "@/hooks/useTabVisibleRefresh";
 
 type SlotFilter = "all" | "lunch" | "dinner";
@@ -110,7 +110,7 @@ export default function KitchenPage() {
   const [data, setData] = useState<any>(null);
   const hasPaintedRef = useRef(false);
   hasPaintedRef.current = data != null;
-  const { loading, setLoading, run, isAbortError } = useCancellableLoad(true);
+  const { loading, setLoading, run, isAbortError, isInFlight } = useQueryLoad(true);
   const [printing, setPrinting] = useState(false);
   const paging = useCursorPagination({ initialPageSize: OPS_DEFAULT_PAGE_SIZE });
 
@@ -122,8 +122,9 @@ export default function KitchenPage() {
   const load = useCallback(
     async (opts: { cursor?: string | null; silent?: boolean } = {}) => {
       const mode = opts.silent ? "silent" : hasPaintedRef.current ? "soft" : "hard";
+      const key = `kitchen:${date}:${debouncedQ}:${driverId}:${slotFilter}:${filterCity}:${paging.pageSize}:${opts.cursor ?? ""}`;
       try {
-        await run(async (signal) => {
+        const summary = await run(async (signal) => {
           const params: Record<string, string> = {
             date,
             page_size: String(paging.pageSize),
@@ -133,17 +134,19 @@ export default function KitchenPage() {
           if (slotFilter !== "all") params.meal_slot = slotFilter;
           if (filterCity) params.city = filterCity;
           if (opts.cursor) params.cursor = opts.cursor;
-          const { data: summary } = await api.get(`/reports/kitchen-summary`, {
+          const { data } = await api.get(`/reports/kitchen-summary`, {
             params,
             signal,
           });
-          setData(summary);
-          paging.applyPageResult({
-            next_cursor: summary?.next_cursor ?? null,
-            has_more: Boolean(summary?.has_more),
-            total: summary?.total,
-          });
-        }, { mode });
+          return data;
+        }, { mode, key });
+        if (summary === undefined) return;
+        setData(summary);
+        paging.applyPageResult({
+          next_cursor: summary?.next_cursor ?? null,
+          has_more: Boolean(summary?.has_more),
+          total: summary?.total,
+        });
       } catch (e: unknown) {
         if (isAbortError(e)) return;
         setLoading(false);
@@ -168,6 +171,7 @@ export default function KitchenPage() {
       load({ cursor: null, silent: true });
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [load]),
+    { isBusy: () => isInFlight() },
   );
 
   useEffect(() => {

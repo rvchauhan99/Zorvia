@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -22,7 +22,7 @@ import { CustomerWhatsAppContact } from "@/components/CustomerWhatsAppContact";
 import { markDeliveryWithProof } from "@/lib/deliveries";
 import { asPageEnvelope, OPS_DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
-import { useCancellableLoad } from "@/hooks/useCancellableLoad";
+import { useQueryLoad } from "@/hooks/useQueryLoad";
 import { useTabVisibleRefresh } from "@/hooks/useTabVisibleRefresh";
 import { ArrowLeft, ArrowRight, CheckCircle, XCircle, Prohibit, CaretUp, CaretDown, MapPin, Plus } from "@phosphor-icons/react";
 
@@ -70,7 +70,7 @@ export default function Deliveries() {
   const isDriver = useMemo(() => sessionIsDriver(session), [session]);
   const [date, setDate] = useState(todayISO());
   const [items, setItems] = useState<any[]>([]);
-  const { loading, paintedRef, run, isAbortError } = useCancellableLoad(true);
+  const { loading, painted, paintedRef, run, isAbortError, isInFlight } = useQueryLoad(true);
   const [filter, setFilter] = useState("pending");
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
@@ -94,63 +94,118 @@ export default function Deliveries() {
   const [listError, setListError] = useState(false);
   const paging = useCursorPagination({ initialPageSize: OPS_DEFAULT_PAGE_SIZE });
 
+  // Latest-ref pattern: fetchPage/load stay referentially stable (their identity
+  // no longer changes when paging state churns), so effects and callbacks that
+  // depend on them do not re-fire and re-fetch on pagination updates.
+  const filtersRef = useRef({ date, debouncedQ, driverId, mealSlot, filterMealTypeId, filterCity, filter, isDriver });
+  filtersRef.current = { date, debouncedQ, driverId, mealSlot, filterMealTypeId, filterCity, filter, isDriver };
+  const pageSizeRef = useRef(paging.pageSize);
+  pageSizeRef.current = paging.pageSize;
+  const pagingRef = useRef(paging);
+  pagingRef.current = paging;
+  // Bumped after every successful mutation; list responses that started before
+  // a mutation landed must not clobber the optimistic row/count updates.
+  const mutationEpochRef = useRef(0);
+
+  const applySummaryData = useCallback((raw: any) => {
+    setSummary({
+      pending: Number(raw?.pending) || 0,
+      delivered: Number(raw?.delivered) || 0,
+      missed: Number(raw?.missed) || 0,
+      cancelled: Number(raw?.cancelled) || 0,
+      paused: Number(raw?.paused) || 0,
+      total: Number(raw?.total) || 0,
+      meals: Number(raw?.meals) || 0,
+    });
+  }, []);
+
+  const buildSummaryParams = useCallback(() => {
+    const f = filtersRef.current;
+    const sumParams: Record<string, string> = { date: f.date };
+    if (f.debouncedQ) sumParams.q = f.debouncedQ;
+    if (!f.isDriver && f.driverId) sumParams.driver_id = f.driverId;
+    if (f.mealSlot && f.mealSlot !== "all") sumParams.meal_slot = f.mealSlot;
+    if (f.filterMealTypeId) sumParams.meal_type_id = f.filterMealTypeId;
+    if (f.filterCity) sumParams.city = f.filterCity;
+    return sumParams;
+  }, []);
+
+  // Post-mutation counts refresh: silent, best-effort, debounced (~1s) so rapid
+  // marks combine into one request. Deliberately outside `run` — it must not
+  // compete with list loads for newest-wins or the spinner. Rows were already
+  // updated optimistically, so only the counts go stale.
+  const summaryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const summarySeqRef = useRef(0);
+  const pageAliveRef = useRef(true);
+  useEffect(() => {
+    pageAliveRef.current = true;
+    return () => {
+      pageAliveRef.current = false;
+      if (summaryTimerRef.current) clearTimeout(summaryTimerRef.current);
+    };
+  }, []);
+
+  const refreshSummary = useCallback(() => {
+    if (summaryTimerRef.current) clearTimeout(summaryTimerRef.current);
+    summaryTimerRef.current = setTimeout(async () => {
+      const mySeq = ++summarySeqRef.current;
+      try {
+        const { data } = await api.get(`/deliveries/summary`, { params: buildSummaryParams() });
+        if (!pageAliveRef.current || mySeq !== summarySeqRef.current) return; // stale or unmounted
+        applySummaryData(data);
+      } catch {
+        /* counts refresh is best-effort */
+      }
+    }, 1000);
+  }, [applySummaryData, buildSummaryParams]);
+
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q.trim()), 300);
     return () => clearTimeout(t);
   }, [q]);
 
   const fetchPage = useCallback(async (opts: { cursor?: string | null; silent?: boolean; pageSize?: number; hard?: boolean } = {}) => {
+    const f = filtersRef.current;
     const mode = opts.silent ? "silent" : opts.hard || !paintedRef.current ? "hard" : "soft";
+    const params: Record<string, string> = {
+      date: f.date,
+      page_size: String(opts.pageSize ?? pageSizeRef.current),
+      include_summary: "1",
+    };
+    if (f.debouncedQ) params.q = f.debouncedQ;
+    if (!f.isDriver && f.driverId) params.driver_id = f.driverId;
+    if (f.mealSlot && f.mealSlot !== "all") params.meal_slot = f.mealSlot;
+    if (f.filterMealTypeId) params.meal_type_id = f.filterMealTypeId;
+    if (f.filterCity) params.city = f.filterCity;
+    if (f.filter && f.filter !== "all") params.status = f.filter;
+    if (opts.cursor) params.cursor = opts.cursor;
+    const epoch = mutationEpochRef.current;
     try {
       const result = await run(async (signal) => {
-        const params: Record<string, string> = {
-          date,
-          page_size: String(opts.pageSize ?? paging.pageSize),
-        };
-        if (debouncedQ) params.q = debouncedQ;
-        if (!isDriver && driverId) params.driver_id = driverId;
-        if (mealSlot && mealSlot !== "all") params.meal_slot = mealSlot;
-        if (filterMealTypeId) params.meal_type_id = filterMealTypeId;
-        if (filterCity) params.city = filterCity;
-        if (filter && filter !== "all") params.status = filter;
-        if (opts.cursor) params.cursor = opts.cursor;
-        const sumParams: Record<string, string> = { date };
-        if (debouncedQ) sumParams.q = debouncedQ;
-        if (!isDriver && driverId) sumParams.driver_id = driverId;
-        if (mealSlot && mealSlot !== "all") sumParams.meal_slot = mealSlot;
-        if (filterMealTypeId) sumParams.meal_type_id = filterMealTypeId;
-        if (filterCity) sumParams.city = filterCity;
-
-        const [{ data }, sumRes] = await Promise.all([
-          api.get(`/deliveries`, { params, signal }),
-          api.get(`/deliveries/summary`, { params: sumParams, signal }).catch(() => ({ data: null })),
-        ]);
-        return {
-          page: asPageEnvelope<any>(data),
-          summary: sumRes?.data ?? null,
-        };
-      }, { mode });
+        const { data } = await api.get(`/deliveries`, { params, signal });
+        const page = asPageEnvelope<any>(data);
+        const raw = data && typeof data === "object" && !Array.isArray(data) ? (data as Record<string, unknown>) : null;
+        let sum = raw?.summary ?? null;
+        if (!sum) {
+          // Older backend without include_summary — fetch counts separately (best-effort).
+          sum = await api.get(`/deliveries/summary`, { params: buildSummaryParams(), signal }).then((r) => r.data).catch(() => null);
+        }
+        return { page, summary: sum };
+      }, { mode, key: `deliveries:${JSON.stringify(params)}` });
       if (!result) return;
+      // A mutation landed while this request was in flight — the optimistic rows
+      // and the debounced counts refresh are newer; do not clobber them.
+      if (epoch !== mutationEpochRef.current) return;
       setListError(false);
       setItems(result.page.items);
-      paging.applyPageResult(result.page);
-      if (result.summary) {
-        setSummary({
-          pending: Number(result.summary.pending) || 0,
-          delivered: Number(result.summary.delivered) || 0,
-          missed: Number(result.summary.missed) || 0,
-          cancelled: Number(result.summary.cancelled) || 0,
-          paused: Number(result.summary.paused) || 0,
-          total: Number(result.summary.total) || 0,
-          meals: Number(result.summary.meals) || 0,
-        });
-      }
+      pagingRef.current.applyPageResult(result.page);
+      if (result.summary) applySummaryData(result.summary);
     } catch (e: unknown) {
       if (isAbortError(e)) return;
       setListError(true);
       if (!opts.silent) toast.error("Failed to load deliveries");
     }
-  }, [date, debouncedQ, driverId, mealSlot, filterMealTypeId, filterCity, isDriver, filter, paging.pageSize, paging.applyPageResult, paintedRef, run, isAbortError]);
+  }, [run, isAbortError, paintedRef, buildSummaryParams, applySummaryData]);
 
   // Coalesce filter-triggered fetches (Strict Mode / rapid dep churn)
   useEffect(() => {
@@ -163,9 +218,10 @@ export default function Deliveries() {
   }, [date, debouncedQ, driverId, mealSlot, filterMealTypeId, filterCity, filter, paging.pageSize]);
 
   const load = useCallback(async (silent = false) => {
-    const c = paging.currentPageIndex > 0 ? paging.cursorHistory[paging.currentPageIndex - 1] ?? null : null;
+    const p = pagingRef.current;
+    const c = p.currentPageIndex > 0 ? p.cursorHistory[p.currentPageIndex - 1] ?? null : null;
     await fetchPage({ cursor: c, silent });
-  }, [fetchPage, paging.currentPageIndex, paging.cursorHistory]);
+  }, [fetchPage]);
 
   useEffect(() => {
     let cancelled = false;
@@ -202,7 +258,7 @@ export default function Deliveries() {
       if (!paintedRef.current) return;
       void load(true);
     }, [load, paintedRef]),
-    { intervalMs: 30000 },
+    { intervalMs: 30000, isBusy: () => isInFlight() },
   );
 
   const flushQueue = useCallback(async () => {
@@ -219,6 +275,7 @@ export default function Deliveries() {
     writeQueue(remaining);
     setQueueLen(remaining.length);
     if (q.length !== remaining.length) {
+      mutationEpochRef.current += 1;
       toast.success(`Synced ${q.length - remaining.length} offline update(s)`);
       load(true);
     }
@@ -234,16 +291,18 @@ export default function Deliveries() {
 
   async function markDelivered(id: string, file: File | null) {
     if (!canMutate) return;
+    mutationEpochRef.current += 1;
     setItems((it) => it.map((d) => (d.id === id ? { ...d, status: "delivered" } : d)));
     try {
       const data = await markDeliveryWithProof(id, file);
+      mutationEpochRef.current += 1;
       setItems((it) =>
         it.map((d) =>
           d.id === id ? { ...d, ...data, status: "delivered" } : d,
         ),
       );
       toast.success("Marked delivered");
-      void load(true);
+      void refreshSummary();
     } catch (e: any) {
       if (!file && (!navigator.onLine || !e?.response)) {
         const q = readQueue().filter((x) => x.id !== id);
@@ -261,6 +320,7 @@ export default function Deliveries() {
 
   async function mark(id: string, status: string) {
     if (!canMutate) return;
+    mutationEpochRef.current += 1;
     setItems((it) =>
       it.map((d) =>
         d.id === id
@@ -270,8 +330,9 @@ export default function Deliveries() {
     );
     try {
       await api.patch(`/deliveries/${id}`, { status });
+      mutationEpochRef.current += 1;
       toast.success(`Marked ${status}`);
-      void load(true);
+      void refreshSummary();
     } catch (e: any) {
       if (!navigator.onLine || !e?.response) {
         const q = readQueue().filter((x) => x.id !== id);
@@ -306,6 +367,7 @@ export default function Deliveries() {
         return;
       }
       await api.post("/deliveries/bulk-status", { ids, status: "delivered" });
+      mutationEpochRef.current += 1;
       toast.success(`Marked ${ids.length} delivered`);
       setConfirmBulkDeliver(false);
       load();
@@ -329,6 +391,7 @@ export default function Deliveries() {
       [next[idx], next[swap]] = [next[swap], next[idx]];
       const ordered_ids = next.map((d) => d.id);
       await api.patch("/deliveries/route-order", { date, ordered_ids });
+      mutationEpochRef.current += 1;
       load();
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || "Reorder failed");
@@ -364,6 +427,7 @@ export default function Deliveries() {
           meal_type_lines: s.meal_type_lines?.length ? s.meal_type_lines : undefined,
         })),
       });
+      mutationEpochRef.current += 1;
       toast.success("Meal adjusted");
       load();
       return data;
@@ -567,6 +631,8 @@ export default function Deliveries() {
           <div className="p-4 text-center text-muted-foreground text-sm" data-testid="deliveries-load-error">
             Couldn&apos;t load deliveries for {fmtDate(date)}. The counts above are still from the last successful load.
           </div>
+        ) : !painted ? (
+          <InlineLoader testid="deliveries-loading" />
         ) : filtered.length === 0 ? (
           <div className="p-4 text-center text-muted-foreground text-sm">
             {!hasInputFilter && filter === "all"
@@ -816,7 +882,7 @@ export default function Deliveries() {
       <AddExtraMealSheet
         open={quickExtraOpen}
         onClose={() => setQuickExtraOpen(false)}
-        onAdded={() => load()}
+        onAdded={() => { mutationEpochRef.current += 1; load(); }}
         defaultDate={date}
       />
     </div>
