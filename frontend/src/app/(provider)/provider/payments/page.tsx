@@ -8,7 +8,7 @@ import { canMutateAdmin, canSeePricing } from "@/lib/roles";
 import { fmtCAD, fmtDateTime } from "@/lib/format";
 import { asPageEnvelope, DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
-import { useCancellableLoad } from "@/hooks/useCancellableLoad";
+import { useQueryLoad } from "@/hooks/useQueryLoad";
 import StatusPill from "@/components/StatusPill";
 import AppSheet from "@/components/AppSheet";
 import RecordPaymentSheet from "@/components/RecordPaymentSheet";
@@ -24,7 +24,7 @@ export default function Payments() {
   const canMutate = canMutateAdmin(session);
   const showMoney = canSeePricing(session);
   const [items, setItems] = useState<any[]>([]);
-  const { loading, painted, paintedRef, run, isAbortError } = useCancellableLoad(true);
+  const { loading, painted, paintedRef, run, isAbortError } = useQueryLoad(true);
   const [filter, setFilter] = useState("pending");
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
@@ -59,8 +59,9 @@ export default function Payments() {
   const fetchPage = useCallback(
     async (opts: { cursor?: string | null; statusOverride?: string; pageSize?: number } = {}) => {
       const mode = paintedRef.current ? "soft" : "hard";
+      const key = `payments:${opts.statusOverride ?? filter}:${debouncedQ}:${range.start}:${range.end}:${customerFilter?.id ?? ""}:${filterCity}:${opts.pageSize ?? paging.pageSize}:${opts.cursor ?? ""}`;
       try {
-        await run(async (signal) => {
+        const page = await run(async (signal) => {
           const params = new URLSearchParams();
           const status = opts.statusOverride ?? filter;
           if (status !== "all") params.set("status", status);
@@ -73,11 +74,12 @@ export default function Payments() {
           if (opts.cursor) params.set("cursor", opts.cursor);
 
           const { data } = await api.get(`/payments?${params.toString()}`, { signal });
-          const page = asPageEnvelope<any>(data);
-          setItems(page.items);
-          paging.applyPageResult(page);
-          setSelected(new Set());
-        }, { mode });
+          return asPageEnvelope<any>(data);
+        }, { mode, key });
+        if (page === undefined) return;
+        setItems(page.items);
+        paging.applyPageResult(page);
+        setSelected(new Set());
       } catch (e: unknown) {
         if (isAbortError(e)) return;
         toast.error("Failed to load payments");

@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canMutateAdmin } from "@/lib/roles";
-import { useCancellableLoad } from "@/hooks/useCancellableLoad";
+import { useQueryLoad } from "@/hooks/useQueryLoad";
 import PlanMode from "./PlanMode";
 import StartSheet from "./StartSheet";
 import EndSheet from "./EndSheet";
@@ -43,7 +43,7 @@ export default function RoutePlanningPage() {
   const admin = canMutateAdmin(session);
   const [slot, setSlot] = useState<MealSlot>("dinner");
   const paintedRef = useRef(false);
-  const { loading, run, isAbortError } = useCancellableLoad(true);
+  const { loading, run, isAbortError } = useQueryLoad(true);
   const [busy, setBusy] = useState(false);
   const [plan, setPlan] = useState<RoutePlan | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -66,18 +66,21 @@ export default function RoutePlanningPage() {
 
   const load = useCallback(async () => {
     const mode = paintedRef.current ? "soft" : "hard";
+    const key = `route-plan:${slot}:${planningDate}`;
     try {
-      await run(async (signal) => {
+      const data = await run(async (signal) => {
         const params: Record<string, string> = {
           meal_slot: slot,
           planning_date: planningDate,
           city: "all",
         };
-        const { data } = await api.get<RoutePlan>("/route-planning", { params, signal });
-        setPlan(data);
-        paintedRef.current = true;
-        setSelected(new Set());
-      }, { mode });
+        const { data: payload } = await api.get<RoutePlan>("/route-planning", { params, signal });
+        return payload;
+      }, { mode, key });
+      if (data === undefined) return;
+      setPlan(data);
+      paintedRef.current = true;
+      setSelected(new Set());
     } catch (e: any) {
       if (isAbortError(e)) return;
       toast.error(e?.response?.data?.detail || "Failed to load route plan");

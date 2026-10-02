@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canMutateAdmin, isDriver, canSeePricing } from "@/lib/roles";
-import { fmtCAD, fmtDate, todayISO, fmtMealCount } from "@/lib/format";
+import { fmtCAD, fmtDate, fmtMealCount } from "@/lib/format";
 import { Truck, Receipt, CurrencyDollar, Users, ArrowRight, Copy, CheckCircle, Circle, Plus } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import StatusPill from "@/components/StatusPill";
@@ -15,7 +15,7 @@ import MarkDeliveredSheet from "@/components/MarkDeliveredSheet";
 import { DeliveryProofThumbButton, DeliveryProofSheet, type DeliveryProofTarget } from "@/components/DeliveryProofViewer";
 import { InlineLoader, KpiSkeleton } from "@/components/loaders";
 import { markDeliveryWithProof } from "@/lib/deliveries";
-import { asPageEnvelope } from "@/lib/pagination";
+import { useQueryLoad } from "@/hooks/useQueryLoad";
 
 const ONBOARD_KEY = "zorvia_provider_onboarded";
 
@@ -38,13 +38,14 @@ function StatCard({ icon: Icon, label, value, hint, tone = "primary", testid }: 
   );
 }
 
-function sortDeliveries(dels: any[]) {
-  return [...dels].sort((a, b) => {
-    const fa = String(a.postal_code || "").replace(/\s+/g, "").slice(0, 3).toUpperCase() || "ZZZ";
-    const fb = String(b.postal_code || "").replace(/\s+/g, "").slice(0, 3).toUpperCase() || "ZZZ";
-    if (fa !== fb) return fa.localeCompare(fb);
-    return String(a.customer_name || "").localeCompare(String(b.customer_name || ""));
-  });
+function dropPendingStop(prev: any, id: string) {
+  if (!prev || !Array.isArray(prev.pending_route)) return prev;
+  const next = prev.pending_route.filter((d: any) => d.id !== id);
+  if (next.length === prev.pending_route.length) return prev;
+  const deliveries = prev.deliveries && typeof prev.deliveries === "object"
+    ? { ...prev.deliveries, pending: Math.max(0, Number(prev.deliveries.pending || 0) - 1) }
+    : prev.deliveries;
+  return { ...prev, pending_route: next, deliveries };
 }
 
 export default function ProviderDashboard() {
@@ -52,31 +53,40 @@ export default function ProviderDashboard() {
   const { session } = useAuth();
   const canQuickMark = canMutateAdmin(session);
   const showMoney = canSeePricing(session);
+  const { loading, painted, paintedRef, run, isAbortError } = useQueryLoad(true);
   const [summary, setSummary] = useState<any>(null);
-  const [summaryLoading, setSummaryLoading] = useState(true);
+  const [snapshotError, setSnapshotError] = useState(false);
   const [provider, setProvider] = useState<any>(null);
   const [providerLoading, setProviderLoading] = useState(true);
-  const [todayDeliveries, setTodayDeliveries] = useState<any[]>([]);
-  const [deliveriesLoading, setDeliveriesLoading] = useState(true);
   const [dismissedOnboard, setDismissedOnboard] = useState(false);
   const [extraOpen, setExtraOpen] = useState(false);
   const [extraLocked, setExtraLocked] = useState<{ id: string; name: string } | null>(null);
   const [deliverTarget, setDeliverTarget] = useState<any | null>(null);
   const [viewingProof, setViewingProof] = useState<DeliveryProofTarget | null>(null);
+  const mutationEpochRef = useRef(0);
+  const kitchenToday = summary?.today ? String(summary.today) : "";
+  const pendingRoute: any[] = Array.isArray(summary?.pending_route) ? summary.pending_route : [];
 
-  async function loadSummary() {
-    setSummaryLoading(true);
+  const loadSnapshot = useCallback(async () => {
+    const epoch = mutationEpochRef.current;
+    const mode = paintedRef.current ? "soft" : "hard";
     try {
-      const { data: s } = await api.get("/reports/dashboard-summary");
-      setSummary(s);
-    } catch {
+      const data = await run(async (signal) => {
+        const { data: payload } = await api.get("/reports/dashboard-summary", { signal });
+        return payload;
+      }, { mode, key: "dashboard-summary" });
+      if (data === undefined) return;
+      if (epoch !== mutationEpochRef.current) return;
+      setSnapshotError(false);
+      setSummary(data);
+    } catch (e: unknown) {
+      if (isAbortError(e)) return;
+      setSnapshotError(true);
       toast.error("Failed to load dashboard summary");
-    } finally {
-      setSummaryLoading(false);
     }
-  }
+  }, [run, isAbortError, paintedRef]);
 
-  async function loadProvider() {
+  const loadProvider = useCallback(async () => {
     setProviderLoading(true);
     try {
       const { data: p } = await api.get("/providers/me");
@@ -86,28 +96,7 @@ export default function ProviderDashboard() {
     } finally {
       setProviderLoading(false);
     }
-  }
-
-  async function loadDeliveries() {
-    setDeliveriesLoading(true);
-    try {
-      const { data } = await api.get("/deliveries", {
-        params: { date: todayISO(), page_size: 10, status: "pending" },
-      });
-      const page = asPageEnvelope<any>(data);
-      setTodayDeliveries(sortDeliveries(page.items));
-    } catch {
-      toast.error("Failed to load today's deliveries");
-    } finally {
-      setDeliveriesLoading(false);
-    }
-  }
-
-  function refreshAll() {
-    void loadSummary();
-    void loadProvider();
-    void loadDeliveries();
-  }
+  }, []);
 
   useEffect(() => {
     if (!session?.user_id) return;
@@ -115,19 +104,19 @@ export default function ProviderDashboard() {
       router.replace("/provider/deliveries");
       return;
     }
-    refreshAll();
+    void loadSnapshot();
+    void loadProvider();
     try {
       setDismissedOnboard(localStorage.getItem(ONBOARD_KEY) === "1");
     } catch { /* ignore */ }
-    // Identity/role only — avoid double fetch when auth soft-refresh replaces session object
-  }, [session?.user_id, session?.role, router]);
+  }, [session?.user_id, session?.role, router, loadSnapshot, loadProvider]);
 
   const hasInterac = !!(provider?.interac_email || "").trim();
   const hasCustomers = (summary?.active_customers ?? 0) > 0 || (summary?.pending_customers ?? 0) > 0;
   const showChecklist =
     canQuickMark &&
     !providerLoading &&
-    !summaryLoading &&
+    painted &&
     !dismissedOnboard &&
     (!hasInterac || !hasCustomers);
 
@@ -137,24 +126,30 @@ export default function ProviderDashboard() {
   }
 
   async function markDelivery(id: string, status: string) {
+    mutationEpochRef.current += 1;
+    setSummary((prev: any) => dropPendingStop(prev, id));
     try {
       await api.patch(`/deliveries/${id}`, { status });
+      mutationEpochRef.current += 1;
       toast.success(`Marked ${status}`);
-      void loadDeliveries();
-      void loadSummary();
+      void loadSnapshot();
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || "Failed");
+      void loadSnapshot();
     }
   }
 
   async function markDeliveredWithProof(id: string, file: File | null) {
+    mutationEpochRef.current += 1;
+    setSummary((prev: any) => dropPendingStop(prev, id));
     try {
       await markDeliveryWithProof(id, file);
+      mutationEpochRef.current += 1;
       toast.success("Marked delivered");
-      void loadDeliveries();
-      void loadSummary();
+      void loadSnapshot();
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || "Failed to mark delivered");
+      void loadSnapshot();
       throw e;
     }
   }
@@ -173,7 +168,7 @@ export default function ProviderDashboard() {
             <img src={provider.logo_url} alt="" className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl object-cover border border-brand-border" data-testid="dashboard-logo" />
           ) : null}
           <div>
-            <span className="label-overline">Today · {fmtDate(todayISO())}</span>
+            <span className="label-overline">Today · {kitchenToday ? fmtDate(kitchenToday) : "…"}</span>
             {providerLoading ? (
               <div className="mt-1 h-7 w-48 sm:w-64 rounded bg-brand-surface animate-pulse" />
             ) : (
@@ -254,7 +249,7 @@ export default function ProviderDashboard() {
         </div>
       ) : null}
 
-      {summaryLoading && !summary ? (
+      {loading && !summary ? (
         <KpiSkeleton testid="dashboard-kpi-skeleton" />
       ) : (
         <div className={`grid gap-3 ${showMoney ? "grid-cols-2 lg:grid-cols-4" : "grid-cols-2"}`}>
@@ -306,13 +301,17 @@ export default function ProviderDashboard() {
               Open list <ArrowRight size={14} />
             </button>
           </div>
-          {deliveriesLoading ? (
-            <InlineLoader testid="dashboard-route-loader" label="Loading route…" />
-          ) : todayDeliveries.length === 0 ? (
+          {!painted ? (
+            snapshotError ? (
+              <div className="p-4 text-center text-sm text-muted-foreground">Couldn&apos;t load today&apos;s route.</div>
+            ) : (
+              <InlineLoader testid="dashboard-route-loader" label="Loading route…" />
+            )
+          ) : pendingRoute.length === 0 ? (
             <div className="p-4 text-center text-sm text-muted-foreground">No deliveries today. Add customers with delivery days that include today.</div>
           ) : (
             <ul className="flex flex-col divide-y divide-brand-border animate-fade-in-up">
-              {todayDeliveries.map((d) => (
+              {pendingRoute.map((d) => (
                 <li key={d.id} data-testid={`dashboard-del-${d.id}`} className="py-3 flex flex-col gap-2 sm:flex-row sm:items-center">
                   <div className="flex-1 min-w-0">
                     {d.customer_id ? (
@@ -355,7 +354,7 @@ export default function ProviderDashboard() {
               ))}
             </ul>
           )}
-          {!deliveriesLoading && todayDeliveries.length > 0 ? (
+          {painted && pendingRoute.length > 0 ? (
             <Link
               href="/provider/deliveries"
               prefetch={false}
@@ -367,9 +366,9 @@ export default function ProviderDashboard() {
           ) : null}
         </div>
 
-        <div className={`card-tinted p-3 ${summaryLoading && !summary ? "opacity-70" : ""}`}>
+        <div className={`card-tinted p-3 ${loading && !summary ? "opacity-70" : ""}`}>
           <h2 className="font-display font-bold text-lg mb-2">At a glance</h2>
-          {summaryLoading && !summary ? (
+          {loading && !summary ? (
             <div className="space-y-3 animate-pulse" data-testid="glance-skeleton">
               {[0, 1, 2, 3].map((i) => (
                 <div key={i} className="flex items-center justify-between">
@@ -418,11 +417,10 @@ export default function ProviderDashboard() {
           setExtraLocked(null);
         }}
         onAdded={() => {
-          void loadDeliveries();
-          void loadSummary();
+          void loadSnapshot();
         }}
         lockedCustomer={extraLocked}
-        defaultDate={todayISO()}
+        defaultDate={kitchenToday || undefined}
       />
     </div>
   );

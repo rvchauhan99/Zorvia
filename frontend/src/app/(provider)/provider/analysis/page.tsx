@@ -19,7 +19,7 @@ import { AgingChart } from "@/components/analytics/AgingChart";
 import { AreaChart } from "@/components/analytics/AreaChart";
 import { KpiSkeleton, SectionSkeleton } from "@/components/loaders";
 import { todayISO } from "@/lib/format";
-import { useCancellableLoad } from "@/hooks/useCancellableLoad";
+import { useQueryLoad } from "@/hooks/useQueryLoad";
 
 function percent(value?: number) {
   return `${Number(value || 0).toFixed(1)}%`;
@@ -101,7 +101,7 @@ export default function AnalysisPage() {
   const [filterCity, setFilterCity] = useState("");
   const [data, setData] = useState<BusinessInsights | null>(null);
   const paintedRef = useRef(false);
-  const { loading, run, isAbortError } = useCancellableLoad(true);
+  const { loading, run, isAbortError } = useQueryLoad(true);
   const [isPending, startTransition] = useTransition();
 
   async function load(opts?: {
@@ -121,15 +121,18 @@ export default function AnalysisPage() {
       return;
     }
     const mode = paintedRef.current ? "soft" : "hard";
+    const key = JSON.stringify({ report: "insights", period: nextPeriod, start, end, meal_slot: slot, city });
     try {
-      await run(async (signal) => {
+      const payload = await run(async (signal) => {
         const { data } = await api.get<BusinessInsights>("/reports/business-insights", {
           params: insightsParams({ period: nextPeriod, start, end, meal_slot: slot, city }),
           signal,
         });
-        setData(data);
-        paintedRef.current = true;
-      }, { mode });
+        return data;
+      }, { mode, key });
+      if (payload === undefined) return;
+      setData(payload);
+      paintedRef.current = true;
     } catch (e: unknown) {
       if (isAbortError(e)) return;
       toast.error("Failed to load analysis");
