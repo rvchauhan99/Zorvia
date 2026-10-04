@@ -9,7 +9,7 @@ import { Plus, MagnifyingGlass, PencilSimple, Trash, PauseCircle, PlayCircle, Ch
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canMutateAdmin, canSeePricing } from "@/lib/roles";
-import { fmtCAD, WEEKDAYS, todayISO } from "@/lib/format";
+import { fmtCAD, WEEKDAYS, todayISO, todayISOInTimezone } from "@/lib/format";
 import { asPageEnvelope, DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
 import { useQueryLoad } from "@/hooks/useQueryLoad";
@@ -329,6 +329,8 @@ export default function Customers() {
   const [form, setForm] = useState<any>(empty);
   const [saving, setSaving] = useState(false);
   const [pauseTarget, setPauseTarget] = useState<any>(null);
+  const [kitchenTimezone, setKitchenTimezone] = useState<string>("America/Toronto");
+  const kitchenToday = todayISOInTimezone(kitchenTimezone);
   const [pauseRange, setPauseRange] = useState({ start: todayISO(), end: todayISO() });
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [rejectTarget, setRejectTarget] = useState<any>(null);
@@ -621,6 +623,7 @@ export default function Customers() {
         api.get("/providers/me"),
       ]);
       setStaff(data || []);
+      setKitchenTimezone(String(prov?.settings?.timezone || "America/Toronto").trim() || "America/Toronto");
       setMonthlyBillingEnabled(!!prov?.settings?.monthly_billing?.enabled);
       const variant = prov?.settings?.monthly_billing?.policy_variant;
       setKitchenDefaultVariant(
@@ -676,7 +679,12 @@ export default function Customers() {
     loadCounts();
   }
 
-  const isPaused = (c: any) => (c.pauses || []).some((p: any) => p.start <= todayISO() && todayISO() <= p.end);
+  const isPaused = (c: any) => (c.pauses || []).some((p: any) => p.start <= kitchenToday && kitchenToday <= p.end);
+
+  const openPause = (c: any) => {
+    setPauseRange({ start: kitchenToday, end: kitchenToday });
+    setPauseTarget(c);
+  };
 
   const filtered = items;
 
@@ -1345,7 +1353,7 @@ export default function Customers() {
                       onHistory={() => router.push(`/provider/customers/${c.id}?tab=payments`)}
                       onApprove={() => approve(c)}
                       onReject={() => { setRejectTarget(c); setRejectReason(""); }}
-                      onPause={() => setPauseTarget(c)}
+                      onPause={() => openPause(c)}
                       onResume={() => resume(c)}
                       onEdit={() => router.push(`/provider/customers/${c.id}/edit`)}
                       onDelete={() => setDeleteTarget(c)}
@@ -1433,7 +1441,7 @@ export default function Customers() {
                             onHistory={() => router.push(`/provider/customers/${c.id}?tab=payments`)}
                             onApprove={() => approve(c)}
                             onReject={() => { setRejectTarget(c); setRejectReason(""); }}
-                            onPause={() => setPauseTarget(c)}
+                            onPause={() => openPause(c)}
                             onResume={() => resume(c)}
                             onEdit={() => router.push(`/provider/customers/${c.id}/edit`)}
                             onDelete={() => setDeleteTarget(c)}

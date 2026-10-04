@@ -8,7 +8,7 @@ import { ArrowLeft, ForkKnife, PencilSimple, Plus } from "@phosphor-icons/react"
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canMutateAdmin, canSeePricing } from "@/lib/roles";
-import { fmtCAD, fmtDate, WEEKDAYS, todayISO, fmtMealCount, fmtExtraBadge } from "@/lib/format";
+import { fmtCAD, fmtDate, WEEKDAYS, todayISO, todayISOInTimezone, fmtMealCount, fmtExtraBadge } from "@/lib/format";
 import StatusPill from "@/components/StatusPill";
 import RecordPaymentSheet from "@/components/RecordPaymentSheet";
 import ExtraMealsSheet from "@/components/ExtraMealsSheet";
@@ -146,6 +146,8 @@ export default function CustomerDetail() {
   const [resetPw, setResetPw] = useState("");
   const [resetPwConfirm, setResetPwConfirm] = useState("");
   const [resetPwBusy, setResetPwBusy] = useState(false);
+  const [kitchenTimezone, setKitchenTimezone] = useState<string>("America/Toronto");
+  const kitchenToday = todayISOInTimezone(kitchenTimezone);
 
   async function handleResetLoginPassword() {
     if (resetPw.length < 6) {
@@ -187,6 +189,9 @@ export default function CustomerDetail() {
           }))
         : [];
       setMealTypes(types);
+      setKitchenTimezone(
+        String(provRes?.data?.settings?.timezone || "America/Toronto").trim() || "America/Toronto",
+      );
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || "Customer not found");
       router.push("/provider/customers");
@@ -413,7 +418,7 @@ export default function CustomerDetail() {
 
   if (!c) return <PageLoader testid="customer-detail-loader" />;
 
-  const isPaused = (c.pauses || []).some((p: any) => p.start <= todayISO() && todayISO() <= p.end);
+  const isPaused = (c.pauses || []).some((p: any) => p.start <= kitchenToday && kitchenToday <= p.end);
   const flatBilling = isFlatBillingMode(c.billing?.billing_mode);
   const isCycleBilling = c.billing?.billing_mode === "cycle_flat";
   const cycleAdjustments: any[] = Array.isArray(c.cycle_adjustments) ? c.cycle_adjustments : [];
@@ -1114,7 +1119,7 @@ export default function CustomerDetail() {
                     <div className="font-medium">{fmtDate(p.start)} → {fmtDate(p.end)}</div>
                     <div className="text-xs text-muted-foreground">{p.start} – {p.end}</div>
                   </div>
-                  {p.start <= todayISO() && todayISO() <= p.end ? (
+                  {p.start <= kitchenToday && kitchenToday <= p.end ? (
                     <span className="text-[10px] uppercase tracking-widest bg-sky-100 text-sky-900 px-2 py-0.5 rounded-full">Active</span>
                   ) : null}
                 </li>

@@ -41,8 +41,27 @@ export function originLineForPool(
   return (eff?.label as string | undefined) || kitchenFallback || "";
 }
 
-export function mapsUrlForStops(originAddress: string, stops: Stop[]) {
-  const parts = [originAddress, ...stops.map(stopAddress)].filter(Boolean);
+/**
+ * Google Maps directions URLs allow a limited number of intermediate waypoints
+ * (consumer Maps URL / dir deep-link). Origin + destination are separate.
+ * Stay at 9 to match common Maps URL behaviour on phone.
+ */
+export const GOOGLE_MAPS_MAX_WAYPOINTS = 9;
+
+/** Max stop addresses that can follow a chunk origin in one Maps URL (waypoints + dest). */
+export const GOOGLE_MAPS_MAX_STOPS_PER_LEG = GOOGLE_MAPS_MAX_WAYPOINTS + 1;
+
+export type GoogleMapsTourChunk = {
+  label: string;
+  url: string;
+  /** 1-based inclusive stop index in the full ordered list */
+  stopFrom: number;
+  stopTo: number;
+};
+
+/** Build a Google Maps directions (or pin) URL from an ordered address list. */
+export function mapsUrlFromAddresses(addresses: string[]) {
+  const parts = addresses.map((a) => (a || "").trim()).filter(Boolean);
   if (!parts.length) return "https://www.google.com/maps";
   if (parts.length === 1) {
     return `https://maps.google.com/?q=${encodeURIComponent(parts[0])}`;
@@ -53,6 +72,90 @@ export function mapsUrlForStops(originAddress: string, stops: Stop[]) {
   let url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}`;
   if (waypoints) url += `&waypoints=${waypoints}`;
   return url;
+}
+
+export function mapsUrlForStops(originAddress: string, stops: Stop[]) {
+  const parts = [originAddress, ...stops.map(stopAddress)].filter(Boolean);
+  return mapsUrlFromAddresses(parts);
+}
+
+function stopMapsLabel(s: Stop) {
+  return (stopAddress(s) || s.name || "").trim();
+}
+
+/** True when a single Google Maps directions URL cannot hold origin + all stops. */
+export function needsGoogleMapsTourChunks(
+  originAddress: string,
+  stops: Stop[],
+  maxWaypoints: number = GOOGLE_MAPS_MAX_WAYPOINTS,
+) {
+  const origin = (originAddress || "").trim();
+  const n = stops.length;
+  if (n === 0) return false;
+  const totalPlaces = (origin ? 1 : 0) + n;
+  // Max places per URL = origin + maxWaypoints + destination
+  return totalPlaces > maxWaypoints + 2;
+}
+
+/**
+ * Split a long tour into Google-safe directions URLs.
+ * Chunk 1 starts at kitchen/start; later chunks start at the previous chunk's last stop
+ * so legs connect when the driver opens parts in order.
+ */
+export function chunkStopsForGoogleMaps(
+  originAddress: string,
+  stops: Stop[],
+  maxWaypoints: number = GOOGLE_MAPS_MAX_WAYPOINTS,
+): GoogleMapsTourChunk[] {
+  const maxAfterOrigin = Math.max(1, maxWaypoints + 1);
+  const ordered = [...stops];
+  if (!ordered.length) {
+    const o = (originAddress || "").trim();
+    if (!o) return [];
+    return [
+      {
+        label: "Start",
+        url: mapsUrlFromAddresses([o]),
+        stopFrom: 0,
+        stopTo: 0,
+      },
+    ];
+  }
+
+  if (!needsGoogleMapsTourChunks(originAddress, ordered, maxWaypoints)) {
+    return [
+      {
+        label: `Full tour (stops 1–${ordered.length})`,
+        url: mapsUrlForStops(originAddress, ordered),
+        stopFrom: 1,
+        stopTo: ordered.length,
+      },
+    ];
+  }
+
+  const chunks: GoogleMapsTourChunk[] = [];
+  let i = 0;
+  let part = 1;
+  let chunkOrigin = (originAddress || "").trim() || stopMapsLabel(ordered[0]);
+
+  while (i < ordered.length) {
+    const slice = ordered.slice(i, i + maxAfterOrigin);
+    const addrs = [chunkOrigin, ...slice.map(stopMapsLabel)].filter(Boolean);
+    // Drop duplicate origin if it equals the first stop address
+    const deduped =
+      addrs.length >= 2 && addrs[0] === addrs[1] ? addrs.slice(1) : addrs;
+    chunks.push({
+      label: `Part ${part} (stops ${i + 1}–${i + slice.length})`,
+      url: mapsUrlFromAddresses(deduped),
+      stopFrom: i + 1,
+      stopTo: i + slice.length,
+    });
+    const last = slice[slice.length - 1];
+    chunkOrigin = stopMapsLabel(last) || chunkOrigin;
+    i += slice.length;
+    part += 1;
+  }
+  return chunks;
 }
 
 /** Format OSRM meters as km for UI (e.g. "12.4 km"). */
