@@ -23,6 +23,27 @@ export function todayISO() {
   return `${y}-${m}-${day}`;
 }
 
+/** Calendar today in a kitchen timezone (falls back to local `todayISO`). */
+export function todayISOInTimezone(timeZone?: string | null) {
+  const tz = (timeZone || "").trim()
+  if (!tz) return todayISO()
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(new Date())
+    const y = parts.find((p) => p.type === "year")?.value
+    const m = parts.find((p) => p.type === "month")?.value
+    const d = parts.find((p) => p.type === "day")?.value
+    if (y && m && d) return `${y}-${m}-${d}`
+  } catch {
+    // invalid tz → local
+  }
+  return todayISO()
+}
+
 export function deliveryQty(d: { quantity?: number } | null | undefined) {
   const q = Number(d?.quantity);
   return Number.isFinite(q) && q >= 1 ? Math.floor(q) : 1;

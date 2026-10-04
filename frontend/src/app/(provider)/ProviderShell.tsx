@@ -80,9 +80,11 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
 
   const items = useMemo(() => {
     if (isDriver) {
-      return allItems.filter(
-        (it) => it.to === "/provider/deliveries" || it.to === "/provider/kitchen"
-      );
+      return [
+        { to: "/provider/deliveries", label: "Deliveries", icon: Truck, testid: "nav-deliveries" },
+        { to: "/provider/my-route", label: "Route", icon: Path, testid: "nav-route" },
+        { to: "/provider/kitchen", label: "Kitchen", icon: CookingPot, testid: "nav-kitchen" },
+      ];
     }
     return allItems.filter((it) => !("adminOnly" in it && it.adminOnly) || canMutate);
   }, [isDriver, canMutate]);
@@ -101,7 +103,8 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
     if (
       isDriver &&
       !pathname.startsWith("/provider/deliveries") &&
-      !pathname.startsWith("/provider/kitchen")
+      !pathname.startsWith("/provider/kitchen") &&
+      !pathname.startsWith("/provider/my-route")
     ) {
       router.replace("/provider/deliveries");
       return;

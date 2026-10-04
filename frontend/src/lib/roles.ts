@@ -53,7 +53,14 @@ export function resolveAppHome(
     return next?.startsWith("/consumer") ? next : "/consumer";
   }
   if (isDriver(session)) {
-    return next?.startsWith("/provider/deliveries") ? next : "/provider/deliveries";
+    if (
+      next?.startsWith("/provider/deliveries") ||
+      next?.startsWith("/provider/kitchen") ||
+      next?.startsWith("/provider/my-route")
+    ) {
+      return next;
+    }
+    return "/provider/deliveries";
   }
   if (next && (next.startsWith("/provider") || next.startsWith("/consumer"))) {
     return next;
