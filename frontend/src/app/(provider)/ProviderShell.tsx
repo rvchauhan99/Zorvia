@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { House, Users, Truck, Receipt, DotsThree, SignOut, ChartLine, Sparkle, Warning, CreditCard, ForkKnife, CookingPot, Path, CalendarBlank } from "@phosphor-icons/react";
+import { House, Users, Truck, Receipt, DotsThree, SignOut, ChartLine, Sparkle, Warning, CreditCard, ForkKnife, CookingPot, Path, CalendarBlank, MapPin } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
 import { isAdmin, isDriver as roleIsDriver, canMutateAdmin, staffRole } from "@/lib/roles";
@@ -280,6 +280,16 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
                   <Path size={20} /> Route planning
                 </Link>
               ) : null}
+              <Link
+                href="/provider/check-location"
+                prefetch={false}
+                data-testid="side-nav-check-location"
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors duration-150 ${
+                  pathname.startsWith("/provider/check-location") ? "bg-brand-surface text-primary" : "text-foreground hover:bg-brand-surface"
+                }`}
+              >
+                <MapPin size={20} /> Check location
+              </Link>
               {canMutate ? (
                 <Link
                   href="/provider/menu"

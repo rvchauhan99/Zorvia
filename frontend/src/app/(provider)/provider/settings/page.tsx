@@ -128,7 +128,7 @@ export default function Settings() {
   function upd(k: string, v: string) {
     setProv((p: any) => ({ ...p, [k]: v }));
   }
-  function updSettings(k: string, v: string | string[] | boolean | number) {
+  function updSettings(k: string, v: string | string[] | boolean | number | Record<string, unknown>) {
     setProv((p: any) => ({ ...p, settings: { ...p.settings, [k]: v } }));
   }
 
@@ -265,6 +265,10 @@ export default function Settings() {
         sms_notifications: !!prov.settings?.sms_notifications,
         whatsapp_menu_share: prov.settings?.whatsapp_menu_share !== false,
         tax_rate_percent: Number(prov.settings?.tax_rate_percent ?? 0),
+        delivery_start_lunch: prov.settings?.delivery_start_lunch || "",
+        delivery_start_dinner: prov.settings?.delivery_start_dinner || "",
+        minutes_per_stop: Number(prov.settings?.minutes_per_stop || 3),
+        driver_start_times: prov.settings?.driver_start_times || {},
         monthly_billing: {
           ...mb,
           enabled: !!mb.enabled,
@@ -707,6 +711,104 @@ export default function Settings() {
                     );
                   })}
                 </div>
+              </div>
+
+              {/* Delivery timing (used by Check location) */}
+              <div className="card-tinted p-3 sm:p-4 flex flex-col gap-3" data-testid="s-delivery-timing">
+                <div>
+                  <div className="label-overline">Delivery timing</div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Used by Check location to estimate when a new address would be delivered. Set the time each driver
+                    leaves the kitchen. Anyone left blank uses the default times below.
+                  </p>
+                </div>
+
+                {staff.filter((m) => m.role === "driver").length ? (
+                  <div className="flex flex-col gap-2" data-testid="s-driver-starts">
+                    <div className="hidden sm:grid grid-cols-[1fr_9rem_9rem] gap-2 px-1 text-[10px] uppercase font-bold tracking-wider text-muted-foreground">
+                      <span>Driver</span>
+                      <span>Lunch start</span>
+                      <span>Dinner start</span>
+                    </div>
+                    {staff
+                      .filter((m) => m.role === "driver")
+                      .map((m) => {
+                        const cur = ((prov.settings?.driver_start_times || {}) as Record<string, Record<string, string>>)[m.id] || {};
+                        const setStart = (slot: "lunch" | "dinner", value: string) => {
+                          const all = { ...((prov.settings?.driver_start_times || {}) as Record<string, Record<string, string>>) };
+                          const next = { ...(all[m.id] || {}), [slot]: value };
+                          if (!next.lunch && !next.dinner) delete all[m.id];
+                          else all[m.id] = next;
+                          updSettings("driver_start_times", all);
+                        };
+                        return (
+                          <div key={m.id} className="grid grid-cols-2 sm:grid-cols-[1fr_9rem_9rem] gap-2 items-center" data-testid={`s-driver-start-${m.id}`}>
+                            <span className="col-span-2 sm:col-span-1 text-sm font-semibold truncate">{m.name || m.email}</span>
+                            <label className="flex flex-col gap-1 sm:block">
+                              <span className="sm:hidden text-[10px] uppercase font-bold tracking-wider text-muted-foreground">Lunch</span>
+                              <input
+                                type="time"
+                                aria-label={`${m.name || "Driver"} lunch start`}
+                                className={inputClass}
+                                value={cur.lunch || ""}
+                                onChange={(e) => setStart("lunch", e.target.value)}
+                              />
+                            </label>
+                            <label className="flex flex-col gap-1 sm:block">
+                              <span className="sm:hidden text-[10px] uppercase font-bold tracking-wider text-muted-foreground">Dinner</span>
+                              <input
+                                type="time"
+                                aria-label={`${m.name || "Driver"} dinner start`}
+                                className={inputClass}
+                                value={cur.dinner || ""}
+                                onChange={(e) => setStart("dinner", e.target.value)}
+                              />
+                            </label>
+                          </div>
+                        );
+                      })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Add drivers under staff to set a start time for each one.</p>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <label className="flex flex-col gap-1.5">
+                    <span className="label-overline">Default lunch start</span>
+                    <input
+                      type="time"
+                      data-testid="s-start-lunch"
+                      className={inputClass}
+                      value={prov.settings?.delivery_start_lunch || ""}
+                      onChange={(e) => updSettings("delivery_start_lunch", e.target.value)}
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="label-overline">Default dinner start</span>
+                    <input
+                      type="time"
+                      data-testid="s-start-dinner"
+                      className={inputClass}
+                      value={prov.settings?.delivery_start_dinner || ""}
+                      onChange={(e) => updSettings("delivery_start_dinner", e.target.value)}
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="label-overline">Minutes per stop</span>
+                    <NumericInput
+                      data-testid="s-minutes-per-stop"
+                      mode="integer"
+                      min={1}
+                      max={30}
+                      className={inputClass}
+                      value={String(prov.settings?.minutes_per_stop ?? 3)}
+                      onValueChange={(v) => updSettings("minutes_per_stop", v)}
+                    />
+                  </label>
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  If nothing is set, 11:30 AM is used for lunch and 5:30 PM for dinner.
+                </span>
               </div>
 
               {/* Cutoff & Tax Rules */}

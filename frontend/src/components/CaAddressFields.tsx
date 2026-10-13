@@ -49,6 +49,7 @@ function Label({
   error,
   children,
   className,
+  plain,
 }: {
   label: string;
   required?: boolean;
@@ -56,16 +57,19 @@ function Label({
   error?: string;
   children: React.ReactNode;
   className?: string;
+  /** Use a div, not a label, when the child is a dropdown (a label re-opens it after you pick). */
+  plain?: boolean;
 }) {
+  const Wrapper = plain ? "div" : "label";
   return (
-    <label className={`flex flex-col gap-1.5 ${className || ""}`}>
+    <Wrapper className={`flex flex-col gap-1.5 ${className || ""}`}>
       <span className="label-overline">
         {label}
         {showRequiredMarks && required ? <span className="text-destructive ml-0.5">*</span> : null}
       </span>
       {children}
       {error ? <span className="text-xs text-destructive">{error}</span> : null}
-    </label>
+    </Wrapper>
   );
 }
 
@@ -122,6 +126,7 @@ export default function CaAddressFields({
         required={provinceRequired}
         showRequiredMarks={showRequiredMarks}
         error={errors.province}
+        plain
       >
         <SearchableSelect
           testid={`${testidPrefix}-province`}
@@ -140,6 +145,7 @@ export default function CaAddressFields({
         required={cityRequired}
         showRequiredMarks={showRequiredMarks}
         error={errors.city}
+        plain
       >
         <SearchableSelect
           testid={`${testidPrefix}-city`}
