@@ -24,7 +24,7 @@ import { asPageEnvelope, OPS_DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/l
 import { useCursorPagination } from "@/hooks/useCursorPagination";
 import { useQueryLoad } from "@/hooks/useQueryLoad";
 import { useTabVisibleRefresh } from "@/hooks/useTabVisibleRefresh";
-import { ArrowLeft, ArrowRight, CheckCircle, XCircle, Prohibit, CaretUp, CaretDown, MapPin, Plus } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, CheckCircle, XCircle, Prohibit, CaretUp, CaretDown, MapPin, Plus, Tag } from "@phosphor-icons/react";
 
 const OFFLINE_QUEUE_KEY = "tiffin_delivery_status_queue";
 
@@ -80,6 +80,8 @@ export default function Deliveries() {
   const [filterCity, setFilterCity] = useState("");
   const [drivers, setDrivers] = useState<{ id: string; name: string; email?: string }[]>([]);
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [labelsBusy, setLabelsBusy] = useState(false);
+  const [labelLayout, setLabelLayout] = useState<"sheet" | "roll">("sheet");
   const [confirmBulkDeliver, setConfirmBulkDeliver] = useState(false);
   const [queueLen, setQueueLen] = useState(0);
   const [extraTarget, setExtraTarget] = useState<any | null>(null);
@@ -458,6 +460,49 @@ export default function Deliveries() {
   const nextPending = canMarkStatuses ? filtered.find((d) => d.status === "pending") : undefined;
 
   const mealsToday = summary.meals || 0;
+  async function printLabels() {
+    setLabelsBusy(true);
+    try {
+      const params: Record<string, string> = { date, layout: labelLayout };
+      if (!isDriver && driverId) params.driver_id = driverId;
+      if (mealSlot !== "all") params.meal_slot = mealSlot;
+      if (filterCity) params.city = filterCity;
+      const { data: blob } = await api.get("/deliveries/labels.pdf", { params, responseType: "blob" });
+      const pdfBlob = blob instanceof Blob && blob.type ? blob : new Blob([blob], { type: "application/pdf" });
+      if (pdfBlob.type && pdfBlob.type.includes("json")) {
+        let detail = "Could not make labels";
+        try {
+          detail = JSON.parse(await pdfBlob.text())?.detail || detail;
+        } catch {
+          /* ignore */
+        }
+        throw new Error(typeof detail === "string" ? detail : "Could not make labels");
+      }
+      const url = URL.createObjectURL(pdfBlob);
+      const win = window.open(url, "_blank");
+      if (!win) {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `labels-${date}.pdf`;
+        a.click();
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e: any) {
+      let detail = e?.message || "Could not make labels";
+      const data = e?.response?.data;
+      if (data instanceof Blob) {
+        try {
+          detail = JSON.parse(await data.text())?.detail || detail;
+        } catch {
+          /* ignore */
+        }
+      }
+      toast.error(typeof detail === "string" ? detail : "Could not make labels");
+    } finally {
+      setLabelsBusy(false);
+    }
+  }
+
   const hasInputFilter = Boolean(q.trim()) || Boolean(driverId) || mealSlot !== "all" || Boolean(filterMealTypeId) || Boolean(filterCity);
 
   const statusFilters = [
@@ -488,6 +533,28 @@ export default function Deliveries() {
           <button data-testid="prev-day" onClick={() => shiftDay(-1)} className="h-11 w-11 min-h-[44px] min-w-[44px] rounded-full bg-white border border-brand-border flex items-center justify-center hover:bg-brand-surface cursor-pointer transition-colors" aria-label="Previous day"><ArrowLeft size={16} /></button>
           <input data-testid="date-picker" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-11 px-3 rounded-xl bg-white border border-brand-border font-medium" />
           <button data-testid="next-day" onClick={() => shiftDay(1)} className="h-11 w-11 min-h-[44px] min-w-[44px] rounded-full bg-white border border-brand-border flex items-center justify-center hover:bg-brand-surface cursor-pointer transition-colors" aria-label="Next day"><ArrowRight size={16} /></button>
+          <div className="inline-flex items-center gap-1.5">
+            <select
+              data-testid="label-layout"
+              value={labelLayout}
+              onChange={(e) => setLabelLayout(e.target.value as "sheet" | "roll")}
+              className="h-11 px-2 rounded-xl bg-white border border-brand-border text-sm"
+              aria-label="Label layout"
+            >
+              <option value="sheet">A4 sheet (8/page)</option>
+              <option value="roll">Label roll (100×60)</option>
+            </select>
+            <button
+              type="button"
+              data-testid="print-labels"
+              onClick={() => printLabels()}
+              disabled={labelsBusy}
+              className="h-11 px-4 rounded-full border border-brand-border bg-white text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer hover:bg-brand-surface disabled:opacity-50"
+            >
+              <Tag size={16} weight="bold" className={labelsBusy ? "animate-pulse" : ""} />
+              {labelsBusy ? "Preparing…" : "Labels"}
+            </button>
+          </div>
           {canAddExtra ? (
             <button
               type="button"
