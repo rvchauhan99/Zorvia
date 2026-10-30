@@ -103,7 +103,8 @@ function LoginForm() {
 
   return (
     <div className="min-h-screen bg-brand-cream flex animate-fade-in-up">
-      <div className="hidden lg:block relative flex-1">
+      <div className="hidden lg:block lg:w-[42%] lg:flex-none p-6">
+        <div className="relative h-full w-full rounded-3xl overflow-hidden">
         <img
           alt="Tiffin lunchbox"
           src="https://images.unsplash.com/photo-1781747835478-a9c3bab5a670?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDJ8MHwxfHNlYXJjaHwyfHxpbmRpYW4lMjB0aWZmaW4lMjBsdW5jaCUyMGJveCUyMGZvb2R8ZW58MHx8fHwxNzgzOTI0ODk3fDA&ixlib=rb-4.1.0&q=85"
@@ -111,17 +112,18 @@ function LoginForm() {
         />
         <div className="absolute inset-0 bg-gradient-to-tr from-black/60 to-transparent" />
         <div className="absolute bottom-10 left-10 text-white max-w-md">
-          <div className="font-display font-black text-4xl leading-tight">{copy.panelTitle}</div>
+          <div className="font-display font-black text-3xl xl:text-4xl leading-tight">{copy.panelTitle}</div>
           <p className="mt-3 text-white/80">{copy.panelBody}</p>
+        </div>
         </div>
       </div>
       <div className="flex-1 flex items-center justify-center p-6 sm:p-10">
         <div className="w-full max-w-md">
-          <Link href="/" className="inline-flex items-center transition-opacity hover:opacity-80" data-testid="login-brand">
+          <Link href="/" className="flex justify-center transition-opacity hover:opacity-80" data-testid="login-brand">
             <img
-              src="/brand/mealhq-logo-horizontal.png"
+              src="/brand/mealhq-logo-horizontal-transparent.png"
               alt="MealHQ"
-              className="h-11 w-auto"
+              className="h-14 sm:h-16 w-auto"
             />
           </Link>
 
@@ -217,7 +219,7 @@ function LoginForm() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className={inputClass}
-                placeholder="••••••••"
+                placeholder="Enter your password"
               />
             </label>
             <div className="flex justify-end -mt-2">

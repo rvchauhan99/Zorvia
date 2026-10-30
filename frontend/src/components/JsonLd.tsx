@@ -7,7 +7,7 @@ export const ORGANIZATION_LD = {
   url: "https://www.mealhq.ca",
   logo: "https://www.mealhq.ca/brand/mealhq-logo-horizontal.png",
   description:
-    "MealHQ is tiffin delivery software for independent Canadian kitchens — customers, routes, Interac payments, and outstanding balances.",
+    "MealHQ is management software for independent Canadian tiffin kitchens — customers, meal plans, routes, kitchen counts, Interac payments, and outstanding balances.",
   email: "ravatrajsinh@gmail.com",
   areaServed: {
     "@type": "Country",
@@ -24,7 +24,7 @@ export const SOFTWARE_LD = {
   operatingSystem: "Web",
   url: "https://www.mealhq.ca",
   description:
-    "Tiffin delivery OS for Canadian kitchens: daily delivery lists, Interac e-Transfer reconciliation, meal schedules, and outstanding balances.",
+    "Tiffin business software for Canadian kitchens: customers, daily routes, kitchen counts, Interac e-Transfer reconciliation, meal schedules, and outstanding balances.",
   offers: {
     "@type": "Offer",
     price: "0",

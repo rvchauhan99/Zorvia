@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 
+
 const CONTACT_EMAILS = [
   "khamarvedang04@gmail.com",
   "ravatrajsinh@gmail.com",
@@ -29,7 +30,7 @@ export default function MarketingShell({
         <div className={`${shell} flex items-center justify-between py-3 sm:py-4 gap-3`}>
           <Link href="/" className="inline-flex items-center shrink-0">
             <Image
-              src="/brand/mealhq-logo-horizontal.png"
+              src="/brand/mealhq-logo-horizontal-transparent.png"
               alt="MealHQ"
               width={200}
               height={64}
