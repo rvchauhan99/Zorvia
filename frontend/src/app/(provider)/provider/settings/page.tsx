@@ -163,6 +163,34 @@ export default function Settings() {
     updMonthlyBilling({ plans });
   }
 
+  function addMonthlyPlan() {
+    const plans = [...(mb.plans || [])];
+    const id = `plan_${Date.now().toString(36)}`;
+    plans.push({
+      id,
+      name: `Plan ${plans.length + 1}`,
+      monthly_fee_cad: 0,
+      standard_days: 20,
+      weekdays: [0, 1, 2, 3, 4],
+      cycle_days: null,
+    });
+    updMonthlyBilling({ plans });
+  }
+
+  function removeMonthlyPlan(idx: number) {
+    const plans = [...(mb.plans || [])];
+    if (plans.length <= 1) return;
+    const gone = plans[idx];
+    if (
+      !window.confirm(
+        `Remove "${gone?.name || gone?.id}"? Customers already on this plan will fall back to the plan that matches their delivery days.`,
+      )
+    )
+      return;
+    plans.splice(idx, 1);
+    updMonthlyBilling({ plans });
+  }
+
   function updMonthlyCancellation(field: string, value: number) {
     updMonthlyBilling({
       cancellation: { ...(mb.cancellation || {}), [field]: value },
@@ -308,6 +336,33 @@ export default function Settings() {
         toast.error("Default collection day (1–31) is required when the monthly subscription policy is enabled");
         setSaving(false);
         return;
+      }
+      if (mb.enabled) {
+        const names = new Set<string>();
+        for (const p of mb.plans || []) {
+          const nm = String(p.name || "").trim().toLowerCase();
+          if (!nm) {
+            toast.error("Every plan needs a name");
+            setSaving(false);
+            return;
+          }
+          if (names.has(nm)) {
+            toast.error(`Two plans are both named "${p.name}". Give each plan its own name`);
+            setSaving(false);
+            return;
+          }
+          names.add(nm);
+          if (!(Number(p.monthly_fee_cad) > 0)) {
+            toast.error(`Set a price for ${p.name}`);
+            setSaving(false);
+            return;
+          }
+          if (!(p.weekdays || []).length) {
+            toast.error(`Pick at least one delivery day for ${p.name}`);
+            setSaving(false);
+            return;
+          }
+        }
       }
       if (mb.enabled && isCycleVariant) {
         const badPlan = (mb.plans || []).find(
@@ -1014,8 +1069,29 @@ export default function Settings() {
                       <span className="label-overline">Plan templates</span>
                       {(mb.plans || []).map((plan: any, idx: number) => (
                         <div key={plan.id || idx} className="border border-brand-border rounded-xl p-4 bg-white flex flex-col gap-3">
-                          <div className="font-bold text-sm text-primary flex items-center gap-2">
-                            <CreditCard size={16} /> {plan.name || plan.id}
+                          <div className="flex items-center gap-2">
+                            <CreditCard size={16} className="text-primary shrink-0" />
+                            <input
+                              type="text"
+                              aria-label={`Plan ${idx + 1} name`}
+                              data-testid={`monthly-plan-name-${plan.id || idx}`}
+                              className={`${inputClass} font-bold text-primary`}
+                              value={plan.name ?? ""}
+                              maxLength={40}
+                              placeholder="Plan name, e.g. Mon-Fri Large"
+                              onChange={(e) => updMonthlyPlan(idx, "name", e.target.value)}
+                            />
+                            {(mb.plans || []).length > 1 && (
+                              <button
+                                type="button"
+                                aria-label={`Remove ${plan.name || plan.id}`}
+                                data-testid={`monthly-plan-remove-${plan.id || idx}`}
+                                onClick={() => removeMonthlyPlan(idx)}
+                                className="shrink-0 p-2 rounded-lg text-muted-foreground hover:text-red-600 hover:bg-red-50"
+                              >
+                                <Trash size={16} />
+                              </button>
+                            )}
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <label className="flex flex-col gap-1 text-xs">
@@ -1084,7 +1160,10 @@ export default function Settings() {
                               </label>
                             )}
                           </div>
-                          <div className="flex flex-wrap gap-2 pt-1">
+                          <span className="text-xs font-medium text-muted-foreground pt-1">
+                            Delivery days for this plan
+                          </span>
+                          <div className="flex flex-wrap gap-2">
                             {weekdayLabels.map((label, wi) => (
                               <label key={label} className="inline-flex items-center gap-1.5 text-xs bg-brand-surface px-2.5 py-1.5 rounded-lg cursor-pointer">
                                 <input
@@ -1099,7 +1178,16 @@ export default function Settings() {
                                     );
                                     if (e.target.checked) set.add(wi);
                                     else set.delete(wi);
-                                    updMonthlyPlan(idx, "weekdays", Array.from(set).sort((a, b) => a - b));
+                                    const next = Array.from(set).sort((a, b) => a - b);
+                                    const wasAuto =
+                                      Number(plan.standard_days) === (plan.weekdays || []).length * 4;
+                                    const plans = [...(mb.plans || [])];
+                                    plans[idx] = {
+                                      ...plans[idx],
+                                      weekdays: next,
+                                      ...(wasAuto && next.length ? { standard_days: next.length * 4 } : {}),
+                                    };
+                                    updMonthlyBilling({ plans });
                                   }}
                                   className="accent-primary"
                                 />
@@ -1109,6 +1197,19 @@ export default function Settings() {
                           </div>
                         </div>
                       ))}
+                      <button
+                        type="button"
+                        data-testid="monthly-plan-add"
+                        onClick={addMonthlyPlan}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-dashed border-brand-border px-4 py-3 text-sm font-semibold text-primary hover:bg-brand-surface"
+                      >
+                        <Plus size={16} /> Add plan
+                      </button>
+                      <p className="text-xs text-muted-foreground">
+                        Add as many plans as you need, even with the same days but a different price
+                        (for example Mon-Fri $220 and Mon-Fri Large $280). Pick the plan on each
+                        customer; their subscription uses that plan&apos;s price.
+                      </p>
                     </div>
 
                     {/* Cancellation Rules */}
