@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+
 const CONTACT_EMAILS = [
   "khamarvedang04@gmail.com",
   "ravatrajsinh@gmail.com",
@@ -14,7 +15,7 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
         <div className={`${shell} flex items-center justify-between py-3 sm:py-4 gap-3`}>
           <Link href="/" className="inline-flex items-center shrink-0" data-testid="legal-brand">
             <img
-              src="/brand/mealhq-logo-horizontal.png"
+              src="/brand/mealhq-logo-horizontal-transparent.png"
               alt="MealHQ"
               className="h-12 sm:h-16 w-auto"
             />

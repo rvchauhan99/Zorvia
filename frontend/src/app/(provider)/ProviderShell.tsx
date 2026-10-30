@@ -231,7 +231,7 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
         <div className="shrink-0 mb-4 flex items-start justify-between gap-2">
           <div>
             <img
-              src="/brand/mealhq-logo-horizontal.png"
+              src="/brand/mealhq-logo-horizontal-transparent.png"
               alt="MealHQ"
               className="h-9 w-auto"
               data-testid="provider-brand-logo"
@@ -382,7 +382,7 @@ export default function ProviderShell({ children }: { children: React.ReactNode 
         {!isRoutePlanningWorkspace ? (
           <div className="lg:hidden sticky top-0 z-30 backdrop-blur-xl bg-white/85 border-b border-brand-border pt-[env(safe-area-inset-top,0px)] px-3 py-2 flex items-center justify-between">
             <img
-              src="/brand/mealhq-logo-horizontal.png"
+              src="/brand/mealhq-logo-horizontal-transparent.png"
               alt="MealHQ"
               className="h-8 w-auto"
               data-testid="provider-brand-logo-mobile"
