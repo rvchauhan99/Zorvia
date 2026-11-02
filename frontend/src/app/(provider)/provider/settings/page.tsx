@@ -1040,6 +1040,40 @@ export default function Settings() {
                           come from each customer&apos;s next payment date, not a day of the month.
                         </span>
                       </label>
+                    ) : null}
+                    {isCycleVariant ? (
+                      <div className="flex flex-col gap-3 md:col-span-2" data-testid="cycle-options">
+                        <label className="flex items-start gap-3 p-4 rounded-xl border border-brand-border bg-white cursor-pointer hover:bg-brand-surface/50 transition-colors">
+                          <input
+                            type="checkbox"
+                            data-testid="cycle-count-customer-days"
+                            checked={!!mb.cycle_count_customer_days}
+                            onChange={(e) => updMonthlyBilling({ cycle_count_customer_days: e.target.checked })}
+                            className="h-5 w-5 mt-0.5 rounded accent-primary border-brand-border cursor-pointer"
+                          />
+                          <div>
+                            <span className="font-bold text-sm text-foreground">Count each customer&apos;s own delivery days</span>
+                            <span className="block text-xs text-muted-foreground mt-0.5">
+                              A customer who only gets Mon, Tue and Wed uses up 20 of their own days, so they renew
+                              after about 7 weeks instead of 4. Off = every customer follows the plan&apos;s weekdays.
+                            </span>
+                          </div>
+                        </label>
+                        <label className="flex items-start gap-3 p-4 rounded-xl border border-brand-border bg-white cursor-pointer hover:bg-brand-surface/50 transition-colors">
+                          <input
+                            type="checkbox"
+                            data-testid="cycle-skip-excused-days"
+                            checked={!!mb.cycle_skip_excused_days}
+                            onChange={(e) => updMonthlyBilling({ cycle_skip_excused_days: e.target.checked })}
+                            className="h-5 w-5 mt-0.5 rounded accent-primary border-brand-border cursor-pointer"
+                          />
+                          <div>
+                            <span className="font-bold text-sm text-foreground">Paused, cancelled and missed days don&apos;t use up cycle days</span>
+                            <span className="block text-xs text-muted-foreground mt-0.5">
+                              Each excused day moves the renewal date one delivery day later. The fee stays the same.
+                              Applies from the day you turn this on; earlier days are not changed.
+                            </span>
+                          </div>
                     ) : (
                       <label className="flex flex-col gap-1.5 max-w-xs">
                         <span className="label-overline">Default Collection Day (1–31)</span>
