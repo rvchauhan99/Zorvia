@@ -1,13 +1,16 @@
 ---
-description: MealHQ frontend platform — always apply; API is mealhq-api
+description: MealHQ frontends pointer — see FE Stack/Local/Delivery triad
 alwaysApply: true
 ---
 
 # MealHQ frontends (Zorvia)
 
-Frontend-only (`frontend/` + `admin-frontend/`). Backend: sibling **mealhq-api**.
+Always-on triad (read these):
 
-- Read [docs/INDEX.md](docs/INDEX.md). Product/API conflicts → mealhq-api docs win.
-- UI chrome: [design_guidelines.json](design_guidelines.json). Preserve `data-testid`.
-- No Phase 2 inbox / WhatsApp chat UI unless asked. No `backend/` folder here.
-- Full contract: [AGENTS.md](AGENTS.md).
+- [MealHQ-FE-Stack.mdc](MealHQ-FE-Stack.mdc) — apps, sibling API, prod
+- [MealHQ-FE-Local.mdc](MealHQ-FE-Local.mdc) — ports, rewrite, credentials
+- [MealHQ-FE-Delivery.mdc](MealHQ-FE-Delivery.mdc) — build + Browser MCP + context sync
+
+Short pack: `ai-context/`. Full contract: [AGENTS.md](../../AGENTS.md). Product/API: sibling mealhq-api docs win.
+
+Domain rules still apply: ui-design, billing-ui, no-prod-deploy-commit, no-local-ops-to-github, prod-web-test-account, testing-gate.

@@ -1,0 +1,30 @@
+---
+description: MealHQ frontend stack — Next.js provider/admin apps
+alwaysApply: true
+---
+
+# MealHQ stack (FE)
+
+## Runtime
+
+- `frontend/` — provider + consumer (TypeScript App Router) — `:3000`
+- `admin-frontend/` — platform admin — `:3001`
+- No Mongo; no `backend/` folder — API is sibling **mealhq-api**
+
+## Sibling API
+
+- Path: `Documents/Programs/MINE/mealhq-api`
+- Open via `MINE/MealHQ.code-workspace` (API + Web)
+- Product/API conflicts → mealhq-api docs win
+
+## Production
+
+- Web: `https://www.mealhq.ca`
+- API target: **`https://api2.mealhq.ca`** (operator sets Vercel env)
+
+## Docs
+
+- Short pack: `ai-context/`
+- FE map: `docs/INDEX.md`
+- Visual constitution: `design_guidelines.json`
+- Contract: `AGENTS.md`

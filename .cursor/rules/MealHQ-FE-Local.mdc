@@ -1,0 +1,28 @@
+---
+description: Local FE ports and rewrite target for MealHQ / Zorvia
+alwaysApply: true
+---
+
+# MealHQ local runtime (FE)
+
+## Start
+
+```bash
+cd /Users/ravatrajsinhchauhan/Documents/Programs/MINE/Zorvia-main
+npm run dev:frontend   # :3000
+npm run dev:admin      # :3001
+```
+
+| Service | URL |
+|---------|-----|
+| Provider + consumer | `http://localhost:3000` |
+| Platform admin | `http://localhost:3001` |
+| API (sibling) | `http://127.0.0.1:8000` |
+
+Rewrites `/api` → `BACKEND_URL` or `http://127.0.0.1:8000`. Start sibling API if the page needs data.
+
+## QA
+
+- Local only for agent browser work (unless user explicitly asks for prod)
+- Prod UI (`www.mealhq.ca`): only `ravatrajsinh@gmail.com` — see sibling `mealhq-api/memory/test_credentials.md`
+- Never invent other prod accounts or open other tenants

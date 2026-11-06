@@ -1,0 +1,29 @@
+---
+description: Mandatory delivery and QA gate for MealHQ / Zorvia UI
+alwaysApply: true
+---
+
+# MealHQ delivery standards (FE)
+
+Before marking **any** UI behavior-changing task complete:
+
+1. Follow the development loop (plan → clean → implement → test → re-verify → context sync).
+2. Read and follow `.cursor/skills/mealhq-ui-screen/SKILL.md`.
+3. API-first when an endpoint exists; then one Browser MCP smoke (≤5 calls) on the focus URL; always `browser_close_tab`.
+4. Run production **build** for the touched app **after** UI QA (never mid-QA).
+5. Context sync via sibling `mealhq-api/.cursor/skills/mealhq-context-sync/SKILL.md` before Done.
+6. Update FE docs if copy/behavior changes; if API contract changes, update mealhq-api docs same change set.
+
+## Completion message must include
+
+- **Test tier** / what was verified
+- **Build** command + pass/fail
+- **Browser MCP** line (Pass/Fail/Skipped with reason)
+- **Context sync** line
+
+## Do not
+
+- Mark Done with “servers not up” — start FE and sibling API
+- Skip Browser MCP for user-facing UI (unless user forbade browser in this chat)
+- Invent Phase 2 inbox / WhatsApp chat UI
+- Commit / deploy / PR unless the user explicitly asked

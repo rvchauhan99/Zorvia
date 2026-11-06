@@ -17,6 +17,7 @@ export type Stop = {
   lat?: number | null;
   lng?: number | null;
   meal_slots?: string[];
+  notes?: string;
 };
 
 export type CityChip = {

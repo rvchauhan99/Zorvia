@@ -217,6 +217,15 @@ function SortableStopRow({
         <p className="text-[#5C6570] truncate text-[11px] leading-tight">
           {stopAddress(stop) || "No address"}
         </p>
+        {stop.notes?.trim() ? (
+          <p
+            className="text-[#5C6570] truncate text-[10px] leading-tight mt-0.5 italic"
+            data-testid={`route-stop-notes-${stop.id}`}
+            title={stop.notes.trim()}
+          >
+            {stop.notes.trim()}
+          </p>
+        ) : null}
         {issue && (
           <span className="inline-flex items-center gap-1 mt-0.5 text-[10px] font-medium text-amber-700">
             <WarningCircle size={11} />

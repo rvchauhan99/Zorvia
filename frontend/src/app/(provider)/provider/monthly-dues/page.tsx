@@ -7,12 +7,14 @@ import {
   CalendarBlank,
   CaretDown,
   ClockCounterClockwise,
+  DotsThreeVertical,
+  MagnifyingGlass,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canMutateAdmin, canSeePricing, isDriver } from "@/lib/roles";
-import { fmtCAD } from "@/lib/format";
+import { fmtCAD, todayISO } from "@/lib/format";
 import { NumericInput } from "@/components/NumericInput";
 import {
   collapsedMonthHint,
@@ -64,7 +66,65 @@ type DueRow = {
   cycle_period_end?: string | null;
   cycle_anchor_missing?: boolean | null;
   prepaid_cycles?: number | null;
+  driver_id?: string | null;
+  driver_name?: string | null;
+  driver_ids?: string[];
 };
+
+const MENU_ITEM =
+  "w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left hover:bg-brand-surface cursor-pointer border-0 bg-transparent";
+
+function addDaysISO(iso: string, days: number): string {
+  const d = new Date(`${iso}T12:00:00`);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function DueTags({
+  row,
+  today,
+}: {
+  row: DueRow;
+  today: string;
+}) {
+  const due = (row.renewal_date || row.collection_due_date || "").slice(0, 10);
+  const tags: { key: string; label: string; className: string }[] = [];
+  if (row.is_overdue) {
+    tags.push({
+      key: "overdue",
+      label: row.days_overdue ? `Overdue ${row.days_overdue}d` : "Overdue",
+      className: "bg-destructive/15 text-destructive",
+    });
+  }
+  if (due && due === today) {
+    tags.push({
+      key: "today",
+      label: "Due today",
+      className: "bg-amber-100 text-amber-900",
+    });
+  }
+  if (due && due === addDaysISO(today, 1)) {
+    tags.push({
+      key: "tomorrow",
+      label: "Due tomorrow",
+      className: "bg-sky-100 text-sky-900",
+    });
+  }
+  if (!tags.length) return null;
+  return (
+    <span className="inline-flex flex-wrap gap-1" data-testid={`monthly-dues-tags-${row.customer_id}`}>
+      {tags.map((t) => (
+        <span
+          key={t.key}
+          data-testid={`monthly-dues-tag-${t.key}-${row.customer_id}`}
+          className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${t.className}`}
+        >
+          {t.label}
+        </span>
+      ))}
+    </span>
+  );
+}
 
 const isCycleRow = (row: DueRow) => row.policy_variant === "cycle_fixed";
 
@@ -160,6 +220,91 @@ function MonthCalcBreakdown({ row }: { row: DueRow }) {
 }
 
 type AdjustTarget = { id: string; name: string; row: DueRow };
+
+function RowActionsMenu({
+  row,
+  open,
+  onToggle,
+  onClose,
+  showMoney,
+  canMutate,
+  calcOpen,
+  onCalc,
+  onHistory,
+  onAdjust,
+  onRenew,
+}: {
+  row: DueRow;
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  showMoney: boolean;
+  canMutate: boolean;
+  calcOpen: boolean;
+  onCalc: () => void;
+  onHistory: () => void;
+  onAdjust: () => void;
+  onRenew: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open, onClose]);
+
+  return (
+    <div className="relative inline-flex items-center gap-2" ref={ref}>
+      {canMutate && showMoney ? (
+        <button
+          type="button"
+          data-testid={`monthly-dues-renew-${row.customer_id}`}
+          aria-label={`Quick Renew for ${row.name}`}
+          onClick={onRenew}
+          className="h-9 px-3 rounded-full bg-primary text-primary-foreground text-xs font-semibold cursor-pointer"
+        >
+          Quick Renew
+        </button>
+      ) : null}
+      <button
+        type="button"
+        data-testid={`monthly-dues-menu-${row.customer_id}`}
+        aria-label={`More actions for ${row.name}`}
+        aria-expanded={open}
+        onClick={onToggle}
+        className="h-9 w-9 rounded-full border border-brand-border bg-white inline-flex items-center justify-center cursor-pointer hover:bg-brand-surface"
+      >
+        <DotsThreeVertical size={18} weight="bold" />
+      </button>
+      {open ? (
+        <div
+          className="absolute right-0 top-full mt-1 z-20 min-w-[180px] rounded-xl border border-brand-border bg-white shadow-lg py-1"
+          data-testid={`monthly-dues-menu-panel-${row.customer_id}`}
+        >
+          {showMoney ? (
+            <button type="button" className={MENU_ITEM} data-testid={`monthly-dues-calc-${row.customer_id}`} onClick={() => { onCalc(); onClose(); }}>
+              <CaretDown size={16} className={calcOpen ? "rotate-180" : ""} />
+              {calcOpen ? "Hide calculation" : "Calc"}
+            </button>
+          ) : null}
+          <button type="button" className={MENU_ITEM} data-testid={`monthly-dues-history-${row.customer_id}`} onClick={() => { onHistory(); onClose(); }}>
+            <ClockCounterClockwise size={16} />
+            History
+          </button>
+          {canMutate && isCycleRow(row) ? (
+            <button type="button" className={MENU_ITEM} data-testid={`monthly-dues-adjust-cycle-${row.customer_id}`} onClick={() => { onAdjust(); onClose(); }}>
+              <CalendarBlank size={16} />
+              Adjust cycle
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function AdjustCycleSheet({
   target,
@@ -326,7 +471,16 @@ export default function MonthlyDuesPage() {
   const [renewCustomer, setRenewCustomer] = useState<{ id: string; name: string } | null>(null);
   const [adjustTarget, setAdjustTarget] = useState<AdjustTarget | null>(null);
   const [filterCity, setFilterCity] = useState("");
+  const [filterQ, setFilterQ] = useState("");
+  const [qDraft, setQDraft] = useState("");
+  const [filterDriverId, setFilterDriverId] = useState("");
+  const [renewalFrom, setRenewalFrom] = useState("");
+  const [renewalTo, setRenewalTo] = useState("");
+  const [dueBucket, setDueBucket] = useState<"" | "overdue" | "today" | "tomorrow">("");
+  const [drivers, setDrivers] = useState<{ id: string; name: string }[]>([]);
+  const [reportToday, setReportToday] = useState(todayISO());
   const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   // Default to 100 so paid-up / new customers are visible without extra paging
   const paging = useCursorPagination({ initialPageSize: 100 });
 
@@ -334,14 +488,40 @@ export default function MonthlyDuesPage() {
     setExpandedIds((prev) => ({ ...prev, [id]: !prev[id] }));
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await api.get("/providers/me/staff");
+        if (cancelled) return;
+        const list = Array.isArray(data) ? data : [];
+        setDrivers(
+          list
+            .filter((s: any) => (s.role || "admin") === "driver" && s.id)
+            .map((s: any) => ({ id: String(s.id), name: String(s.name || s.email || s.id) })),
+        );
+      } catch {
+        /* optional */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const load = useCallback(async (opts: { cursor?: string | null } = {}) => {
     const mode = paintedRef.current ? "soft" : "hard";
-    const key = `dues:${filterCity}:${paging.pageSize}:${opts.cursor ?? ""}`;
+    const key = `dues:${filterCity}:${filterQ}:${filterDriverId}:${renewalFrom}:${renewalTo}:${dueBucket}:${paging.pageSize}:${opts.cursor ?? ""}`;
     try {
       const data = await run(async (signal) => {
         const params = new URLSearchParams({ page_size: String(paging.pageSize) });
         if (opts.cursor) params.set("cursor", opts.cursor);
         if (filterCity) params.set("city", filterCity);
+        if (filterQ.trim()) params.set("q", filterQ.trim());
+        if (filterDriverId) params.set("driver_id", filterDriverId);
+        if (renewalFrom) params.set("renewal_from", renewalFrom);
+        if (renewalTo) params.set("renewal_to", renewalTo);
+        if (dueBucket) params.set("due_bucket", dueBucket);
         const { data: payload } = await api.get(`/reports/monthly-dues?${params.toString()}`, { signal });
         return payload;
       }, { mode, key });
@@ -349,6 +529,7 @@ export default function MonthlyDuesPage() {
       setAllowed(true);
       setRows(Array.isArray(data?.rows) ? data.rows : []);
       setTotals(data?.totals || null);
+      if (typeof data?.today === "string" && data.today) setReportToday(data.today.slice(0, 10));
       paintedRef.current = true;
       paging.applyPageResult({
         next_cursor: data?.next_cursor ?? null,
@@ -368,7 +549,7 @@ export default function MonthlyDuesPage() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- paging.applyPageResult is stable
-  }, [paging.pageSize, filterCity, run, isAbortError]);
+  }, [paging.pageSize, filterCity, filterQ, filterDriverId, renewalFrom, renewalTo, dueBucket, run, isAbortError]);
 
   useEffect(() => {
     if (isDriver(session)) {
@@ -389,7 +570,7 @@ export default function MonthlyDuesPage() {
   const isAdjustable = rows.some((r) => r.policy_variant === "monthly_adjustable");
   const hasCycleRows = rows.some(isCycleRow);
 
-  const colCount = 4 + (hasCycleRows ? 1 : 0) + (showMoney ? 4 : 0) + 1;
+  const colCount = 4 + (showMoney ? 1 : 0);
 
   if (loading && !rows.length && !totals) {
     return <PageLoader testid="monthly-dues-loading" label="Loading customer subscriptions…" />;
@@ -422,15 +603,6 @@ export default function MonthlyDuesPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <CityFilterSelect
-            value={filterCity}
-            onChange={(next) => {
-              setFilterCity(next);
-              paging.resetToFirstPage();
-            }}
-            testid="monthly-dues-city-filter"
-            className="w-[180px]"
-          />
           <button
             type="button"
             data-testid="monthly-dues-refresh"
@@ -439,6 +611,119 @@ export default function MonthlyDuesPage() {
           >
             <ArrowClockwise size={16} /> Refresh
           </button>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2" data-testid="monthly-dues-filters">
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="relative flex-1 min-w-[180px] max-w-sm">
+            <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="search"
+              data-testid="monthly-dues-search"
+              placeholder="Search name, phone, plan…"
+              value={qDraft}
+              onChange={(e) => setQDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  setFilterQ(qDraft.trim());
+                  paging.resetToFirstPage();
+                }
+              }}
+              className="h-10 w-full pl-9 pr-3 rounded-full border border-brand-border bg-white text-sm outline-none focus:ring-2 focus:ring-primary/30"
+            />
+          </label>
+          <button
+            type="button"
+            data-testid="monthly-dues-search-go"
+            onClick={() => {
+              setFilterQ(qDraft.trim());
+              paging.resetToFirstPage();
+            }}
+            className="h-10 px-4 rounded-full border border-brand-border bg-white text-sm font-medium cursor-pointer hover:bg-brand-surface"
+          >
+            Search
+          </button>
+          <CityFilterSelect
+            value={filterCity}
+            onChange={(next) => {
+              setFilterCity(next);
+              paging.resetToFirstPage();
+            }}
+            testid="monthly-dues-city-filter"
+            className="w-[160px]"
+          />
+          <select
+            data-testid="monthly-dues-driver-filter"
+            value={filterDriverId}
+            onChange={(e) => {
+              setFilterDriverId(e.target.value);
+              paging.resetToFirstPage();
+            }}
+            className="h-10 px-3 rounded-full border border-brand-border bg-white text-sm max-w-[180px]"
+          >
+            <option value="">All drivers</option>
+            {drivers.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
+            Renewal from
+            <input
+              type="date"
+              data-testid="monthly-dues-renewal-from"
+              value={renewalFrom}
+              onChange={(e) => {
+                setRenewalFrom(e.target.value);
+                paging.resetToFirstPage();
+              }}
+              className="h-10 px-3 rounded-full border border-brand-border bg-white text-sm"
+            />
+          </label>
+          <label className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
+            to
+            <input
+              type="date"
+              data-testid="monthly-dues-renewal-to"
+              value={renewalTo}
+              onChange={(e) => {
+                setRenewalTo(e.target.value);
+                paging.resetToFirstPage();
+              }}
+              className="h-10 px-3 rounded-full border border-brand-border bg-white text-sm"
+            />
+          </label>
+          <div className="inline-flex flex-wrap gap-1" data-testid="monthly-dues-due-buckets">
+            {(
+              [
+                { id: "", label: "All due" },
+                { id: "today", label: "Due today" },
+                { id: "tomorrow", label: "Due tomorrow" },
+                { id: "overdue", label: "Overdue" },
+              ] as const
+            ).map((b) => (
+              <button
+                key={b.id || "all"}
+                type="button"
+                data-testid={`monthly-dues-bucket-${b.id || "all"}`}
+                onClick={() => {
+                  setDueBucket(b.id);
+                  paging.resetToFirstPage();
+                }}
+                className={`h-9 px-3 rounded-full text-xs font-semibold border cursor-pointer ${
+                  dueBucket === b.id
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-white border-brand-border hover:bg-brand-surface"
+                }`}
+              >
+                {b.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -486,18 +771,16 @@ export default function MonthlyDuesPage() {
                       <div className="min-w-0">
                         <div className="font-medium flex items-center gap-2 flex-wrap">
                           <span className="truncate">{r.name}</span>
-                          {r.is_overdue ? (
-                            <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-destructive/15 text-destructive">
-                              Overdue
-                            </span>
-                          ) : null}
+                          <DueTags row={r} today={reportToday} />
                         </div>
                         <div className="text-xs text-muted-foreground mt-0.5">
-                          {[r.monthly_plan_name, r.phone].filter(Boolean).join(" · ")}
+                          {[r.monthly_plan_name, r.phone, r.driver_name].filter(Boolean).join(" · ")}
                         </div>
                         <div className="text-xs text-muted-foreground mt-1">
-                          Renewal {r.renewal_date || r.collection_due_date || "—"}
-                          {r.is_overdue && r.days_overdue ? ` · ${r.days_overdue}d overdue` : null}
+                          Next payment {r.renewal_date || r.collection_due_date || "—"}
+                          {hasCycleRows && isCycleRow(r)
+                            ? ` · Cycle #${r.cycle_index ?? 0} · ${r.cycle_days ?? "—"}d`
+                            : ""}
                         </div>
                         {showMoney ? (
                           <div className="text-xs text-muted-foreground mt-1">
@@ -518,79 +801,40 @@ export default function MonthlyDuesPage() {
                           >
                             {fmtCAD(balance)}
                           </div>
-                          <div className="text-[10px] text-muted-foreground">Balance</div>
+                          <div className="text-[10px] text-muted-foreground">Owes</div>
                         </div>
                       ) : null}
                     </div>
-                    {showMoney ? (
-                      <>
-                        <button
-                          type="button"
-                          data-testid={`monthly-dues-calc-${r.customer_id}`}
-                          aria-expanded={open}
-                          onClick={() => toggleCalc(r.customer_id)}
-                          className="h-9 rounded-full border border-brand-border bg-white text-xs font-semibold cursor-pointer inline-flex items-center justify-center gap-1.5"
-                        >
-                          <CaretDown
-                            size={14}
-                            className={`transition-transform ${open ? "rotate-180" : ""}`}
-                          />
-                          {open ? "Hide calculation" : "How this month was calculated"}
-                        </button>
-                        {open ? <MonthCalcBreakdown row={r} /> : null}
-                      </>
-                    ) : null}
-                    <div className="flex flex-col gap-2">
-                      <button
-                        type="button"
-                        data-testid={`monthly-dues-history-${r.customer_id}`}
-                        onClick={() => router.push(`/provider/customers/${r.customer_id}?tab=payments`)}
-                        className="h-10 rounded-full border border-brand-border bg-white text-sm font-semibold cursor-pointer inline-flex items-center justify-center gap-2"
-                      >
-                        <ClockCounterClockwise size={18} />
-                        Payment history
-                      </button>
-                      {canMutate && isCycleRow(r) ? (
-                        <button
-                          type="button"
-                          data-testid={`monthly-dues-adjust-cycle-mobile-${r.customer_id}`}
-                          aria-label={`Adjust cycle for ${r.name}`}
-                          onClick={() => setAdjustTarget({ id: r.customer_id, name: r.name, row: r })}
-                          className="h-10 rounded-full border border-brand-border bg-white text-sm font-semibold cursor-pointer inline-flex items-center justify-center gap-2"
-                        >
-                          <CalendarBlank size={18} />
-                          Adjust cycle
-                        </button>
-                      ) : null}
-                      {canMutate && showMoney ? (
-                        <button
-                          type="button"
-                          data-testid={`monthly-dues-renew-mobile-${r.customer_id}`}
-                          aria-label={`Quick Renew for ${r.name}`}
-                          onClick={() => setRenewCustomer({ id: r.customer_id, name: r.name })}
-                          className="h-10 rounded-full bg-primary text-primary-foreground text-sm font-semibold cursor-pointer"
-                        >
-                          Quick Renew
-                        </button>
-                      ) : null}
+                    {showMoney && open ? <MonthCalcBreakdown row={r} /> : null}
+                    <div className="flex justify-end">
+                      <RowActionsMenu
+                        row={r}
+                        open={openMenuId === r.customer_id}
+                        onToggle={() =>
+                          setOpenMenuId((id) => (id === r.customer_id ? null : r.customer_id))
+                        }
+                        onClose={() => setOpenMenuId(null)}
+                        showMoney={showMoney}
+                        canMutate={canMutate}
+                        calcOpen={open}
+                        onCalc={() => toggleCalc(r.customer_id)}
+                        onHistory={() => router.push(`/provider/customers/${r.customer_id}?tab=payments`)}
+                        onAdjust={() => setAdjustTarget({ id: r.customer_id, name: r.name, row: r })}
+                        onRenew={() => setRenewCustomer({ id: r.customer_id, name: r.name })}
+                      />
                     </div>
                   </li>
                 );
               })}
             </ul>
             <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-sm min-w-[800px]" data-testid="monthly-dues-table">
+              <table className="w-full text-sm min-w-[720px]" data-testid="monthly-dues-table">
                 <thead className="text-left bg-brand-surface">
                   <tr>
                     <th className="px-3 py-2 label-overline">Customer</th>
                     <th className="px-3 py-2 label-overline">Plan</th>
-                    <th className="px-3 py-2 label-overline">Renewal date</th>
-                    {hasCycleRows ? <th className="px-3 py-2 label-overline">Cycle</th> : null}
-                    <th className="px-3 py-2 label-overline">Overdue by</th>
-                    {showMoney ? <th className="px-3 py-2 label-overline text-right">Plan fee</th> : null}
-                    {showMoney ? <th className="px-3 py-2 label-overline text-right">This month</th> : null}
-                    {showMoney ? <th className="px-3 py-2 label-overline text-right">Balance</th> : null}
-                    {showMoney ? <th className="px-3 py-2 label-overline text-right">Credit</th> : null}
+                    <th className="px-3 py-2 label-overline">Next payment</th>
+                    {showMoney ? <th className="px-3 py-2 label-overline text-right">Owes</th> : null}
                     <th className="px-3 py-2 label-overline text-right">Action</th>
                   </tr>
                 </thead>
@@ -610,118 +854,62 @@ export default function MonthlyDuesPage() {
                           <td className="px-3 py-2 font-medium">
                             <span className="inline-flex items-center gap-2 flex-wrap">
                               {r.name}
-                              {r.is_overdue ? (
-                                <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-destructive/15 text-destructive">
-                                  Overdue
-                                </span>
-                              ) : null}
+                              <DueTags row={r} today={reportToday} />
                             </span>
                             {r.phone ? <div className="text-xs text-muted-foreground font-normal">{r.phone}</div> : null}
+                            {r.driver_name ? (
+                              <div className="text-[10px] text-muted-foreground font-normal">Driver {r.driver_name}</div>
+                            ) : null}
                           </td>
-                          <td className="px-3 py-2 text-muted-foreground">{r.monthly_plan_name || "—"}</td>
+                          <td className="px-3 py-2 text-muted-foreground">
+                            <div>{r.monthly_plan_name || "—"}</div>
+                            {showMoney ? (
+                              <div className="text-[10px] text-muted-foreground/80">
+                                Fee {fmtCAD(r.monthly_fee ?? 0)}
+                                {monthCharge != null ? ` · month ${fmtCAD(Number(monthCharge))}` : ""}
+                                {hint ? ` · ${hint}` : ""}
+                              </div>
+                            ) : null}
+                            {hasCycleRows && isCycleRow(r) ? (
+                              <div className="text-[10px] text-muted-foreground/80">
+                                Cycle #{r.cycle_index ?? 0} · {r.cycle_days ?? "—"}d
+                              </div>
+                            ) : null}
+                          </td>
                           <td className="px-3 py-2 text-muted-foreground">
                             {r.renewal_date || r.collection_due_date || "—"}
                           </td>
-                          {hasCycleRows ? (
-                            <td className="px-3 py-2 text-muted-foreground">
-                              {isCycleRow(r) ? (
-                                <>
-                                  <div>
-                                    #{r.cycle_index ?? 0} · {r.cycle_days ?? "—"}d
-                                  </div>
-                                  {r.cycle_period_start || r.cycle_period_end ? (
-                                    <div className="text-[10px] text-muted-foreground/80">
-                                      {r.cycle_period_start || "—"} → {r.cycle_period_end || "—"}
-                                    </div>
-                                  ) : null}
-                                </>
-                              ) : (
-                                "—"
-                              )}
-                            </td>
-                          ) : null}
-                          <td className="px-3 py-2 text-muted-foreground">
-                            {r.is_overdue && r.days_overdue ? `${r.days_overdue}d` : "—"}
-                          </td>
-                          {showMoney ? (
-                            <td className="px-3 py-2 text-right font-semibold text-muted-foreground">{fmtCAD(r.monthly_fee ?? 0)}</td>
-                          ) : null}
-                          {showMoney ? (
-                            <td className="px-3 py-2 text-right text-muted-foreground">
-                              <div>{monthCharge != null ? fmtCAD(Number(monthCharge)) : "—"}</div>
-                              {hint ? (
-                                <div className="text-[10px] text-muted-foreground/80 mt-0.5">{hint}</div>
-                              ) : null}
-                            </td>
-                          ) : null}
                           {showMoney ? (
                             <td
                               className={`px-3 py-2 text-right font-semibold ${balance > 0 ? "text-primary" : "text-muted-foreground"}`}
                               data-testid={`monthly-dues-balance-${r.customer_id}`}
                             >
-                              {fmtCAD(balance)}
-                            </td>
-                          ) : null}
-                          {showMoney ? (
-                            <td className="px-3 py-2 text-right text-secondary font-medium">
-                              {credit > 0 ? fmtCAD(credit) : "—"}
+                              <div>{fmtCAD(balance)}</div>
+                              {credit > 0 ? (
+                                <div className="text-[10px] text-secondary font-medium">{fmtCAD(credit)} credit</div>
+                              ) : null}
                             </td>
                           ) : null}
                           <td className="px-3 py-2 text-right">
-                            <div className="inline-flex items-center justify-end gap-2 flex-wrap">
-                              {showMoney ? (
-                                <button
-                                  type="button"
-                                  data-testid={`monthly-dues-calc-${r.customer_id}`}
-                                  aria-expanded={open}
-                                  onClick={() => toggleCalc(r.customer_id)}
-                                  className="h-9 px-3 rounded-full border border-brand-border bg-white text-xs font-semibold cursor-pointer inline-flex items-center gap-1"
-                                  title="How this month was calculated"
-                                >
-                                  <CaretDown
-                                    size={14}
-                                    className={`transition-transform ${open ? "rotate-180" : ""}`}
-                                  />
-                                  Calc
-                                </button>
-                              ) : null}
-                              <button
-                                type="button"
-                                data-testid={`monthly-dues-history-${r.customer_id}`}
-                                onClick={() => router.push(`/provider/customers/${r.customer_id}?tab=payments`)}
-                                className="h-9 px-3 rounded-full border border-brand-border bg-white text-xs font-semibold cursor-pointer inline-flex items-center gap-1.5"
-                                title="Payment history"
-                              >
-                                <ClockCounterClockwise size={16} />
-                                History
-                              </button>
-                              {canMutate && isCycleRow(r) ? (
-                                <button
-                                  type="button"
-                                  data-testid={`monthly-dues-adjust-cycle-${r.customer_id}`}
-                                  aria-label={`Adjust cycle for ${r.name}`}
-                                  onClick={() =>
-                                    setAdjustTarget({ id: r.customer_id, name: r.name, row: r })
-                                  }
-                                  className="h-9 px-3 rounded-full border border-brand-border bg-white text-xs font-semibold cursor-pointer inline-flex items-center gap-1.5"
-                                  title="Postpone or re-date this collection"
-                                >
-                                  <CalendarBlank size={16} />
-                                  Adjust cycle
-                                </button>
-                              ) : null}
-                              {canMutate && showMoney ? (
-                                <button
-                                  type="button"
-                                  data-testid={`monthly-dues-renew-${r.customer_id}`}
-                                  aria-label={`Quick Renew for ${r.name}`}
-                                  onClick={() => setRenewCustomer({ id: r.customer_id, name: r.name })}
-                                  className="h-9 px-3 rounded-full bg-primary text-primary-foreground text-xs font-semibold cursor-pointer"
-                                >
-                                  Quick Renew
-                                </button>
-                              ) : null}
-                            </div>
+                            <RowActionsMenu
+                              row={r}
+                              open={openMenuId === r.customer_id}
+                              onToggle={() =>
+                                setOpenMenuId((id) => (id === r.customer_id ? null : r.customer_id))
+                              }
+                              onClose={() => setOpenMenuId(null)}
+                              showMoney={showMoney}
+                              canMutate={canMutate}
+                              calcOpen={open}
+                              onCalc={() => toggleCalc(r.customer_id)}
+                              onHistory={() =>
+                                router.push(`/provider/customers/${r.customer_id}?tab=payments`)
+                              }
+                              onAdjust={() =>
+                                setAdjustTarget({ id: r.customer_id, name: r.name, row: r })
+                              }
+                              onRenew={() => setRenewCustomer({ id: r.customer_id, name: r.name })}
+                            />
                           </td>
                         </tr>
                         {showMoney && open ? (

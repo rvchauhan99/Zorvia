@@ -86,6 +86,38 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: "high_balance", label: "High balance" },
 ];
 
+/** Seq/Driver from slot_assignments (route planning), not legacy top-level fields. */
+function customerRouteDisplay(c: any): { seq: string; driver: string } {
+  const sa = c?.slot_assignments || {};
+  const lunch = sa.lunch || {};
+  const dinner = sa.dinner || {};
+  const slots: string[] = Array.isArray(c?.meal_slots) && c.meal_slots.length
+    ? c.meal_slots
+    : ["lunch", "dinner"].filter((s) => sa[s] && (sa[s].delivery_sequence != null || sa[s].driver_id));
+  const parts: string[] = [];
+  const drivers: string[] = [];
+  const showLunch = slots.includes("lunch") || lunch.delivery_sequence != null || lunch.driver_id;
+  const showDinner = slots.includes("dinner") || dinner.delivery_sequence != null || dinner.driver_id;
+  if (showLunch && (lunch.delivery_sequence != null || lunch.driver_name || lunch.driver_id)) {
+    parts.push(`L:${lunch.delivery_sequence != null ? lunch.delivery_sequence : "—"}`);
+    if (lunch.driver_name) drivers.push(`L:${lunch.driver_name}`);
+  }
+  if (showDinner && (dinner.delivery_sequence != null || dinner.driver_name || dinner.driver_id)) {
+    parts.push(`D:${dinner.delivery_sequence != null ? dinner.delivery_sequence : "—"}`);
+    if (dinner.driver_name) drivers.push(`D:${dinner.driver_name}`);
+  }
+  if (parts.length) {
+    return {
+      seq: parts.join(" · "),
+      driver: drivers.length ? drivers.join(" · ") : (c.driver_name || "—"),
+    };
+  }
+  return {
+    seq: c?.delivery_sequence != null ? String(c.delivery_sequence) : "—",
+    driver: c?.driver_name || "—",
+  };
+}
+
 const MENU_ITEM =
   "w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left hover:bg-brand-surface cursor-pointer border-0 bg-transparent";
 
@@ -1339,8 +1371,8 @@ export default function Customers() {
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                    <span>Seq <span className="font-mono text-foreground">{c.delivery_sequence != null ? c.delivery_sequence : "—"}</span></span>
-                    <span>Driver <span className="text-foreground">{c.driver_name || "—"}</span></span>
+                    <span>Seq <span className="font-mono text-foreground">{customerRouteDisplay(c).seq}</span></span>
+                    <span>Driver <span className="text-foreground">{customerRouteDisplay(c).driver}</span></span>
                   </div>
                   <div className="flex items-center justify-end -ml-1" onClick={(e) => e.stopPropagation()}>
                     <CustomerRowActions
@@ -1406,11 +1438,11 @@ export default function Customers() {
                           ))}
                         </div>
                       </td>
-                      <td className="px-3 py-2.5 font-mono text-muted-foreground text-center">
-                        {c.delivery_sequence != null ? c.delivery_sequence : "—"}
+                      <td className="px-3 py-2.5 font-mono text-muted-foreground text-center text-xs">
+                        {customerRouteDisplay(c).seq}
                       </td>
                       <td className="px-3 py-2.5 hidden lg:table-cell text-muted-foreground text-xs">
-                        {c.driver_name || "—"}
+                        {customerRouteDisplay(c).driver}
                       </td>
                       <td className="px-3 py-2.5 font-semibold">{customerSlotSummary(c)}</td>
                       {showMoney ? (
