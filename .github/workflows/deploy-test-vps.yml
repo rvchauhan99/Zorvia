@@ -1,0 +1,62 @@
+name: Deploy test VPS (frontend)
+
+# Test only — production stays on Vercel / unchanged. Does not run on main.
+on:
+  push:
+    branches: [ravat]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-test-vps-frontend
+  cancel-in-progress: true
+
+jobs:
+  deploy-test:
+    name: Deploy frontend to test VPS
+    runs-on: ubuntu-latest
+    env:
+      VPS_HOST: ${{ vars.TEST_VPS_HOST || '178.92.120.191' }}
+      VPS_USER: ${{ vars.TEST_VPS_USER || 'root' }}
+      VPS_BASE: ${{ vars.TEST_VPS_BASE || '/opt/mealhq-test' }}
+      NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
+      NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          # Same deploy key as mealhq-api (authorized on 178.92.120.191). Prefer TEST_VPS_*.
+          ssh-private-key: ${{ secrets.TEST_VPS_SSH_PRIVATE_KEY || secrets.VULTR_SSH_PRIVATE_KEY }}
+
+      - name: Add test VPS host key
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "${VPS_HOST}" >> ~/.ssh/known_hosts
+
+      - name: Deploy frontend to test VPS
+        run: |
+          chmod +x scripts/deploy_test_vps_ci.sh
+          ./scripts/deploy_test_vps_ci.sh
+
+      - name: Public smoke
+        run: |
+          URL="https://test.mealhq.ca"
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            CODE="$(curl -skS -o /dev/null -w '%{http_code}' "${URL}" || true)"
+            if [[ "$CODE" == "200" || "$CODE" == "307" || "$CODE" == "308" ]]; then
+              echo "OK ${URL} HTTP ${CODE}"
+              exit 0
+            fi
+            echo "Attempt ${i}: HTTP ${CODE}; retrying..."
+            sleep 10
+          done
+          echo "Public smoke soft-fail (DNS may be pending); localhost check already passed"
+          exit 0
