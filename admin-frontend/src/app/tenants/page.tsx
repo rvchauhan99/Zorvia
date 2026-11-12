@@ -10,12 +10,15 @@ import { asPageEnvelope, DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
 
 type StatusFilter = "" | "trialing" | "active" | "expired";
+type DisabledFilter = "" | "true" | "false";
 
 export default function TenantsPage() {
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<StatusFilter>("");
+  const [disabled, setDisabled] = useState<DisabledFilter>("");
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const paging = useCursorPagination({ initialPageSize: DEFAULT_PAGE_SIZE });
 
   const load = useCallback(
@@ -26,6 +29,7 @@ export default function TenantsPage() {
         params.set("limit", String(paging.pageSize));
         if (q.trim()) params.set("q", q.trim());
         if (status) params.set("status", status);
+        if (disabled) params.set("disabled", disabled);
         if (opts.cursor) params.set("cursor", opts.cursor);
         const { data } = await api.get(`/platform/tenants?${params}`);
         const page = asPageEnvelope<any>(data);
@@ -38,14 +42,51 @@ export default function TenantsPage() {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [q, status, paging.pageSize],
+    [q, status, disabled, paging.pageSize],
   );
 
   useEffect(() => {
     paging.resetToFirstPage();
     load({ cursor: null });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, paging.pageSize]);
+  }, [status, disabled, paging.pageSize]);
+
+  async function toggleTenant(tenantId: string, isDisabled: boolean, name: string) {
+    if (!isDisabled) {
+      const ok = window.confirm(
+        `Deactivate “${name || tenantId}”? Kitchen staff and their clients will not be able to log in. All data stays intact.`,
+      );
+      if (!ok) return;
+    }
+    setBusyId(tenantId);
+    try {
+      const path = isDisabled
+        ? `/platform/tenants/${tenantId}/activate`
+        : `/platform/tenants/${tenantId}/deactivate`;
+      const { data } = await api.post(path);
+      const next = data?.tenant;
+      setRows((prev) =>
+        prev.map((r) =>
+          r.tenant_id === tenantId
+            ? {
+                ...r,
+                is_disabled: Boolean(next?.is_disabled ?? !isDisabled),
+                disabled_at: next?.disabled_at ?? (isDisabled ? null : r.disabled_at),
+              }
+            : r,
+        ),
+      );
+      toast.success(isDisabled ? "Tenant activated" : "Tenant deactivated");
+      if (disabled) {
+        paging.resetToFirstPage();
+        await load({ cursor: null });
+      }
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || "Action failed");
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   return (
     <AdminShell title="Tenants">
@@ -100,6 +141,30 @@ export default function TenantsPage() {
           ))}
         </div>
 
+        <div className="flex gap-2 flex-wrap">
+          {(
+            [
+              ["", "Any access"],
+              ["false", "Enabled"],
+              ["true", "Disabled"],
+            ] as [DisabledFilter, string][]
+          ).map(([v, label]) => (
+            <button
+              key={label}
+              type="button"
+              data-testid={`tenant-disabled-filter-${v || "any"}`}
+              onClick={() => setDisabled(v)}
+              className={`h-10 px-4 rounded-full text-sm font-medium border cursor-pointer ${
+                disabled === v
+                  ? "bg-neutral-900 text-white border-neutral-900"
+                  : "bg-white border-neutral-200"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="text-sm text-neutral-500" data-testid="tenant-total">
             {paging.total} kitchen{paging.total === 1 ? "" : "s"}
@@ -112,6 +177,7 @@ export default function TenantsPage() {
                 const params = new URLSearchParams();
                 if (q.trim()) params.set("q", q.trim());
                 if (status) params.set("status", status);
+                if (disabled) params.set("disabled", disabled);
                 const qs = params.toString();
                 await downloadCsv(
                   `/platform/exports/tenants.csv${qs ? `?${qs}` : ""}`,
@@ -138,14 +204,24 @@ export default function TenantsPage() {
           ) : (
             <ul className="divide-y divide-neutral-200" data-testid="tenants-list">
               {rows.map((r) => (
-                <li key={r.tenant_id}>
+                <li key={r.tenant_id} className="flex items-stretch gap-0">
                   <Link
                     href={`/tenants/${r.tenant_id}`}
                     data-testid={`tenant-${r.tenant_id}`}
-                    className="flex items-start justify-between gap-3 p-4 hover:bg-neutral-50"
+                    className="flex flex-1 items-start justify-between gap-3 p-4 hover:bg-neutral-50 min-w-0"
                   >
                     <div className="min-w-0">
-                      <div className="font-semibold truncate">{r.name || r.tenant_id}</div>
+                      <div className="font-semibold truncate flex items-center gap-2 flex-wrap">
+                        <span>{r.name || r.tenant_id}</span>
+                        {r.is_disabled ? (
+                          <span
+                            data-testid={`tenant-disabled-badge-${r.tenant_id}`}
+                            className="inline-flex text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-800"
+                          >
+                            Disabled
+                          </span>
+                        ) : null}
+                      </div>
                       <div className="text-xs text-neutral-500 mt-0.5 truncate">
                         {r.admin_email || "—"} · {r.customer_count} customers
                       </div>
@@ -161,6 +237,29 @@ export default function TenantsPage() {
                       </div>
                     </div>
                   </Link>
+                  <div className="flex items-center pr-3 shrink-0">
+                    <button
+                      type="button"
+                      data-testid={`tenant-toggle-${r.tenant_id}`}
+                      disabled={busyId === r.tenant_id}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        void toggleTenant(r.tenant_id, Boolean(r.is_disabled), r.name || "");
+                      }}
+                      className={`h-9 px-3 rounded-full text-xs font-semibold border cursor-pointer disabled:opacity-50 ${
+                        r.is_disabled
+                          ? "bg-teal-700 text-white border-teal-700"
+                          : "bg-white text-red-700 border-red-200 hover:bg-red-50"
+                      }`}
+                    >
+                      {busyId === r.tenant_id
+                        ? "…"
+                        : r.is_disabled
+                          ? "Activate"
+                          : "Deactivate"}
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>

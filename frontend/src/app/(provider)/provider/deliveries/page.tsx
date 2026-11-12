@@ -19,6 +19,7 @@ import CursorPaginationBar from "@/components/CursorPaginationBar";
 import SearchableSelect from "@/components/SearchableSelect";
 import CityFilterSelect from "@/components/CityFilterSelect";
 import { CustomerWhatsAppContact } from "@/components/CustomerWhatsAppContact";
+import ExpandableNotes from "@/components/ExpandableNotes";
 import { markDeliveryWithProof } from "@/lib/deliveries";
 import { asPageEnvelope, OPS_DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
@@ -792,24 +793,23 @@ export default function Deliveries() {
                         <span className="hidden sm:inline">Open in Maps</span>
                       </a>
                       {(d.customer_notes || "").trim() ? (
-                        <span
-                          className="text-xs text-muted-foreground italic truncate min-w-0"
-                          data-testid={`del-customer-notes-${d.id}`}
-                          title={String(d.customer_notes).trim()}
-                        >
-                          &quot;{String(d.customer_notes).trim()}&quot;
-                        </span>
+                        <ExpandableNotes
+                          text={String(d.customer_notes).trim()}
+                          title="Customer notes"
+                          testId={`del-customer-notes-${d.id}`}
+                        />
                       ) : null}
                     </div>
                     {(d.notes || "").trim() &&
                     String(d.notes).trim() !== String(d.customer_notes || "").trim() ? (
-                      <span
-                        className="text-[11px] text-muted-foreground/80 italic truncate pl-1"
-                        data-testid={`del-ops-notes-${d.id}`}
-                        title={String(d.notes).trim()}
-                      >
-                        Ops: {String(d.notes).trim()}
-                      </span>
+                      <ExpandableNotes
+                        text={String(d.notes).trim()}
+                        title="Ops notes"
+                        prefix="Ops: "
+                        quoted={false}
+                        testId={`del-ops-notes-${d.id}`}
+                        className="pl-1 text-[11px] text-muted-foreground/80"
+                      />
                     ) : null}
                   </div>
                 </div>

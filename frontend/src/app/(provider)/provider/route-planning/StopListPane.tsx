@@ -36,6 +36,7 @@ import {
 } from "@phosphor-icons/react";
 import CursorPaginationBar from "@/components/CursorPaginationBar";
 import { CustomerWhatsAppContact } from "@/components/CustomerWhatsAppContact";
+import ExpandableNotes from "@/components/ExpandableNotes";
 import { OPS_DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
 import MoveStopSheet from "./MoveStopSheet";
@@ -218,13 +219,13 @@ function SortableStopRow({
           {stopAddress(stop) || "No address"}
         </p>
         {stop.notes?.trim() ? (
-          <p
-            className="text-[#5C6570] truncate text-[10px] leading-tight mt-0.5 italic"
-            data-testid={`route-stop-notes-${stop.id}`}
-            title={stop.notes.trim()}
-          >
-            {stop.notes.trim()}
-          </p>
+          <ExpandableNotes
+            text={stop.notes.trim()}
+            title="Stop notes"
+            quoted={false}
+            testId={`route-stop-notes-${stop.id}`}
+            className="text-[#5C6570] text-[10px] leading-tight mt-0.5"
+          />
         ) : null}
         {issue && (
           <span className="inline-flex items-center gap-1 mt-0.5 text-[10px] font-medium text-amber-700">

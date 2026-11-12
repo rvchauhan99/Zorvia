@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # CI: sync Zorvia frontend → test VPS and rebuild frontend container.
 # Never uploads API secrets. Compose lives under /opt/mealhq-test/api/deploy.
+# Target: 167.114.117.71:20085 (TEST only — not production / Vercel main).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 FE_ROOT="${FE_ROOT:-${ROOT}/frontend}"
-VPS_HOST="${VPS_HOST:-178.92.120.191}"
+VPS_HOST="${VPS_HOST:-167.114.117.71}"
+VPS_SSH_PORT="${VPS_SSH_PORT:-20085}"
 VPS_USER="${VPS_USER:-root}"
 VPS_BASE="${VPS_BASE:-/opt/mealhq-test}"
 REMOTE="${VPS_USER}@${VPS_HOST}"
@@ -15,12 +17,15 @@ if [[ ! -d "${FE_ROOT}" ]]; then
   exit 1
 fi
 
+# ssh/rsync use -p for port; scp uses -P (capital).
 if [[ -n "${SSH_AUTH_SOCK:-}" ]]; then
-  SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new)
-  RSYNC_SSH="ssh ${SSH_OPTS[*]}"
+  SSH_OPTS=(-p "${VPS_SSH_PORT}" -o BatchMode=yes -o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new)
+  SCP_OPTS=(-P "${VPS_SSH_PORT}" -o BatchMode=yes -o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new)
+  RSYNC_SSH="ssh -p ${VPS_SSH_PORT} -o BatchMode=yes -o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new"
 elif [[ -n "${SSH_KEY:-}" && -f "${SSH_KEY}" ]]; then
-  SSH_OPTS=(-i "${SSH_KEY}" -o BatchMode=yes -o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new)
-  RSYNC_SSH="ssh -i ${SSH_KEY} -o BatchMode=yes -o StrictHostKeyChecking=accept-new"
+  SSH_OPTS=(-p "${VPS_SSH_PORT}" -i "${SSH_KEY}" -o BatchMode=yes -o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new)
+  SCP_OPTS=(-P "${VPS_SSH_PORT}" -i "${SSH_KEY}" -o BatchMode=yes -o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new)
+  RSYNC_SSH="ssh -p ${VPS_SSH_PORT} -i ${SSH_KEY} -o BatchMode=yes -o StrictHostKeyChecking=accept-new"
 else
   echo "Set SSH_AUTH_SOCK (ssh-agent) or SSH_KEY" >&2
   exit 1
@@ -54,7 +59,7 @@ rsync -avz \
   --exclude 'test_reports' \
   "${FE_ROOT}/" "${REMOTE}:${VPS_BASE}/web/"
 
-scp "${SSH_OPTS[@]}" /tmp/mealhq-fe.env.production "${REMOTE}:${VPS_BASE}/web/.env.production"
+scp "${SCP_OPTS[@]}" /tmp/mealhq-fe.env.production "${REMOTE}:${VPS_BASE}/web/.env.production"
 rm -f /tmp/mealhq-fe.env.production
 
 echo "Rebuild frontend on test VPS ..."
@@ -67,7 +72,7 @@ if [[ ! -f docker-compose.test.yml ]]; then
 fi
 docker compose -f docker-compose.test.yml up -d --build frontend
 echo "Waiting for frontend ..."
-for i in \$(seq 1 60); do
+for i in \$(seq 1 90); do
   CODE=\$(curl -fsS -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:3050/ || true)
   if [[ "\$CODE" == "200" || "\$CODE" == "307" || "\$CODE" == "308" ]]; then
     echo "Frontend OK HTTP \$CODE"
