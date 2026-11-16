@@ -30,6 +30,7 @@ export default function TenantDetailPage() {
   const [insights, setInsights] = useState<any>(null);
   const [insightsLoading, setInsightsLoading] = useState(true);
   const [waEnabled, setWaEnabled] = useState(false);
+  const [accessBusy, setAccessBusy] = useState(false);
 
   const loadNotes = useCallback(async () => {
     try {
@@ -92,6 +93,30 @@ export default function TenantDetailPage() {
     }
   }
 
+  async function toggleAccess() {
+    if (!data) return;
+    const isDisabled = Boolean(data.is_disabled);
+    if (!isDisabled) {
+      const ok = window.confirm(
+        `Deactivate “${data.name || id}”? Kitchen staff and their clients will not be able to log in. All data stays intact.`,
+      );
+      if (!ok) return;
+    }
+    setAccessBusy(true);
+    try {
+      const path = isDisabled
+        ? `/platform/tenants/${id}/activate`
+        : `/platform/tenants/${id}/deactivate`;
+      const { data: res } = await api.post(path);
+      if (res?.tenant) setData(res.tenant);
+      toast.success(isDisabled ? "Tenant activated" : "Tenant deactivated");
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || "Action failed");
+    } finally {
+      setAccessBusy(false);
+    }
+  }
+
   const kpis = insights?.kpis;
 
   return (
@@ -105,14 +130,53 @@ export default function TenantDetailPage() {
         ) : (
           <>
             <div className="bg-white border border-neutral-200 rounded-2xl p-4 flex flex-col gap-2">
-              <div className="text-xs uppercase tracking-widest text-neutral-500 font-semibold">
-                Kitchen
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div className="text-xs uppercase tracking-widest text-neutral-500 font-semibold">
+                  Kitchen
+                </div>
+                {data.is_disabled ? (
+                  <span
+                    data-testid="tenant-disabled-badge"
+                    className="inline-flex text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-800"
+                  >
+                    Disabled
+                  </span>
+                ) : (
+                  <span
+                    data-testid="tenant-enabled-badge"
+                    className="inline-flex text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded-full bg-teal-100 text-teal-800"
+                  >
+                    Enabled
+                  </span>
+                )}
               </div>
               <div className="text-xl sm:text-2xl font-bold" data-testid="tenant-name">
                 {data.name}
               </div>
               <div className="text-sm text-neutral-600">{data.admin_email || "—"}</div>
               <div className="text-xs font-mono text-neutral-400">{data.signup_code}</div>
+              {data.is_disabled ? (
+                <div className="text-xs text-red-700 mt-1" data-testid="tenant-disabled-meta">
+                  Disabled
+                  {data.disabled_at ? ` · ${data.disabled_at}` : ""}
+                  {data.disabled_by ? ` · by ${data.disabled_by}` : ""}
+                </div>
+              ) : null}
+              <div className="mt-2">
+                <button
+                  type="button"
+                  data-testid="tenant-access-toggle"
+                  disabled={accessBusy}
+                  onClick={() => void toggleAccess()}
+                  className={`h-10 px-4 rounded-full text-sm font-semibold border cursor-pointer disabled:opacity-50 ${
+                    data.is_disabled
+                      ? "bg-teal-700 text-white border-teal-700"
+                      : "bg-white text-red-700 border-red-200 hover:bg-red-50"
+                  }`}
+                >
+                  {accessBusy ? "…" : data.is_disabled ? "Activate tenant" : "Deactivate tenant"}
+                </button>
+              </div>
             </div>
 
             <div className="bg-white border border-neutral-200 rounded-2xl p-4">

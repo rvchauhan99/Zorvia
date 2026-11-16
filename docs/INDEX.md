@@ -1,7 +1,9 @@
 # Documentation index — MealHQ frontends (Zorvia)
 
-**Last updated:** 2026-09-21  
+**Last updated:** 2026-11-06  
 **Status:** FE-safe map. Product/API truth lives in sibling **mealhq-api**. When FE and API docs disagree on behavior, **mealhq-api wins**.
+
+Agents: start with [`../ai-context/`](../ai-context/) + [`../AGENTS.md`](../AGENTS.md), then this index. Open product via `MINE/MealHQ.code-workspace`.
 
 | # | Doc | What it decides |
 |---|-----|-----------------|

@@ -344,7 +344,7 @@ export default function CustomerFormPage({
     "monthly_adjustable" | "monthly_fixed" | "cycle_fixed"
   >("monthly_adjustable");
   const [monthlyPlans, setMonthlyPlans] = useState<
-    { id: string; name: string; monthly_fee_cad?: number }[]
+    { id: string; name: string; monthly_fee_cad?: number; weekdays?: number[] }[]
   >([]);
 
   // ── Route preview ───────────────────────────────────────────────────────────
@@ -380,6 +380,9 @@ export default function CustomerFormPage({
               id: String(p.id),
               name: String(p.name || p.id),
               monthly_fee_cad: Number(p.monthly_fee_cad) || 0,
+              weekdays: Array.isArray(p.weekdays)
+                ? p.weekdays.map((d: any) => Number(d)).filter((d: number) => d >= 0 && d <= 6)
+                : undefined,
             }))
           : [];
         setMonthlyPlans(plans);
@@ -1418,7 +1421,37 @@ export default function CustomerFormPage({
                           testid="cf-monthly-plan"
                           inputClassName={inp()}
                           value={form.monthly_plan_id || ""}
-                          onChange={(v) => setForm({ ...form, monthly_plan_id: v })}
+                          onChange={(v) => {
+                            const plan = monthlyPlans.find((p) => p.id === v);
+                            setForm((f) => {
+                              const next = { ...f, monthly_plan_id: v };
+                              const days = plan?.weekdays?.length
+                                ? [...plan.weekdays].sort((a, b) => a - b)
+                                : null;
+                              if (!days) return next;
+                              const linesMap: SlotMealTypeLines = { ...f.slot_meal_type_lines };
+                              for (const slot of f.meal_slots as ("lunch" | "dinner")[]) {
+                                const seed =
+                                  uniformLinesForSlot(f.slot_meal_type_lines, slot, f.delivery_days) ||
+                                  [
+                                    defaultLine({
+                                      typeId: "regular",
+                                      qty: 1,
+                                      price:
+                                        Number(mealTypes.find((t) => t.id === "regular")?.price ?? 12) ||
+                                        12,
+                                      mealTypeOptions: mealTypes,
+                                    }),
+                                  ];
+                                if (seed.length) linesMap[slot] = broadcastLinesToDays(days, seed);
+                              }
+                              return {
+                                ...next,
+                                delivery_days: days,
+                                slot_meal_type_lines: linesMap,
+                              };
+                            });
+                          }}
                           allowEmpty
                           emptyLabel="Auto-match from schedule"
                           options={monthlyPlans.map((p) => ({

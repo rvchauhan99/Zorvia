@@ -24,6 +24,7 @@ import CursorPaginationBar from "@/components/CursorPaginationBar";
 import SearchableSelect from "@/components/SearchableSelect";
 import CityFilterSelect from "@/components/CityFilterSelect";
 import { CustomerWhatsAppContact } from "@/components/CustomerWhatsAppContact";
+import ExpandableNotes from "@/components/ExpandableNotes";
 import { OPS_DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
 import { useQueryLoad } from "@/hooks/useQueryLoad";
@@ -736,9 +737,14 @@ export default function KitchenPage() {
                         </div>
                       ) : null}
                       {row.notes ? (
-                        <div className="text-xs text-muted-foreground mt-0.5 whitespace-pre-wrap line-clamp-2">
-                          {row.notes}
-                        </div>
+                        <ExpandableNotes
+                          text={String(row.notes)}
+                          title="Customer notes"
+                          quoted={false}
+                          clampLines={2}
+                          testId={`kitchen-pack-notes-${row.delivery_id}`}
+                          className="mt-0.5"
+                        />
                       ) : null}
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5 text-sm shrink-0">

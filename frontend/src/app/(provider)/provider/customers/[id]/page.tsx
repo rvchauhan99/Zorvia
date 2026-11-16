@@ -26,6 +26,7 @@ import MenuWeekPanel from "@/components/MenuWeekPanel";
 import type { MenuWeek } from "@/lib/menuPlan";
 import { fetchWhatsappFeaturesEnabled } from "@/lib/whatsapp-features";
 import CursorPaginationBar from "@/components/CursorPaginationBar";
+import ExpandableNotes from "@/components/ExpandableNotes";
 import { asPageEnvelope, DEFAULT_PAGE_SIZE, type AllowedPageSize } from "@/lib/pagination";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
 
@@ -101,7 +102,7 @@ function timelineDetail(ev: CustomerTimelineEvent, showMoney: boolean) {
     return ev.data?.reference ? String(ev.data.reference) : "Payment";
   }
   if (ev.type === "pause") return `${fmtDate(ev.data?.start || "")} → ${fmtDate(ev.data?.end || "")}`;
-  if (ev.type === "note") return String(ev.data?.notes || "").slice(0, 120) || "—";
+  if (ev.type === "note") return String(ev.data?.notes || "").trim() || "—";
   return ev.date || ev.at || "—";
 }
 
@@ -876,7 +877,19 @@ export default function CustomerDetail() {
                     <li key={`${ev.type}-${ev.at}-${idx}`} className="p-4 flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="font-medium capitalize">{timelineLabel(ev)}</div>
-                        <div className="text-xs text-muted-foreground mt-0.5 truncate">{timelineDetail(ev, showMoney)}</div>
+                        {ev.type === "note" ? (
+                          <ExpandableNotes
+                            text={String(ev.data?.notes || "")}
+                            title="Customer notes"
+                            quoted={false}
+                            testId={`customer-timeline-note-${idx}`}
+                            className="mt-0.5"
+                          />
+                        ) : (
+                          <div className="text-xs text-muted-foreground mt-0.5 truncate">
+                            {timelineDetail(ev, showMoney)}
+                          </div>
+                        )}
                       </div>
                       <div className="text-xs text-muted-foreground shrink-0">{ev.date || (ev.at || "").slice(0, 10) || "—"}</div>
                     </li>

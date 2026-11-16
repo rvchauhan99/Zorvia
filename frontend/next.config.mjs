@@ -12,6 +12,8 @@ const frontendRoot = path.resolve(__dirname);
 
 /** @type {import("next").NextConfig} */
 const nextConfig = {
+  // Standalone output for VPS / Docker (test.mealhq.ca). Vercel ignores harmlessly.
+  output: "standalone",
   turbopack: {
     root: frontendRoot,
   },

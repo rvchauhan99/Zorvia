@@ -21,7 +21,7 @@ Brand: **MealHQ**. Tenancy: one provider = one tenant (`tenant_id = provider_id`
 
 - **Provider admin / driver / viewer** — staff roles on provider users (see API FUNCTIONAL for mutate matrix)
 - **Consumer** — deliveries, cancel cutoff, Interac payments, balance
-- **Platform operator** — tenants, SaaS payments, reports in admin-frontend
+- **Platform operator** — tenants (including deactivate/activate kill-switch), SaaS payments, reports in admin-frontend
 
 ## 3. Billing UI gates (non-negotiable)
 

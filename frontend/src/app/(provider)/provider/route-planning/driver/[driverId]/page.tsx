@@ -419,6 +419,14 @@ export default function DriverRouteDetailPage() {
                         phoneClassName="text-[#5C6570] text-[11px] underline-offset-2 hover:underline print:text-inherit print:no-underline"
                       />
                       <p className="text-[#5C6570] mt-0.5">{stopAddress(s)}</p>
+                      {s.notes?.trim() ? (
+                        <p
+                          className="text-[#5C6570] mt-0.5 italic text-[11px]"
+                          data-testid={`route-driver-stop-notes-${s.id}`}
+                        >
+                          {s.notes.trim()}
+                        </p>
+                      ) : null}
                     </div>
                   </div>
                 </li>

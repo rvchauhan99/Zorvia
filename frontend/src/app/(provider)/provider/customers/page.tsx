@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Plus, MagnifyingGlass, PencilSimple, Trash, PauseCircle, PlayCircle, CheckCircle, XCircle, UploadSimple, EnvelopeSimple, ClockCounterClockwise, DotsThreeVertical } from "@phosphor-icons/react";
+import { Plus, MagnifyingGlass, PencilSimple, Trash, PauseCircle, PlayCircle, CheckCircle, XCircle, UploadSimple, DownloadSimple, EnvelopeSimple, ClockCounterClockwise, DotsThreeVertical } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canMutateAdmin, canSeePricing } from "@/lib/roles";
@@ -85,6 +85,38 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: "inactive", label: "Inactive" },
   { id: "high_balance", label: "High balance" },
 ];
+
+/** Seq/Driver from slot_assignments (route planning), not legacy top-level fields. */
+function customerRouteDisplay(c: any): { seq: string; driver: string } {
+  const sa = c?.slot_assignments || {};
+  const lunch = sa.lunch || {};
+  const dinner = sa.dinner || {};
+  const slots: string[] = Array.isArray(c?.meal_slots) && c.meal_slots.length
+    ? c.meal_slots
+    : ["lunch", "dinner"].filter((s) => sa[s] && (sa[s].delivery_sequence != null || sa[s].driver_id));
+  const parts: string[] = [];
+  const drivers: string[] = [];
+  const showLunch = slots.includes("lunch") || lunch.delivery_sequence != null || lunch.driver_id;
+  const showDinner = slots.includes("dinner") || dinner.delivery_sequence != null || dinner.driver_id;
+  if (showLunch && (lunch.delivery_sequence != null || lunch.driver_name || lunch.driver_id)) {
+    parts.push(`L:${lunch.delivery_sequence != null ? lunch.delivery_sequence : "—"}`);
+    if (lunch.driver_name) drivers.push(`L:${lunch.driver_name}`);
+  }
+  if (showDinner && (dinner.delivery_sequence != null || dinner.driver_name || dinner.driver_id)) {
+    parts.push(`D:${dinner.delivery_sequence != null ? dinner.delivery_sequence : "—"}`);
+    if (dinner.driver_name) drivers.push(`D:${dinner.driver_name}`);
+  }
+  if (parts.length) {
+    return {
+      seq: parts.join(" · "),
+      driver: drivers.length ? drivers.join(" · ") : (c.driver_name || "—"),
+    };
+  }
+  return {
+    seq: c?.delivery_sequence != null ? String(c.delivery_sequence) : "—",
+    driver: c?.driver_name || "—",
+  };
+}
 
 const MENU_ITEM =
   "w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left hover:bg-brand-surface cursor-pointer border-0 bg-transparent";
@@ -338,6 +370,7 @@ export default function Customers() {
   const [openActionsId, setOpenActionsId] = useState<string | null>(null);
   const [showInvite, setShowInvite] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [extraOpen, setExtraOpen] = useState(false);
   const [inviteForm, setInviteForm] = useState({ name: "", email: "" });
   const [scheduleMode, setScheduleMode] = useState<ScheduleMode>("same");
@@ -1153,6 +1186,79 @@ export default function Customers() {
     }
   }
 
+  /** Download the customers matching the current filters as a CSV (all pages, not just this one). */
+  async function exportCustomersCsv() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const rows: any[] = [];
+      let cursor: string | null = null;
+      for (let i = 0; i < 200; i++) {
+        const params = new URLSearchParams();
+        params.set("page_size", "200");
+        if (filter !== "all") params.set("status", filter);
+        if (debouncedQ) params.set("q", debouncedQ);
+        if (filterDriverId) params.set("driver_id", filterDriverId);
+        if (filterMealTypeId) params.set("meal_type_id", filterMealTypeId);
+        if (filterCity) params.set("city", filterCity);
+        if (cursor) params.set("cursor", cursor);
+        const { data } = await api.get(`/customers?${params.toString()}`);
+        const page = asPageEnvelope<any>(data);
+        rows.push(...page.items);
+        if (!page.has_more || !page.next_cursor) break;
+        cursor = page.next_cursor;
+      }
+      if (!rows.length) {
+        toast.info("No customers to export");
+        return;
+      }
+      const cell = (v: unknown) => {
+        let t = String(v ?? "").replace(/\r?\n/g, " ").trim();
+        // Stop spreadsheet apps from running a cell that starts like a formula.
+        if (/^[=@]/.test(t) || /^[+-][^0-9]/.test(t)) t = `'${t}`;
+        return `"${t.replace(/"/g, '""')}"`;
+      };
+      const statusOf = (c: any) =>
+        c.rejected ? "Rejected"
+          : c.pending_approval ? "Pending approval"
+          : !c.active ? "Inactive"
+          : isPaused(c) ? "Paused"
+          : "Active";
+      const planOf = (c: any) =>
+        [
+          monthlyPlans.find((p) => p.id === c.monthly_plan_id)?.name,
+          c.meal_type_id ? mealTypes.find((t) => t.id === c.meal_type_id)?.name || c.meal_type_id : "",
+          customerSlotSummary(c),
+        ].filter(Boolean).join(" · ");
+      const header = ["Name", "Contact", "Address", "Notes", "Meal Plan", "Status"];
+      const lines = [header.map(cell).join(",")];
+      for (const c of rows) {
+        lines.push([
+          c.name,
+          [c.phone, c.email].filter(Boolean).join(" / "),
+          [c.address, c.apartment, c.city, c.province, c.postal_code].filter(Boolean).join(", "),
+          c.notes,
+          planOf(c),
+          statusOf(c),
+        ].map(cell).join(","));
+      }
+      const blob = new Blob(["\uFEFF" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `customers${filter !== "all" ? `-${filter}` : ""}-${kitchenToday}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success(`Exported ${rows.length} customer${rows.length === 1 ? "" : "s"}`);
+    } catch {
+      toast.error("Export failed");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-3 animate-fade-in-up">
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -1198,6 +1304,17 @@ export default function Customers() {
               >
                 <UploadSimple size={16} />
                 <span className="truncate">Import</span>
+              </button>
+              <button
+                type="button"
+                data-testid="export-customers"
+                onClick={exportCustomersCsv}
+                disabled={exporting}
+                className="pill-btn btn-outline gap-1.5 sm:gap-2 flex-1 sm:flex-none shrink-0 cursor-pointer h-11 inline-flex items-center justify-center disabled:opacity-60"
+                title="Export the customers shown (current filters) as CSV"
+              >
+                <DownloadSimple size={16} />
+                <span className="truncate">{exporting ? "Exporting…" : "Export"}</span>
               </button>
               <button
                 data-testid="invite-customer-btn"
@@ -1339,8 +1456,8 @@ export default function Customers() {
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                    <span>Seq <span className="font-mono text-foreground">{c.delivery_sequence != null ? c.delivery_sequence : "—"}</span></span>
-                    <span>Driver <span className="text-foreground">{c.driver_name || "—"}</span></span>
+                    <span>Seq <span className="font-mono text-foreground">{customerRouteDisplay(c).seq}</span></span>
+                    <span>Driver <span className="text-foreground">{customerRouteDisplay(c).driver}</span></span>
                   </div>
                   <div className="flex items-center justify-end -ml-1" onClick={(e) => e.stopPropagation()}>
                     <CustomerRowActions
@@ -1406,11 +1523,11 @@ export default function Customers() {
                           ))}
                         </div>
                       </td>
-                      <td className="px-3 py-2.5 font-mono text-muted-foreground text-center">
-                        {c.delivery_sequence != null ? c.delivery_sequence : "—"}
+                      <td className="px-3 py-2.5 font-mono text-muted-foreground text-center text-xs">
+                        {customerRouteDisplay(c).seq}
                       </td>
                       <td className="px-3 py-2.5 hidden lg:table-cell text-muted-foreground text-xs">
-                        {c.driver_name || "—"}
+                        {customerRouteDisplay(c).driver}
                       </td>
                       <td className="px-3 py-2.5 font-semibold">{customerSlotSummary(c)}</td>
                       {showMoney ? (
