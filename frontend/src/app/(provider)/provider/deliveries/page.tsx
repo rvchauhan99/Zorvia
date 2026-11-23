@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canMutateDeliveries, canMutateAdmin, isDriver as sessionIsDriver } from "@/lib/roles";
-import { fmtDate, todayISO, fmtMealCount, deliveryQty, fmtExtraBadge, fmtMealTypeLabel } from "@/lib/format";
+import { fmtDate, fmtDateTime, todayISO, fmtMealCount, deliveryQty, fmtExtraBadge, fmtMealTypeLabel } from "@/lib/format";
 import { mealSlotBadgeLabel } from "@/lib/mealSlots";
 import StatusPill from "@/components/StatusPill";
 import AppSheet from "@/components/AppSheet";
@@ -456,9 +456,21 @@ export default function Deliveries() {
 
   const today = todayISO();
   const isFutureDate = date > today;
-  const canMarkStatuses = canMutate && !isFutureDate;
+  const canMarkOutcome = canMutate && !isFutureDate;
+  const canCancelPending = canMutate;
 
-  const nextPending = canMarkStatuses ? filtered.find((d) => d.status === "pending") : undefined;
+  const nextPending = canMarkOutcome ? filtered.find((d) => d.status === "pending") : undefined;
+
+  function markedAtLabel(d: { status?: string; marked_at?: string | null }) {
+    if (!d?.marked_at) return null;
+    const when = fmtDateTime(d.marked_at);
+    if (!when) return null;
+    const st = d.status || "pending";
+    if (st === "delivered") return `Delivered at ${when}`;
+    if (st === "cancelled") return `Cancelled at ${when}`;
+    if (st === "missed") return `Missed at ${when}`;
+    return `Marked at ${when}`;
+  }
 
   const mealsToday = summary.meals || 0;
   async function printLabels() {
@@ -581,11 +593,11 @@ export default function Deliveries() {
 
       {isFutureDate ? (
         <p data-testid="future-date-hint" className="text-sm text-muted-foreground">
-          Viewing a future date — you can plan the route, but marking delivered / missed / cancelled is only allowed for today or past dates.
+          Viewing a future date — you can plan the route and cancel (skip) pending stops. Marking delivered or missed is only for today or past dates.
         </p>
       ) : null}
 
-      {nextPending && canMarkStatuses ? (
+      {nextPending && canMarkOutcome ? (
         <div data-testid="next-stop" className="sm:hidden card-tinted p-3 border-primary/30 ring-1 ring-primary/20 bg-white">
           <div className="label-overline">Next stop</div>
           <CustomerWhatsAppContact
@@ -822,7 +834,7 @@ export default function Deliveries() {
                     <span className="ml-1.5 text-primary font-medium text-xs">{fmtExtraBadge(d)}</span>
                   ) : null}
                 </div>
-                {canMarkStatuses && d.status === "pending" ? (
+                {d.status === "pending" && (canMarkOutcome || canCancelPending || canAddExtra) ? (
                   <div className="flex items-center gap-2 w-full sm:w-auto">
                     {canAddExtra ? (
                       <button
@@ -836,24 +848,37 @@ export default function Deliveries() {
                         <span className="hidden sm:inline">Adjust</span>
                       </button>
                     ) : null}
-                    <button data-testid={`mark-delivered-${d.id}`} onClick={() => setDeliverTarget(d)} className="flex-1 sm:flex-none h-11 min-h-[44px] px-4 rounded-full bg-secondary text-secondary-foreground text-sm font-semibold active:scale-95 transition-transform inline-flex items-center justify-center gap-1 cursor-pointer hover:bg-brand-sageDark">
-                      <CheckCircle size={16} weight="bold" /> Delivered
-                    </button>
-                    <button data-testid={`mark-missed-${d.id}`} onClick={() => mark(d.id, "missed")} className="icon-btn icon-btn-danger" aria-label="Missed">
-                      <XCircle size={18} />
-                    </button>
-                    <button data-testid={`mark-cancelled-${d.id}`} onClick={() => mark(d.id, "cancelled")} className="icon-btn icon-btn-danger" aria-label="Cancel">
-                      <Prohibit size={18} />
-                    </button>
+                    {canMarkOutcome ? (
+                      <>
+                        <button data-testid={`mark-delivered-${d.id}`} onClick={() => setDeliverTarget(d)} className="flex-1 sm:flex-none h-11 min-h-[44px] px-4 rounded-full bg-secondary text-secondary-foreground text-sm font-semibold active:scale-95 transition-transform inline-flex items-center justify-center gap-1 cursor-pointer hover:bg-brand-sageDark">
+                          <CheckCircle size={16} weight="bold" /> Delivered
+                        </button>
+                        <button data-testid={`mark-missed-${d.id}`} onClick={() => mark(d.id, "missed")} className="icon-btn icon-btn-danger" aria-label="Missed">
+                          <XCircle size={18} />
+                        </button>
+                      </>
+                    ) : null}
+                    {canCancelPending ? (
+                      <button data-testid={`mark-cancelled-${d.id}`} onClick={() => mark(d.id, "cancelled")} className="icon-btn icon-btn-danger" aria-label="Cancel">
+                        <Prohibit size={18} />
+                      </button>
+                    ) : null}
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2 flex-wrap justify-end">
-                    {d.delivery_image_url || d.has_delivery_image ? (
-                      <DeliveryProofThumbButton delivery={d} onView={setViewingProof} />
-                    ) : null}
-                    <StatusPill status={d.status} />
-                    {canMutate && !isFutureDate && d.status !== "pending" && d.status !== "paused" ? (
-                      <button data-testid={`reset-${d.id}`} onClick={() => mark(d.id, "pending")} className="min-h-[44px] px-3 text-xs text-muted-foreground hover:text-foreground cursor-pointer transition-colors">Undo</button>
+                  <div className="flex flex-col items-end gap-1">
+                    <div className="flex items-center gap-2 flex-wrap justify-end">
+                      {d.delivery_image_url || d.has_delivery_image ? (
+                        <DeliveryProofThumbButton delivery={d} onView={setViewingProof} />
+                      ) : null}
+                      <StatusPill status={d.status} />
+                      {canMutate && d.status !== "pending" && d.status !== "paused" && (!isFutureDate || d.status === "cancelled") ? (
+                        <button data-testid={`reset-${d.id}`} onClick={() => mark(d.id, "pending")} className="min-h-[44px] px-3 text-xs text-muted-foreground hover:text-foreground cursor-pointer transition-colors">Undo</button>
+                      ) : null}
+                    </div>
+                    {markedAtLabel(d) ? (
+                      <div className="text-[11px] text-muted-foreground" data-testid={`del-marked-at-${d.id}`}>
+                        {markedAtLabel(d)}
+                      </div>
                     ) : null}
                   </div>
                 )}

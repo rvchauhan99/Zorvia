@@ -4,11 +4,11 @@ import React, { useCallback, useEffect, useState, useTransition } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
-import { ArrowLeft, ForkKnife, PencilSimple, Plus } from "@phosphor-icons/react";
+import { ArrowLeft, ForkKnife, PencilSimple, Plus, Prohibit } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canMutateAdmin, canSeePricing } from "@/lib/roles";
-import { fmtCAD, fmtDate, WEEKDAYS, todayISO, todayISOInTimezone, fmtMealCount, fmtExtraBadge } from "@/lib/format";
+import { fmtCAD, fmtDate, fmtDateTime, WEEKDAYS, todayISO, todayISOInTimezone, fmtMealCount, fmtExtraBadge } from "@/lib/format";
 import StatusPill from "@/components/StatusPill";
 import RecordPaymentSheet from "@/components/RecordPaymentSheet";
 import ExtraMealsSheet from "@/components/ExtraMealsSheet";
@@ -138,6 +138,7 @@ export default function CustomerDetail() {
   const [viewingProof, setViewingProof] = useState<DeliveryProofTarget | null>(null);
   const [customerDeliveries, setCustomerDeliveries] = useState<any[]>([]);
   const [deliveriesLoading, setDeliveriesLoading] = useState(false);
+  const [cancellingDeliveryId, setCancellingDeliveryId] = useState<string | null>(null);
   const deliveriesPaging = useCursorPagination({ initialPageSize: DEFAULT_PAGE_SIZE });
   const [customerPayments, setCustomerPayments] = useState<any[]>([]);
   const [paymentsLoading, setPaymentsLoading] = useState(false);
@@ -299,6 +300,33 @@ export default function CustomerDetail() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- deliveriesPaging.applyPageResult is stable
   }, [id, deliveriesPaging.pageSize]);
+
+  async function cancelCustomerDelivery(deliveryId: string) {
+    if (!canMutate || cancellingDeliveryId) return;
+    setCancellingDeliveryId(deliveryId);
+    try {
+      const { data } = await api.patch(`/deliveries/${deliveryId}`, { status: "cancelled" });
+      setCustomerDeliveries((prev) =>
+        prev.map((d) => (d.id === deliveryId ? { ...d, ...data } : d)),
+      );
+      toast.success("Delivery cancelled");
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || "Could not cancel delivery");
+    } finally {
+      setCancellingDeliveryId(null);
+    }
+  }
+
+  function deliveryMarkedAtLabel(d: { status?: string; marked_at?: string | null }) {
+    if (!d?.marked_at) return null;
+    const when = fmtDateTime(d.marked_at);
+    if (!when) return null;
+    const st = d.status || "pending";
+    if (st === "delivered") return `Delivered at ${when}`;
+    if (st === "cancelled") return `Cancelled at ${when}`;
+    if (st === "missed") return `Missed at ${when}`;
+    return `Marked at ${when}`;
+  }
 
   const fetchPayments = useCallback(async (opts: { cursor?: string | null } = {}) => {
     if (!id) return;
@@ -925,9 +953,14 @@ export default function CustomerDetail() {
                 ) : (
                   customerDeliveries.map((d: any) => {
                     const badge = fmtExtraBadge(d);
+                    const markedLabel = deliveryMarkedAtLabel(d);
+                    const canCancelFutureOrToday =
+                      canMutate
+                      && (d.status || "pending") === "pending"
+                      && String(d.delivery_date || "") >= kitchenToday;
                     return (
-                      <li key={d.id} className="p-4 flex items-center gap-3">
-                        <div className="flex-1">
+                      <li key={d.id} className="p-4 flex items-center gap-3" data-testid={`cust-del-row-${d.id}`}>
+                        <div className="flex-1 min-w-0">
                           <div className="font-medium">{fmtDate(d.delivery_date)}</div>
                           <div className="text-xs text-muted-foreground">
                             {fmtMealCount(d)}
@@ -937,12 +970,30 @@ export default function CustomerDetail() {
                               </span>
                             ) : null}
                           </div>
+                          {markedLabel ? (
+                            <div className="text-[11px] text-muted-foreground mt-0.5" data-testid={`cust-del-marked-at-${d.id}`}>
+                              {markedLabel}
+                            </div>
+                          ) : null}
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           {d.delivery_image_url || d.has_delivery_image ? (
                             <DeliveryProofThumbButton delivery={d} onView={setViewingProof} compact />
                           ) : null}
                           <StatusPill status={d.status} />
+                          {canCancelFutureOrToday ? (
+                            <button
+                              type="button"
+                              data-testid={`cust-del-cancel-${d.id}`}
+                              disabled={cancellingDeliveryId === d.id}
+                              onClick={() => cancelCustomerDelivery(d.id)}
+                              className="h-11 min-h-[44px] px-3 rounded-full border border-brand-border bg-white text-sm inline-flex items-center gap-1 cursor-pointer hover:bg-brand-surface disabled:opacity-50"
+                              aria-label="Cancel delivery"
+                            >
+                              <Prohibit size={16} />
+                              <span className="hidden sm:inline">Cancel</span>
+                            </button>
+                          ) : null}
                         </div>
                       </li>
                     );
