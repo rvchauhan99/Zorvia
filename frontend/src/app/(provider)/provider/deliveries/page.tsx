@@ -853,14 +853,14 @@ export default function Deliveries() {
                         <button data-testid={`mark-delivered-${d.id}`} onClick={() => setDeliverTarget(d)} className="flex-1 sm:flex-none h-11 min-h-[44px] px-4 rounded-full bg-secondary text-secondary-foreground text-sm font-semibold active:scale-95 transition-transform inline-flex items-center justify-center gap-1 cursor-pointer hover:bg-brand-sageDark">
                           <CheckCircle size={16} weight="bold" /> Delivered
                         </button>
-                        <button data-testid={`mark-missed-${d.id}`} onClick={() => mark(d.id, "missed")} className="icon-btn icon-btn-danger" aria-label="Missed">
-                          <XCircle size={18} />
+                        <button data-testid={`mark-missed-${d.id}`} onClick={() => mark(d.id, "missed")} className="h-11 min-h-[44px] px-3 rounded-full inline-flex items-center justify-center gap-1 text-sm font-medium cursor-pointer transition-colors icon-btn-danger" aria-label="Missed" title="Driver went but could not deliver">
+                          <XCircle size={16} className="hidden sm:inline" /> Missed
                         </button>
                       </>
                     ) : null}
                     {canCancelPending ? (
-                      <button data-testid={`mark-cancelled-${d.id}`} onClick={() => mark(d.id, "cancelled")} className="icon-btn icon-btn-danger" aria-label="Cancel">
-                        <Prohibit size={18} />
+                      <button data-testid={`mark-cancelled-${d.id}`} onClick={() => mark(d.id, "cancelled")} className="h-11 min-h-[44px] px-3 rounded-full inline-flex items-center justify-center gap-1 text-sm font-medium cursor-pointer transition-colors icon-btn-danger" aria-label="Cancel" title="Skip this day: no delivery">
+                        <Prohibit size={16} className="hidden sm:inline" /> Cancel
                       </button>
                     ) : null}
                   </div>
