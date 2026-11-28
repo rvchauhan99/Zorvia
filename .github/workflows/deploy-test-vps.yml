@@ -18,8 +18,8 @@ jobs:
     name: Deploy frontend to test VPS
     runs-on: ubuntu-latest
     env:
-      VPS_HOST: ${{ vars.TEST_VPS_HOST || '167.114.117.71' }}
-      VPS_SSH_PORT: ${{ vars.TEST_VPS_SSH_PORT || '20085' }}
+      VPS_HOST: ${{ vars.TEST_VPS_HOST || '178.92.120.191' }}
+      VPS_SSH_PORT: ${{ vars.TEST_VPS_SSH_PORT || '22' }}
       VPS_USER: ${{ vars.TEST_VPS_USER || 'root' }}
       VPS_BASE: ${{ vars.TEST_VPS_BASE || '/opt/mealhq-test' }}
       NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
@@ -34,7 +34,7 @@ jobs:
       - name: Setup SSH agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
-          # Deploy key must be authorized on 167.114.117.71:20085. Prefer TEST_VPS_*.
+          # Deploy key must be authorized on 178.92.120.191:22. Prefer TEST_VPS_*.
           ssh-private-key: ${{ secrets.TEST_VPS_SSH_PRIVATE_KEY || secrets.VULTR_SSH_PRIVATE_KEY }}
 
       - name: Add test VPS host key

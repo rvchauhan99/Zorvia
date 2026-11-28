@@ -1,0 +1,37 @@
+# Repo-root context guard. Real images build from frontend/ (its own .dockerignore);
+# if anything ever builds from the root, local ops / tests / secrets still stay out.
+
+**/node_modules/
+**/.next/
+**/.vercel/
+**/.DS_Store
+
+.env
+**/.env
+**/.env.*
+!**/.env.example
+*.pem
+*.key
+*credentials*.json
+
+scripts/
+tests/
+test_reports/
+testdata/
+**/testdata/
+test_result.md
+memory/
+**/*.test.*
+**/*.spec.*
+*.csv
+*.xlsx
+
+docs/
+ai-context/
+**/*.md
+.cursor/
+.vscode/
+.idea/
+.git/
+.github/
+*.code-workspace

@@ -12,6 +12,7 @@ import { useQueryLoad } from "@/hooks/useQueryLoad";
 import StatusPill from "@/components/StatusPill";
 import AppSheet from "@/components/AppSheet";
 import RecordPaymentSheet from "@/components/RecordPaymentSheet";
+import { PaymentScreenshotSheet, hasScreenshot } from "@/components/PaymentScreenshotViewer";
 import CustomerAsyncSelect from "@/components/CustomerAsyncSelect";
 import CursorPaginationBar from "@/components/CursorPaginationBar";
 import { StatusFilterCards } from "@/components/StatusFilterCards";
@@ -476,7 +477,7 @@ export default function Payments() {
                       </td>
                       <td className="p-3 align-middle text-right">
                         <div className="flex items-center justify-end gap-1.5 flex-wrap">
-                          {p.screenshot_url && (
+                          {hasScreenshot(p) && (
                             <button
                               data-testid={`view-shot-${p.id}`}
                               onClick={() => setViewing(p)}
@@ -579,14 +580,11 @@ export default function Payments() {
         </p>
       </AppSheet>
 
-      <AppSheet open={!!viewing} onClose={() => setViewing(null)} title={viewing ? `${viewing.customer_name}${showMoney ? ` · ${fmtCAD(viewing.amount)}` : ""}` : "Screenshot"} size="2xl" showHandle={false}>
-        <p className="text-xs text-muted-foreground mb-3">Ref {viewing?.reference}</p>
-        <div className="rounded-xl overflow-hidden bg-brand-surface flex items-center justify-center p-2">
-          {viewing?.screenshot_url ? (
-            <img data-testid="screenshot-img" src={viewing.screenshot_url} alt="payment screenshot" className="max-w-full max-h-[60vh] object-contain" />
-          ) : null}
-        </div>
-      </AppSheet>
+      <PaymentScreenshotSheet
+        payment={viewing}
+        onClose={() => setViewing(null)}
+        title={viewing ? `${viewing.customer_name}${showMoney ? ` · ${fmtCAD(viewing.amount)}` : ""}` : "Screenshot"}
+      />
 
       <AppSheet
         open={!!verifyFor && !!verifyHints?.showChoice}

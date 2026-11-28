@@ -88,7 +88,7 @@ export default function Deliveries() {
   const [extraTarget, setExtraTarget] = useState<any | null>(null);
   const [extraBusy, setExtraBusy] = useState(false);
   const [quickExtraOpen, setQuickExtraOpen] = useState(false);
-  const [mealTypes, setMealTypes] = useState<{ id: string; name: string; price: number }[]>([]);
+  const [mealTypes, setMealTypes] = useState<{ id: string; name: string; price: number; is_active?: boolean }[]>([]);
   const [deliverTarget, setDeliverTarget] = useState<any | null>(null);
   const [viewingProof, setViewingProof] = useState<DeliveryProofTarget | null>(null);
   const [summary, setSummary] = useState<Record<string, number>>({
@@ -240,6 +240,7 @@ export default function Deliveries() {
               id: String(t.id),
               name: String(t.name || t.id),
               price: Number(t.price) || 0,
+              is_active: t.is_active !== false,
             }))
           : [];
         setMealTypes(types);

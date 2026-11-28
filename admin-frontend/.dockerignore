@@ -1,0 +1,46 @@
+# Build context: admin-frontend/. Keep local ops, tests, secrets and host artifacts out of any image.
+
+# Host artifacts
+node_modules/
+.next/
+out/
+.vercel/
+.turbo/
+*.tsbuildinfo
+npm-debug.log*
+.DS_Store
+
+# Secrets / local env
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*credentials*.json
+
+# Tests / QA / reports / seeds (NEVER in an image)
+tests/
+test/
+e2e/
+__tests__/
+**/*.test.*
+**/*.spec.*
+coverage/
+test-results/
+test_reports/
+playwright-report/
+testdata/
+*.csv
+*.xlsx
+scripts/
+
+# Docs / agent / IDE / container meta
+**/*.md
+docs/
+memory/
+.cursor/
+.vscode/
+.idea/
+.git/
+Dockerfile*
+.dockerignore

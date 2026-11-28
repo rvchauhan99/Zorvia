@@ -1,6 +1,6 @@
 # MealHQ frontends — Functional (FE-safe)
 
-**Last updated:** 2026-09-20  
+**Last updated:** 2026-11-27  
 **Canonical product SoT:** sibling [`mealhq-api/docs/FUNCTIONAL.md`](../../mealhq-api/docs/FUNCTIONAL.md)  
 **When this file and the API FUNCTIONAL disagree, the API file wins.**
 
@@ -41,6 +41,10 @@ Detail: API `CYCLE_SUBSCRIPTION.md` / `MONTHLY_BILLING.md`.
 - WhatsApp product UI gated by backend `WHATSAPP_FEATURES_ENABLED`
 - Do **not** invent Phase 2: notification inbox UI, WhatsApp chat inbox
 - Provider shell: prefer Shell-owned subscription + auth session; avoid idle `Link` prefetch/`_rsc` storms (`prefetch={false}` on More/CTAs) so dashboard loads stay lean
+- **Images are never in list payloads.** Lists carry `has_delivery_image` / `has_screenshot`; show a View action only when true and fetch the file on open (`DeliveryProofViewer`, `PaymentScreenshotViewer` → `GET /payments/{id}/screenshot`). Do not read `screenshot_url` / `delivery_image_url` from list rows
+- **Customer 360 timeline** is paged (`page_size`+`cursor`, newest 50 first) with **Load more** (`customer-timeline-load-more`, `payment-history-load-more`); never slice a full fetch
+- **Customer lists** use the `page_size`+`cursor` envelope (or `limit` for pickers). Bare `GET /customers` is legacy, capped at 500 with `X-Result-Truncated`
+- Image upload can return **503** “Image storage unavailable, try again” — surface the API message; never retry by sending base64
 
 ## 5. Route planning UI
 

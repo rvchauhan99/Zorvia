@@ -66,6 +66,7 @@ export default function AddExtraMealSheet({
               id: String(t.id),
               name: String(t.name || t.id),
               price: Number(t.price) || 0,
+              is_active: t.is_active !== false,
             }))
           : [];
         if (!cancelled) {

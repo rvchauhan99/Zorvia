@@ -3,7 +3,15 @@
 export const MAX_MEAL_TYPE_LINES = 5;
 export const MAX_LINE_TOTAL_QTY = 20;
 
-export type MealTypeOption = { id: string; name: string; price: number };
+export type MealTypeOption = { id: string; name: string; price: number; is_active?: boolean };
+
+/** Types a user may pick: active ones, plus the currently selected id even if deactivated. */
+export function pickableMealTypes<T extends { id: string; is_active?: boolean }>(
+  options: T[],
+  currentId?: string | null,
+): T[] {
+  return options.filter((t) => t.is_active !== false || t.id === currentId);
+}
 
 export type MealTypeLine = {
   meal_type_id: string;

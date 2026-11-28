@@ -10,8 +10,8 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-ARG BACKEND_URL=https://api-test.mealhq.ca
-ARG NEXT_PUBLIC_BACKEND_URL=https://api-test.mealhq.ca
+ARG BACKEND_URL=http://api:8080
+ARG NEXT_PUBLIC_BACKEND_URL=https://test.mealhq.ca
 ENV BACKEND_URL=$BACKEND_URL \
     NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL \
     NEXT_TELEMETRY_DISABLED=1

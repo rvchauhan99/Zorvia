@@ -18,6 +18,7 @@ import {
   MAX_LINE_TOTAL_QTY,
   formatMealTypeLinesBreakdown,
   linesTotalQty,
+  pickableMealTypes,
   priceForTypeId,
 } from "@/lib/mealTypeLines";
 
@@ -307,10 +308,11 @@ export default function ExtraMealsSheet({
       const total = slotQty(cur);
       if (total >= MAX_QTY) return prev;
       const used = new Set(cur.lines.map((ln) => ln.meal_type_id));
+      const activeTypes = pickableMealTypes(mealTypes);
       const nextType =
-        mealTypes.find((t) => t.id === suggestedTypeId && !used.has(t.id)) ||
-        mealTypes.find((t) => !used.has(t.id)) ||
-        mealTypes[0] ||
+        activeTypes.find((t) => t.id === suggestedTypeId && !used.has(t.id)) ||
+        activeTypes.find((t) => !used.has(t.id)) ||
+        activeTypes[0] ||
         { id: "regular", name: "Regular", price: crmPrice || 12 };
       const price = nextType.price || crmPrice || 12;
       return {
@@ -695,7 +697,7 @@ export default function ExtraMealsSheet({
                                 });
                               }}
                               disabled={locked}
-                              options={mealTypes.map((t) => ({
+                              options={pickableMealTypes(mealTypes, ln.meal_type_id).map((t) => ({
                                 value: t.id,
                                 label: `${t.name} (${fmtCAD(t.price)})`,
                               }))}

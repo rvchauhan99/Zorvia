@@ -20,6 +20,7 @@ import {
   linesTotalQty,
   linesTotalAmount,
   normalizeLines,
+  pickableMealTypes,
   priceForTypeId,
   uniformLinesForSlot,
 } from "@/lib/mealTypeLines";
@@ -150,8 +151,9 @@ function LinesEditor({
     const remaining = MAX_LINE_TOTAL_QTY - total;
     if (remaining < 1) return;
     const used = new Set(lines.map((ln) => ln.meal_type_id));
+    const activeOptions = pickableMealTypes(mealTypeOptions);
     const nextType =
-      mealTypeOptions.find((t) => !used.has(t.id)) || mealTypeOptions[0] || { id: "regular", name: "Regular", price: 12 };
+      activeOptions.find((t) => !used.has(t.id)) || activeOptions[0] || { id: "regular", name: "Regular", price: 12 };
     setQtyDrafts({});
     setPriceDrafts({});
     onChange(
@@ -190,7 +192,10 @@ function LinesEditor({
               }}
               className={`${inputClassName} text-xs sm:text-sm`}
             >
-              {(mealTypeOptions.length ? mealTypeOptions : [{ id: ln.meal_type_id, name: ln.meal_type_id, price: ln.unit_price }]).map(
+              {(mealTypeOptions.length
+                ? pickableMealTypes(mealTypeOptions, ln.meal_type_id)
+                : [{ id: ln.meal_type_id, name: ln.meal_type_id, price: ln.unit_price }]
+              ).map(
                 (t) => (
                   <option key={t.id} value={t.id}>
                     {t.name}

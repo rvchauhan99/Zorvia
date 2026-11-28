@@ -69,6 +69,24 @@ function percent(value?: number) {
   return `${Number(value || 0).toFixed(1)}%`;
 }
 
+type TimelinePage = { events: CustomerTimelineEvent[]; next_cursor?: string | null; has_more?: boolean };
+
+function TimelineLoadMore({ loading, onClick, testId }: { loading: boolean; onClick: () => void; testId: string }) {
+  return (
+    <div className="p-3 border-t border-brand-border">
+      <button
+        type="button"
+        data-testid={testId}
+        disabled={loading}
+        onClick={onClick}
+        className="pill-btn btn-outline w-full h-11 disabled:opacity-50"
+      >
+        {loading ? "Loading…" : "Load more"}
+      </button>
+    </div>
+  );
+}
+
 function timelineLabel(ev: CustomerTimelineEvent) {
   if (ev.comment) return ev.comment.split(" · ")[0] || ev.comment;
   if (ev.type === "delivery") return `Delivery ${ev.data?.status || ""}`.trim();
@@ -128,13 +146,15 @@ export default function CustomerDetail() {
   const [mealSlot, setMealSlot] = useState<MealSlotFilter>("all");
   const [insights, setInsights] = useState<CustomerInsights | null>(null);
   const [timeline, setTimeline] = useState<CustomerTimelineEvent[]>([]);
+  const [timelineCursor, setTimelineCursor] = useState<string | null>(null);
+  const [timelineLoadingMore, setTimelineLoadingMore] = useState(false);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [recordOpen, setRecordOpen] = useState(false);
   const [extraOpen, setExtraOpen] = useState(false);
   const [extraBusy, setExtraBusy] = useState(false);
   const [waEnabled, setWaEnabled] = useState(false);
-  const [mealTypes, setMealTypes] = useState<{ id: string; name: string; price: number }[]>([]);
+  const [mealTypes, setMealTypes] = useState<{ id: string; name: string; price: number; is_active?: boolean }[]>([]);
   const [viewingProof, setViewingProof] = useState<DeliveryProofTarget | null>(null);
   const [customerDeliveries, setCustomerDeliveries] = useState<any[]>([]);
   const [deliveriesLoading, setDeliveriesLoading] = useState(false);
@@ -188,6 +208,7 @@ export default function CustomerDetail() {
             id: String(t.id),
             name: String(t.name || t.id),
             price: Number(t.price) || 0,
+            is_active: t.is_active !== false,
           }))
         : [];
       setMealTypes(types);
@@ -272,16 +293,42 @@ export default function CustomerDetail() {
         api.get<CustomerInsights>(`/customers/${id}/insights`, {
           params: insightsParams({ period: nextPeriod, start, end, meal_slot: slot }),
         }),
-        api.get<{ events: CustomerTimelineEvent[] }>(`/customers/${id}/timeline`),
+        api.get<TimelinePage>(`/customers/${id}/timeline`),
       ]);
       setInsights(insightsRes.data);
       setTimeline(timelineRes.data.events || []);
+      setTimelineCursor(timelineRes.data.next_cursor ?? null);
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || "Failed to load analysis");
     } finally {
       setAnalysisLoading(false);
     }
   }
+
+  const reloadTimeline = useCallback(() => {
+    api.get<TimelinePage>(`/customers/${id}/timeline`)
+      .then((res) => {
+        setTimeline(res.data.events || []);
+        setTimelineCursor(res.data.next_cursor ?? null);
+      })
+      .catch(() => {});
+  }, [id]);
+
+  const loadMoreTimeline = useCallback(async () => {
+    if (!timelineCursor || timelineLoadingMore) return;
+    setTimelineLoadingMore(true);
+    try {
+      const { data } = await api.get<TimelinePage>(`/customers/${id}/timeline`, {
+        params: { cursor: timelineCursor },
+      });
+      setTimeline((prev) => [...prev, ...(data.events || [])]);
+      setTimelineCursor(data.next_cursor ?? null);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || "Failed to load more activity");
+    } finally {
+      setTimelineLoadingMore(false);
+    }
+  }, [id, timelineCursor, timelineLoadingMore]);
 
   const fetchDeliveries = useCallback(async (opts: { cursor?: string | null } = {}) => {
     if (!id) return;
@@ -379,9 +426,7 @@ export default function CustomerDetail() {
       fetchPayments({ cursor: null });
       // Per-meal: also refresh timeline for mixed meals+payments ledger
       if (!isFlatBillingMode(c?.billing?.billing_mode)) {
-        api.get<{ events: CustomerTimelineEvent[] }>(`/customers/${id}/timeline`)
-          .then((res) => setTimeline(res.data.events || []))
-          .catch(() => {});
+        reloadTimeline();
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset+fetch when tab opens or page size changes
@@ -901,7 +946,7 @@ export default function CustomerDetail() {
                 {timeline.length === 0 ? (
                   <li className="p-4 text-center text-sm text-muted-foreground">No activity yet.</li>
                 ) : (
-                  timeline.slice(0, 40).map((ev, idx) => (
+                  timeline.map((ev, idx) => (
                     <li key={`${ev.type}-${ev.at}-${idx}`} className="p-4 flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="font-medium capitalize">{timelineLabel(ev)}</div>
@@ -925,6 +970,9 @@ export default function CustomerDetail() {
                 )}
               </ul>
             )}
+            {timelineCursor ? (
+              <TimelineLoadMore loading={timelineLoadingMore} onClick={loadMoreTimeline} testId="customer-timeline-load-more" />
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -1132,6 +1180,9 @@ export default function CustomerDetail() {
                 )}
               </ul>
             )}
+            {!flatBilling && timelineCursor ? (
+              <TimelineLoadMore loading={timelineLoadingMore} onClick={loadMoreTimeline} testId="payment-history-load-more" />
+            ) : null}
           </div>
           {flatBilling ? (
             <CursorPaginationBar
@@ -1163,9 +1214,7 @@ export default function CustomerDetail() {
               load();
               const c2 = paymentsPaging.currentPageIndex > 0 ? paymentsPaging.cursorHistory[paymentsPaging.currentPageIndex - 1] ?? null : null;
               fetchPayments({ cursor: c2 });
-              api.get<{ events: CustomerTimelineEvent[] }>(`/customers/${id}/timeline`)
-                .then((res) => setTimeline(res.data.events || []))
-                .catch(() => {});
+              reloadTimeline();
             }}
           />
         </div>

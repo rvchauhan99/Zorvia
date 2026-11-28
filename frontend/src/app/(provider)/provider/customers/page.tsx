@@ -375,7 +375,7 @@ export default function Customers() {
   const [inviteForm, setInviteForm] = useState({ name: "", email: "" });
   const [scheduleMode, setScheduleMode] = useState<ScheduleMode>("same");
   const [staff, setStaff] = useState<any[]>([]);
-  const [mealTypes, setMealTypes] = useState<{ id: string; name: string; price: number }[]>([
+  const [mealTypes, setMealTypes] = useState<{ id: string; name: string; price: number; is_active?: boolean }[]>([
     { id: "regular", name: "Regular", price: 12 },
     { id: "jain", name: "Jain", price: 12 },
     { id: "fasting", name: "Fasting", price: 12 },
@@ -678,6 +678,7 @@ export default function Customers() {
             id: t.id,
             name: t.name,
             price: Number(t.price) || 12,
+            is_active: t.is_active !== false,
           }))
         );
       } else if (prov?.meal_price_default != null) {

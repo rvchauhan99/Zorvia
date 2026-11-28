@@ -11,3 +11,4 @@ Detail: [AGENTS.md](../AGENTS.md), [docs/INDEX.md](../docs/INDEX.md), sibling `m
 7. UI Done = build + Browser MCP (≤5 calls) on the focus URL; start local servers if down.
 8. Client seeds / kitchen handbooks / one-off QA → `.gitignore` + `.dockerignore` same change.
 9. Open product via `MINE/MealHQ.code-workspace` (API + Web).
+10. Lists never carry image bytes: use `has_delivery_image` / `has_screenshot` + lazy viewers (`DeliveryProofViewer`, `PaymentScreenshotViewer`). Timelines and customer lists are cursor-paged — Load more, never slice a full fetch. API rules: `mealhq-api/docs/TECHNICAL.md#data-access-rules`.

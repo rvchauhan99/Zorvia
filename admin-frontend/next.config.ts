@@ -7,6 +7,7 @@ const backend =
   "http://127.0.0.1:8000";
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   turbopack: {
     root: path.resolve(__dirname),
   },

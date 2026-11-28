@@ -16,7 +16,8 @@ import {
   Copy,
   CalendarCheck,
   UserPlus,
-  Key
+  Key,
+  ArrowCounterClockwise
 } from "@phosphor-icons/react";
 import { todayISO } from "@/lib/format";
 import { useAuth } from "@/lib/auth";
@@ -199,7 +200,7 @@ export default function Settings() {
 
   const weekdayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-  const mealTypes: { id: string; name: string; price: number | string; is_system?: boolean }[] =
+  const mealTypes: { id: string; name: string; price: number | string; is_system?: boolean; is_active?: boolean }[] =
     Array.isArray(prov.meal_types) && prov.meal_types.length
       ? prov.meal_types
       : [
@@ -216,23 +217,26 @@ export default function Settings() {
     setMealTypes(mealTypes.map((t) => (t.id === id ? { ...t, price } : t)));
   }
 
-  function updMealTypeName(id: string, name: string) {
-    setMealTypes(mealTypes.map((t) => (t.id === id && !t.is_system ? { ...t, name } : t)));
-  }
-
   function addCustomMealType() {
-    const id = `custom_${Math.random().toString(36).slice(2, 10)}`;
-    const seed = Number(mealTypes.find((t) => t.id === "regular")?.price ?? prov.meal_price_default ?? 12) || 12;
-    setMealTypes([...mealTypes, { id, name: "Custom", price: seed, is_system: false }]);
-  }
-
-  function removeMealType(id: string) {
-    const row = mealTypes.find((t) => t.id === id);
-    if (!row || row.is_system || id === "regular" || id === "jain" || id === "fasting") {
-      toast.error("System meal types cannot be removed");
+    const name = (window.prompt("Meal type name (cannot be changed later)") || "").trim();
+    if (!name) return;
+    if (mealTypes.some((t) => t.name.trim().toLowerCase() === name.toLowerCase())) {
+      toast.error("A meal type with this name already exists");
       return;
     }
-    setMealTypes(mealTypes.filter((t) => t.id !== id));
+    const id = `custom_${Math.random().toString(36).slice(2, 10)}`;
+    const seed = Number(mealTypes.find((t) => t.id === "regular")?.price ?? prov.meal_price_default ?? 12) || 12;
+    setMealTypes([...mealTypes, { id, name, price: seed, is_system: false, is_active: true }]);
+  }
+
+  function setMealTypeActive(id: string, active: boolean) {
+    const row = mealTypes.find((t) => t.id === id);
+    if (!row || row.is_system || id === "regular" || id === "jain" || id === "fasting") {
+      toast.error("System meal types cannot be deactivated");
+      return;
+    }
+    setMealTypes(mealTypes.map((t) => (t.id === id ? { ...t, is_active: active } : t)));
+    toast.success(active ? "Meal type reactivated — save to apply" : "Meal type deactivated — save to apply");
   }
 
   const closedDates: string[] = [...(prov.settings?.closed_dates || [])].sort();
@@ -259,6 +263,7 @@ export default function Settings() {
         name: t.name,
         price: Number(t.price),
         is_system: !!t.is_system || ["regular", "jain", "fasting"].includes(t.id),
+        is_active: t.is_active !== false,
       }));
       for (const t of typesPayload) {
         if (!t.name?.trim() || !(t.price > 0)) {
@@ -718,20 +723,31 @@ export default function Settings() {
                 <div className="flex flex-col gap-2.5">
                   {mealTypes.map((t) => {
                     const locked = !!t.is_system || ["regular", "jain", "fasting"].includes(t.id);
+                    const inactive = !locked && t.is_active === false;
                     return (
                       <div
                         key={t.id}
-                        className="flex flex-col sm:flex-row gap-3 sm:items-center p-3 rounded-xl border border-brand-border bg-white"
+                        className={`flex flex-col sm:flex-row gap-3 sm:items-center p-3 rounded-xl border border-brand-border ${inactive ? "bg-brand-surface/60 opacity-70" : "bg-white"}`}
                         data-testid={`s-meal-type-${t.id}`}
                       >
-                        <input
-                          data-testid={`s-meal-type-name-${t.id}`}
-                          className={`${inputClass} flex-1 font-medium`}
-                          value={t.name}
-                          disabled={locked}
-                          onChange={(e) => updMealTypeName(t.id, e.target.value)}
-                          aria-label="Meal type name"
-                        />
+                        <div className="flex-1 flex items-center gap-2 min-w-0">
+                          <input
+                            data-testid={`s-meal-type-name-${t.id}`}
+                            className={`${inputClass} flex-1 font-medium`}
+                            value={t.name}
+                            disabled
+                            readOnly
+                            aria-label="Meal type name"
+                          />
+                          {inactive && (
+                            <span
+                              data-testid={`s-meal-type-inactive-${t.id}`}
+                              className="text-[10px] uppercase font-bold tracking-wider text-destructive bg-destructive/10 px-2 py-1 rounded-lg shrink-0"
+                            >
+                              Inactive
+                            </span>
+                          )}
+                        </div>
                         <div className="flex items-center gap-2 shrink-0">
                           <div className="relative flex items-center">
                             <span className="absolute left-3 text-xs font-semibold text-muted-foreground">$</span>
@@ -746,17 +762,30 @@ export default function Settings() {
                             />
                           </div>
                           <span className="text-xs text-muted-foreground font-medium">CAD</span>
-                          {!locked ? (
+                          {locked ? null : inactive ? (
+                            <button
+                              type="button"
+                              data-testid={`s-meal-type-reactivate-${t.id}`}
+                              onClick={() => setMealTypeActive(t.id, true)}
+                              className="h-10 w-10 inline-flex items-center justify-center rounded-xl border border-brand-border text-foreground hover:bg-brand-surface cursor-pointer transition-colors"
+                              aria-label="Reactivate meal type"
+                              title="Reactivate"
+                            >
+                              <ArrowCounterClockwise size={16} />
+                            </button>
+                          ) : (
                             <button
                               type="button"
                               data-testid={`s-meal-type-remove-${t.id}`}
-                              onClick={() => removeMealType(t.id)}
+                              onClick={() => setMealTypeActive(t.id, false)}
                               className="h-10 w-10 inline-flex items-center justify-center rounded-xl border border-destructive/30 text-destructive hover:bg-destructive/10 cursor-pointer transition-colors"
-                              aria-label="Remove meal type"
+                              aria-label="Deactivate meal type"
+                              title="Deactivate"
                             >
                               <Trash size={16} />
                             </button>
-                          ) : (
+                          )}
+                          {locked && (
                             <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/70 bg-brand-surface px-2.5 py-1.5 rounded-lg text-center min-w-[50px]">
                               Core
                             </span>

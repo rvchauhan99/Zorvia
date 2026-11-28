@@ -1,0 +1,51 @@
+# Build context: frontend/ (see Dockerfile). Runtime image ships only .next/standalone,
+# .next/static and public/ — keep local ops, tests, secrets and host artifacts out of the build.
+
+# Host artifacts (Linux deps come from `npm ci` in the deps stage)
+node_modules/
+.next/
+out/
+.vercel/
+.turbo/
+*.tsbuildinfo
+npm-debug.log*
+.DS_Store
+
+# Secrets / local env (build config comes from Docker ARG/ENV only)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*credentials*.json
+
+# Tests / QA / reports / seeds (NEVER in an image)
+tests/
+test/
+e2e/
+__tests__/
+**/*.test.*
+**/*.spec.*
+coverage/
+test-results/
+test_reports/
+playwright-report/
+playwright/.cache/
+testdata/
+*.csv
+*.xlsx
+
+# Local scripts — only the one `npm run build` calls is allowed
+scripts/
+!scripts/vercel-link-monorepo-root.js
+
+# Docs / agent / IDE / container meta
+**/*.md
+docs/
+memory/
+.cursor/
+.vscode/
+.idea/
+.git/
+Dockerfile*
+.dockerignore
